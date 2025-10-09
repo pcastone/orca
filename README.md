@@ -13,7 +13,7 @@ projectbase/
 │   └── defects/             # where all defect and problem mark down files go. 
 ├── todo/                    # Public headers
 │   ├── tasks.md             # current task to be excuted
-│   └── bugs.md              # this for tracking bugs if the bug has defect (major problem) then 
+│   └── bugfix.md              # this for tracking bugs if the bug has defect (major problem) then 
 │                              defects document should be included in the bug list. 
 ├── logs                     # captures login when code is running from src, code running from
 │                              release should use release/logs
