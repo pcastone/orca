@@ -1,0 +1,601 @@
+//! Workflow repository for database operations
+
+use crate::db::Database;
+use crate::error::{OrcaError, Result};
+use crate::workflow::Workflow;
+use chrono::Utc;
+use sqlx::Row;
+use std::sync::Arc;
+
+/// Repository for workflow database operations
+#[derive(Clone, Debug)]
+pub struct WorkflowRepository {
+    db: Arc<Database>,
+}
+
+impl WorkflowRepository {
+    /// Create a new workflow repository
+    pub fn new(db: Arc<Database>) -> Self {
+        Self { db }
+    }
+
+    /// Save a workflow to the database
+    pub async fn save(&self, workflow: &Workflow) -> Result<()> {
+        let created_at = Utc::now().timestamp();
+
+        sqlx::query(
+            "INSERT INTO workflows (id, name, description, status, pattern, created_at, updated_at, metadata)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        .bind(&workflow.id)
+        .bind(&workflow.name)
+        .bind(&workflow.description)
+        .bind(&workflow.status)
+        .bind(&workflow.pattern)
+        .bind(created_at)
+        .bind(created_at)
+        .bind(&workflow.metadata)
+        .execute(self.db.pool())
+        .await
+        .map_err(|e| OrcaError::Database(format!("Failed to save workflow: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// Load a workflow from the database by ID
+    pub async fn find_by_id(&self, id: &str) -> Result<Workflow> {
+        let row = sqlx::query(
+            "SELECT id, name, description, status, pattern, created_at, updated_at,
+                    started_at, completed_at, metadata
+             FROM workflows WHERE id = ?"
+        )
+        .bind(id)
+        .fetch_optional(self.db.pool())
+        .await
+        .map_err(|e| OrcaError::Database(format!("Failed to load workflow: {}", e)))?
+        .ok_or_else(|| OrcaError::Database(format!("Workflow not found: {}", id)))?;
+
+        let workflow = Workflow {
+            id: row.get("id"),
+            name: row.get("name"),
+            description: row.get("description"),
+            status: row.get("status"),
+            pattern: row.get("pattern"),
+            created_at: row.get("created_at"),
+            updated_at: row.get("updated_at"),
+            started_at: row.get("started_at"),
+            completed_at: row.get("completed_at"),
+            metadata: row.get("metadata"),
+        };
+
+        Ok(workflow)
+    }
+
+    /// List all workflows from the database
+    pub async fn list(&self) -> Result<Vec<Workflow>> {
+        let rows = sqlx::query(
+            "SELECT id, name, description, status, pattern, created_at, updated_at,
+                    started_at, completed_at, metadata
+             FROM workflows
+             ORDER BY created_at DESC"
+        )
+        .fetch_all(self.db.pool())
+        .await
+        .map_err(|e| OrcaError::Database(format!("Failed to list workflows: {}", e)))?;
+
+        let workflows = rows
+            .into_iter()
+            .map(|row| Workflow {
+                id: row.get("id"),
+                name: row.get("name"),
+                description: row.get("description"),
+                status: row.get("status"),
+                pattern: row.get("pattern"),
+                created_at: row.get("created_at"),
+                updated_at: row.get("updated_at"),
+                started_at: row.get("started_at"),
+                completed_at: row.get("completed_at"),
+                metadata: row.get("metadata"),
+            })
+            .collect();
+
+        Ok(workflows)
+    }
+
+    /// List workflows by status
+    pub async fn list_by_status(&self, status: &str) -> Result<Vec<Workflow>> {
+        let rows = sqlx::query(
+            "SELECT id, name, description, status, pattern, created_at, updated_at,
+                    started_at, completed_at, metadata
+             FROM workflows
+             WHERE status = ?
+             ORDER BY created_at DESC"
+        )
+        .bind(status)
+        .fetch_all(self.db.pool())
+        .await
+        .map_err(|e| OrcaError::Database(format!("Failed to list workflows by status: {}", e)))?;
+
+        let workflows = rows
+            .into_iter()
+            .map(|row| Workflow {
+                id: row.get("id"),
+                name: row.get("name"),
+                description: row.get("description"),
+                status: row.get("status"),
+                pattern: row.get("pattern"),
+                created_at: row.get("created_at"),
+                updated_at: row.get("updated_at"),
+                started_at: row.get("started_at"),
+                completed_at: row.get("completed_at"),
+                metadata: row.get("metadata"),
+            })
+            .collect();
+
+        Ok(workflows)
+    }
+
+    /// Update a workflow in the database
+    pub async fn update(&self, workflow: &Workflow) -> Result<()> {
+        let updated_at = Utc::now().timestamp();
+
+        sqlx::query(
+            "UPDATE workflows
+             SET name = ?, description = ?, status = ?, pattern = ?,
+                 updated_at = ?, started_at = ?, completed_at = ?, metadata = ?
+             WHERE id = ?"
+        )
+        .bind(&workflow.name)
+        .bind(&workflow.description)
+        .bind(&workflow.status)
+        .bind(&workflow.pattern)
+        .bind(updated_at)
+        .bind(workflow.started_at)
+        .bind(workflow.completed_at)
+        .bind(&workflow.metadata)
+        .bind(&workflow.id)
+        .execute(self.db.pool())
+        .await
+        .map_err(|e| OrcaError::Database(format!("Failed to update workflow: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// Delete a workflow from the database
+    pub async fn delete(&self, id: &str) -> Result<()> {
+        sqlx::query("DELETE FROM workflows WHERE id = ?")
+            .bind(id)
+            .execute(self.db.pool())
+            .await
+            .map_err(|e| OrcaError::Database(format!("Failed to delete workflow: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// Add a task to a workflow
+    pub async fn add_task(&self, workflow_id: &str, task_id: &str, sequence: i32) -> Result<()> {
+        let created_at = Utc::now().timestamp();
+
+        sqlx::query(
+            "INSERT INTO workflow_tasks (workflow_id, task_id, sequence, created_at)
+             VALUES (?, ?, ?, ?)"
+        )
+        .bind(workflow_id)
+        .bind(task_id)
+        .bind(sequence)
+        .bind(created_at)
+        .execute(self.db.pool())
+        .await
+        .map_err(|e| OrcaError::Database(format!("Failed to add task to workflow: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// Remove a task from a workflow
+    pub async fn remove_task(&self, workflow_id: &str, task_id: &str) -> Result<()> {
+        sqlx::query(
+            "DELETE FROM workflow_tasks
+             WHERE workflow_id = ? AND task_id = ?"
+        )
+        .bind(workflow_id)
+        .bind(task_id)
+        .execute(self.db.pool())
+        .await
+        .map_err(|e| OrcaError::Database(format!("Failed to remove task from workflow: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// Load workflow task IDs in sequence order
+    pub async fn get_task_ids(&self, workflow_id: &str) -> Result<Vec<String>> {
+        let rows = sqlx::query(
+            "SELECT task_id FROM workflow_tasks
+             WHERE workflow_id = ?
+             ORDER BY sequence ASC"
+        )
+        .bind(workflow_id)
+        .fetch_all(self.db.pool())
+        .await
+        .map_err(|e| OrcaError::Database(format!("Failed to load workflow tasks: {}", e)))?;
+
+        let task_ids = rows
+            .into_iter()
+            .map(|row| row.get("task_id"))
+            .collect();
+
+        Ok(task_ids)
+    }
+
+    /// Count workflows by status
+    pub async fn count_by_status(&self, status: &str) -> Result<i64> {
+        let row = sqlx::query("SELECT COUNT(*) as count FROM workflows WHERE status = ?")
+            .bind(status)
+            .fetch_one(self.db.pool())
+            .await
+            .map_err(|e| OrcaError::Database(format!("Failed to count workflows: {}", e)))?;
+
+        Ok(row.get("count"))
+    }
+
+    /// Check if a workflow exists
+    pub async fn exists(&self, id: &str) -> Result<bool> {
+        let row = sqlx::query("SELECT COUNT(*) as count FROM workflows WHERE id = ?")
+            .bind(id)
+            .fetch_one(self.db.pool())
+            .await
+            .map_err(|e| OrcaError::Database(format!("Failed to check workflow existence: {}", e)))?;
+
+        let count: i64 = row.get("count");
+        Ok(count > 0)
+    }
+
+    /// Get task count for a workflow
+    pub async fn get_task_count(&self, workflow_id: &str) -> Result<i64> {
+        let row = sqlx::query(
+            "SELECT COUNT(*) as count FROM workflow_tasks WHERE workflow_id = ?"
+        )
+        .bind(workflow_id)
+        .fetch_one(self.db.pool())
+        .await
+        .map_err(|e| OrcaError::Database(format!("Failed to count workflow tasks: {}", e)))?;
+
+        Ok(row.get("count"))
+    }
+
+    /// Pause a running workflow
+    ///
+    /// Updates the workflow status to "paused".
+    /// Only workflows in "running" status can be paused.
+    pub async fn pause_workflow(&self, id: &str) -> Result<()> {
+        let updated_at = Utc::now().timestamp();
+
+        // First check if workflow exists and is pausable
+        let workflow = self.find_by_id(id).await?;
+
+        if workflow.status != "running" {
+            return Err(OrcaError::Other(format!(
+                "Cannot pause workflow with status '{}'. Only 'running' workflows can be paused.",
+                workflow.status
+            )));
+        }
+
+        // Update workflow to paused status
+        sqlx::query(
+            "UPDATE workflows
+             SET status = 'paused', updated_at = ?
+             WHERE id = ?"
+        )
+        .bind(updated_at)
+        .bind(id)
+        .execute(self.db.pool())
+        .await
+        .map_err(|e| OrcaError::Database(format!("Failed to pause workflow: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// Resume a paused workflow
+    ///
+    /// Updates the workflow status from "paused" back to "running".
+    /// Only workflows in "paused" status can be resumed.
+    pub async fn resume_workflow(&self, id: &str) -> Result<()> {
+        let updated_at = Utc::now().timestamp();
+
+        // First check if workflow exists and is resumable
+        let workflow = self.find_by_id(id).await?;
+
+        if workflow.status != "paused" {
+            return Err(OrcaError::Other(format!(
+                "Cannot resume workflow with status '{}'. Only 'paused' workflows can be resumed.",
+                workflow.status
+            )));
+        }
+
+        // Update workflow to running status
+        sqlx::query(
+            "UPDATE workflows
+             SET status = 'running', updated_at = ?
+             WHERE id = ?"
+        )
+        .bind(updated_at)
+        .bind(id)
+        .execute(self.db.pool())
+        .await
+        .map_err(|e| OrcaError::Database(format!("Failed to resume workflow: {}", e)))?;
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::workflow::Task;
+    use crate::repositories::TaskRepository;
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    async fn setup_test_db() -> Arc<Database> {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(5)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+
+        let db = Arc::new(Database {
+            pool: Arc::new(pool),
+        });
+
+        // Run migrations
+        db.run_migrations().await.unwrap();
+
+        db
+    }
+
+    #[tokio::test]
+    async fn test_save_and_find() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let workflow = Workflow::new("Test workflow", "react");
+        repo.save(&workflow).await.unwrap();
+
+        let loaded = repo.find_by_id(&workflow.id).await.unwrap();
+        assert_eq!(loaded.id, workflow.id);
+        assert_eq!(loaded.name, workflow.name);
+        assert_eq!(loaded.pattern, "react");
+    }
+
+    #[tokio::test]
+    async fn test_list_workflows() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let workflow1 = Workflow::new("Workflow 1", "react");
+        let workflow2 = Workflow::new("Workflow 2", "plan_execute");
+
+        repo.save(&workflow1).await.unwrap();
+        repo.save(&workflow2).await.unwrap();
+
+        let workflows = repo.list().await.unwrap();
+        assert_eq!(workflows.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_update_workflow() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let mut workflow = Workflow::new("Test workflow", "react");
+        repo.save(&workflow).await.unwrap();
+
+        workflow.status = "completed".to_string();
+        workflow.description = Some("Updated description".to_string());
+        repo.update(&workflow).await.unwrap();
+
+        let loaded = repo.find_by_id(&workflow.id).await.unwrap();
+        assert_eq!(loaded.status, "completed");
+        assert_eq!(loaded.description, Some("Updated description".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_delete_workflow() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let workflow = Workflow::new("Test workflow", "react");
+        repo.save(&workflow).await.unwrap();
+
+        repo.delete(&workflow.id).await.unwrap();
+
+        let result = repo.find_by_id(&workflow.id).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_workflow_tasks() {
+        let db = setup_test_db().await;
+        let workflow_repo = WorkflowRepository::new(db.clone());
+        let task_repo = TaskRepository::new(db);
+
+        // Create workflow
+        let workflow = Workflow::new("Test workflow", "react");
+        workflow_repo.save(&workflow).await.unwrap();
+
+        // Create tasks
+        let task1 = Task::new("Task 1");
+        let task2 = Task::new("Task 2");
+        task_repo.save(&task1).await.unwrap();
+        task_repo.save(&task2).await.unwrap();
+
+        // Add tasks to workflow
+        workflow_repo.add_task(&workflow.id, &task1.id, 0).await.unwrap();
+        workflow_repo.add_task(&workflow.id, &task2.id, 1).await.unwrap();
+
+        // Get task IDs
+        let task_ids = workflow_repo.get_task_ids(&workflow.id).await.unwrap();
+        assert_eq!(task_ids.len(), 2);
+        assert_eq!(task_ids[0], task1.id);
+        assert_eq!(task_ids[1], task2.id);
+
+        // Get task count
+        let count = workflow_repo.get_task_count(&workflow.id).await.unwrap();
+        assert_eq!(count, 2);
+
+        // Remove a task
+        workflow_repo.remove_task(&workflow.id, &task1.id).await.unwrap();
+        let task_ids = workflow_repo.get_task_ids(&workflow.id).await.unwrap();
+        assert_eq!(task_ids.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_list_by_status() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let mut workflow1 = Workflow::new("Workflow 1", "react");
+        let workflow2 = Workflow::new("Workflow 2", "react");
+
+        workflow1.status = "completed".to_string();
+
+        repo.save(&workflow1).await.unwrap();
+        repo.save(&workflow2).await.unwrap();
+
+        let completed = repo.list_by_status("completed").await.unwrap();
+        assert_eq!(completed.len(), 1);
+
+        let pending = repo.list_by_status("pending").await.unwrap();
+        assert_eq!(pending.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_count_and_exists() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let workflow = Workflow::new("Test workflow", "react");
+        repo.save(&workflow).await.unwrap();
+
+        let count = repo.count_by_status("pending").await.unwrap();
+        assert_eq!(count, 1);
+
+        let exists = repo.exists(&workflow.id).await.unwrap();
+        assert!(exists);
+
+        let not_exists = repo.exists("nonexistent").await.unwrap();
+        assert!(!not_exists);
+    }
+
+    #[tokio::test]
+    async fn test_pause_running_workflow() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let mut workflow = Workflow::new("Test workflow", "react");
+        workflow.status = "running".to_string();
+        repo.save(&workflow).await.unwrap();
+
+        // Pause the workflow
+        repo.pause_workflow(&workflow.id).await.unwrap();
+
+        // Verify workflow is paused
+        let loaded = repo.find_by_id(&workflow.id).await.unwrap();
+        assert_eq!(loaded.status, "paused");
+    }
+
+    #[tokio::test]
+    async fn test_pause_non_running_workflow_fails() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let workflow = Workflow::new("Test workflow", "react");
+        repo.save(&workflow).await.unwrap();
+
+        // Workflow is in pending status
+        assert_eq!(workflow.status, "pending");
+
+        // Attempt to pause pending workflow should fail
+        let result = repo.pause_workflow(&workflow.id).await;
+        assert!(result.is_err());
+
+        // Verify workflow status unchanged
+        let loaded = repo.find_by_id(&workflow.id).await.unwrap();
+        assert_eq!(loaded.status, "pending");
+    }
+
+    #[tokio::test]
+    async fn test_resume_paused_workflow() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let mut workflow = Workflow::new("Test workflow", "react");
+        workflow.status = "paused".to_string();
+        repo.save(&workflow).await.unwrap();
+
+        // Resume the workflow
+        repo.resume_workflow(&workflow.id).await.unwrap();
+
+        // Verify workflow is running
+        let loaded = repo.find_by_id(&workflow.id).await.unwrap();
+        assert_eq!(loaded.status, "running");
+    }
+
+    #[tokio::test]
+    async fn test_resume_non_paused_workflow_fails() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let workflow = Workflow::new("Test workflow", "react");
+        repo.save(&workflow).await.unwrap();
+
+        // Workflow is in pending status
+        assert_eq!(workflow.status, "pending");
+
+        // Attempt to resume pending workflow should fail
+        let result = repo.resume_workflow(&workflow.id).await;
+        assert!(result.is_err());
+
+        // Verify workflow status unchanged
+        let loaded = repo.find_by_id(&workflow.id).await.unwrap();
+        assert_eq!(loaded.status, "pending");
+    }
+
+    #[tokio::test]
+    async fn test_pause_resume_cycle() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let mut workflow = Workflow::new("Test workflow", "react");
+        workflow.status = "running".to_string();
+        repo.save(&workflow).await.unwrap();
+
+        // Pause
+        repo.pause_workflow(&workflow.id).await.unwrap();
+        let loaded = repo.find_by_id(&workflow.id).await.unwrap();
+        assert_eq!(loaded.status, "paused");
+
+        // Resume
+        repo.resume_workflow(&workflow.id).await.unwrap();
+        let loaded = repo.find_by_id(&workflow.id).await.unwrap();
+        assert_eq!(loaded.status, "running");
+    }
+
+    #[tokio::test]
+    async fn test_pause_nonexistent_workflow_fails() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        // Attempt to pause nonexistent workflow should fail
+        let result = repo.pause_workflow("nonexistent-id").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_resume_nonexistent_workflow_fails() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        // Attempt to resume nonexistent workflow should fail
+        let result = repo.resume_workflow("nonexistent-id").await;
+        assert!(result.is_err());
+    }
+}

@@ -1,0 +1,74 @@
+[package]
+name = "langgraph-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Core graph execution engine for rLangGraph"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+langgraph-checkpoint = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+async-stream = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+rand = { workspace = true }
+jsonschema = { workspace = true, optional = true }
+tracing = { workspace = true }
+
+[features]
+default = []
+json-validation = ["jsonschema"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros"] }
+proptest = { workspace = true }
+criterion = { workspace = true }
+reqwest = { workspace = true }  # For example LLM client implementations
+
+[[bench]]
+name = "graph_execution_bench"
+harness = false
+
+[[example]]
+name = "chatbot_basic"
+path = "../../examples/chatbot_basic.rs"
+
+[[example]]
+name = "message_state_pattern"
+path = "../../examples/message_state_pattern.rs"
+
+[[example]]
+name = "managed_values"
+path = "../../examples/managed_values.rs"
+
+[[example]]
+name = "visualization"
+path = "../../examples/visualization.rs"
+
+[[example]]
+name = "ollama_subgraph_yaml"
+path = "../../examples/ollama_subgraph/main.rs"
+
+[[example]]
+name = "chatbot_ollama"
+path = "../../examples/chatbot_ollama.rs"
+
+[[example]]
+name = "message_state_ollama"
+path = "../../examples/message_state_ollama.rs"

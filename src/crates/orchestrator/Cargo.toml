@@ -1,0 +1,62 @@
+[package]
+name = "orchestrator"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Orchestration engine for coordinating workflows in acolib"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "orchestrator-server"
+path = "src/bin/orchestrator-server.rs"
+
+[dependencies]
+tokio = { workspace = true }
+tokio-stream = { workspace = true, features = ["sync"] }
+tokio-tungstenite = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+futures-util = "0.3"
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+regex = { workspace = true }
+sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio", "migrate"] }
+tiktoken-rs = "0.5"
+rand = "0.8"
+
+# Web framework and HTTP
+axum = "0.7"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# WebSocket and compression
+dashmap = "5.5"
+parking_lot = "0.12"
+flate2 = "1.0"
+
+# Internal workspace dependencies
+langgraph-core = { workspace = true }
+langgraph-prebuilt = { workspace = true }
+tooling = { workspace = true }
+llm = { path = "../llm" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros"] }
+tempfile = "3.10"
+reqwest = { version = "0.12", features = ["json"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+criterion = { workspace = true, features = ["async_tokio"] }

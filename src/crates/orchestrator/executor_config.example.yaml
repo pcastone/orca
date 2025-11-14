@@ -1,0 +1,72 @@
+# Example Executor Configuration for LLM-based Task Execution
+#
+# This configuration file demonstrates all available options for
+# configuring the LlmTaskExecutor.
+#
+# To use this configuration:
+# 1. Copy this file to your desired location
+# 2. Modify the values as needed
+# 3. Load it in your code:
+#    let config = ExecutorConfig::from_file("executor_config.yaml")?;
+#    let executor = LlmTaskExecutor::with_config(chat_model, config);
+
+# Model identifier
+# Supported presets: gpt-4, gpt-4-turbo, gpt-3.5-turbo,
+#                    claude-3-opus, claude-3-sonnet, claude-3-haiku
+model: gpt-4
+
+# Temperature for LLM generation (0.0 - 1.0)
+# Lower values = more deterministic, higher values = more creative
+temperature: 0.7
+
+# Maximum tokens for LLM response
+# Set to null/omit to use model defaults
+max_tokens: 4096
+
+# Enable streaming responses
+# When true, responses are streamed token-by-token
+streaming: false
+
+# Context window size (in tokens)
+# Used for context management and trimming
+# Set to null/omit to use model defaults
+context_window: 8192
+
+# Optional custom system prompt
+# If omitted, uses the default task execution prompt
+# system_prompt: |
+#   You are a helpful task execution assistant.
+#   Execute tasks efficiently and provide clear results.
+
+# Retry configuration for handling transient failures
+retry:
+  # Maximum number of retry attempts
+  max_retries: 3
+
+  # Initial backoff delay in milliseconds
+  initial_backoff_ms: 1000
+
+  # Maximum backoff delay in milliseconds
+  max_backoff_ms: 60000
+
+  # Multiplier for exponential backoff
+  backoff_multiplier: 2.0
+
+  # Whether to add random jitter to backoff delays
+  # Helps prevent thundering herd problem
+  jitter: true
+
+# Environment Variable Overrides
+# ==============================
+# The following environment variables can override config values:
+#
+# ACOLIB_LLM_MODEL          - Model identifier
+# ACOLIB_LLM_TEMPERATURE    - Temperature (0.0-1.0)
+# ACOLIB_LLM_MAX_TOKENS     - Maximum tokens
+# ACOLIB_LLM_MAX_RETRIES    - Maximum retry attempts
+# ACOLIB_LLM_STREAMING      - Enable streaming (true/false)
+#
+# Example:
+#   export ACOLIB_LLM_MODEL="claude-3-sonnet"
+#   export ACOLIB_LLM_TEMPERATURE="0.5"
+#   export ACOLIB_LLM_STREAMING="true"

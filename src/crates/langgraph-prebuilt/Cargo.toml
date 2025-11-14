@@ -1,0 +1,29 @@
+[package]
+name = "langgraph-prebuilt"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "High-level prebuilt agent patterns for rLangGraph"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+langgraph-checkpoint = { workspace = true }
+langgraph-core = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+futures = { workspace = true }
+regex = "1.10"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros"] }

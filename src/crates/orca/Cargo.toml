@@ -1,0 +1,74 @@
+[package]
+name = "orca"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Standalone orchestrator for AI agent workflows with direct tool execution"
+
+[[bin]]
+name = "orca"
+path = "src/bin/orca.rs"
+
+[dependencies]
+# Async runtime
+tokio = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+
+# Database
+sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio", "migrate"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+toml = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Utilities
+uuid = { workspace = true }
+chrono = { workspace = true }
+regex = { workspace = true }
+rand = { workspace = true }
+sha2 = "0.10"
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = "0.3"
+
+# CLI
+clap = { workspace = true }
+dirs = "5.0"
+indicatif = "0.17"
+colored = "2.1"
+tabled = "0.15"
+
+# LangGraph patterns
+langgraph-core = { workspace = true }
+langgraph-prebuilt = { workspace = true }
+langgraph-checkpoint = { workspace = true }
+
+# Tool execution
+tooling = { workspace = true }
+
+# LLM integration
+llm = { workspace = true, features = ["local", "remote"] }
+
+# Token counting
+tiktoken-rs = "0.5"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros"] }
+tempfile = "3.10"
+
+[build-dependencies]
+chrono = { workspace = true }
