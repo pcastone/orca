@@ -19,7 +19,7 @@ pub use config::{AcoConfig, ConfigLoader};
 pub use error::{AcoError, Result};
 pub use server::AcoServer;
 pub use session::SessionManager;
-pub use tui::{App, TuiConfig};
+pub use tui::{App, AppState, View, TuiConfig};
 pub use workspace::{
     PathValidator, SecurityConfig, WorkspaceInitConfig, WorkspaceInitializer, WorkspaceMetadata,
     WorkspaceValidator,

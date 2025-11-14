@@ -9,7 +9,7 @@
 use crate::error::{AcoError, Result};
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use tracing::{debug, info};
+use tracing::debug;
 
 /// Authentication connection modes
 #[derive(Debug, Clone)]

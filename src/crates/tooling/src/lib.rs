@@ -20,6 +20,7 @@ pub mod logging;
 pub mod rate_limit;
 pub mod serialization;
 pub mod validation;
+pub mod tools;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

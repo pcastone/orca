@@ -408,6 +408,20 @@ impl AcoClient {
     }
 }
 
+/// Connect to orchestrator server (stub implementation)
+pub async fn connect_to_orchestrator(_server_url: &str) -> Result<()> {
+    // Stub implementation - will be implemented in future tasks
+    info!("Connecting to orchestrator (stub)");
+    Ok(())
+}
+
+/// Show connection status (stub implementation)
+pub async fn show_status() -> Result<()> {
+    // Stub implementation - will be implemented in future tasks
+    println!("ACO Client Status (stub)");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

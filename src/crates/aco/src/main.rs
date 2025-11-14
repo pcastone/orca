@@ -134,7 +134,7 @@ async fn main() -> Result<()> {
                 aco::tui::run(tui_config).await?;
             } else {
                 // Run server mode
-                let server = AcoServer::new(&workspace).with_address(&server_address);
+                let server = AcoServer::new().with_address(&server_address);
 
                 // Register all tools
                 register_tools(&server).await?;
@@ -150,7 +150,7 @@ async fn main() -> Result<()> {
             info!("Workspace: {}", workspace.display());
             info!("Address: {}", address);
 
-            let server = AcoServer::new(&workspace).with_address(&address);
+            let server = AcoServer::new().with_address(&address);
             register_tools(&server).await?;
             server.start().await?;
         }
