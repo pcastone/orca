@@ -5,7 +5,8 @@ use crate::proto::workflows::{
     DeleteWorkflowRequest, DeleteWorkflowResponse, ExecuteWorkflowRequest,
     ExecutionEvent,
 };
-use crate::db::DatabasePool;
+use crate::db::{DatabasePool, repositories::WorkflowRepository};
+use crate::proto_conv::workflow_to_proto;
 use crate::execution::{ExecutionStreamHandler, ExecutionEventType};
 use tonic::{Request, Response, Status};
 use std::sync::Arc;
@@ -50,22 +51,39 @@ impl WorkflowService for WorkflowServiceImpl {
             ))?;
 
         let workflow_id = Uuid::new_v4().to_string();
-        let now = Utc::now().to_rfc3339();
 
-        // In a real implementation, this would use the repository to create the workflow
-        // For now, we'll create a response directly
-        let proto_workflow = ProtoWorkflow {
-            id: workflow_id,
-            name: req.name,
-            description: req.description,
-            definition: req.definition,
-            status: "draft".to_string(),
-            created_at: now.clone(),
-            updated_at: now,
-        };
+        // Create workflow in database using repository
+        let workflow = WorkflowRepository::create(
+            &self.pool,
+            workflow_id,
+            req.name,
+            req.definition,
+        ).await.map_err(|e| {
+            tracing::error!("Failed to create workflow in database: {}", e);
+            Status::internal(format!("Failed to create workflow: {}", e))
+        })?;
 
-        tracing::info!("Created workflow: {}", proto_workflow.id);
-        Ok(Response::new(proto_workflow))
+        // Update description if provided
+        if !req.description.is_empty() {
+            WorkflowRepository::update_description(&self.pool, &workflow.id, &req.description)
+                .await
+                .map_err(|e| {
+                    tracing::warn!("Failed to update workflow description: {}", e);
+                    // Continue anyway, non-critical error
+                })?;
+        }
+
+        // Fetch updated workflow
+        let updated_workflow = WorkflowRepository::get_by_id(&self.pool, &workflow.id)
+            .await
+            .map_err(|e| {
+                tracing::error!("Database error getting created workflow: {}", e);
+                Status::internal("Failed to retrieve created workflow")
+            })?
+            .ok_or_else(|| Status::internal("Workflow disappeared after creation"))?;
+
+        tracing::info!("Created workflow: {}", updated_workflow.id);
+        Ok(Response::new(workflow_to_proto(&updated_workflow)))
     }
 
     async fn get_workflow(
@@ -74,20 +92,70 @@ impl WorkflowService for WorkflowServiceImpl {
     ) -> Result<Response<ProtoWorkflow>, Status> {
         let req = request.into_inner();
 
-        // In a real implementation, this would query the database
-        Err(Status::not_found(format!("Workflow not found: {}", req.id)))
+        if req.id.is_empty() {
+            return Err(Status::invalid_argument("Workflow ID is required"));
+        }
+
+        let workflow = WorkflowRepository::get_by_id(&self.pool, &req.id)
+            .await
+            .map_err(|e| {
+                tracing::error!("Database error getting workflow {}: {}", req.id, e);
+                Status::internal(format!("Failed to retrieve workflow: {}", e))
+            })?
+            .ok_or_else(|| {
+                tracing::warn!("Workflow not found: {}", req.id);
+                Status::not_found(format!("Workflow not found: {}", req.id))
+            })?;
+
+        tracing::debug!("Retrieved workflow: {}", workflow.id);
+        Ok(Response::new(workflow_to_proto(&workflow)))
     }
 
     async fn list_workflows(
         &self,
         request: Request<ListWorkflowsRequest>,
     ) -> Result<Response<ListWorkflowsResponse>, Status> {
-        let _req = request.into_inner();
+        let req = request.into_inner();
 
-        // In a real implementation, this would query the database with pagination
+        // Query workflows from database
+        let workflows = if !req.status.is_empty() {
+            // Filter by status
+            WorkflowRepository::list_by_status(&self.pool, &req.status)
+                .await
+                .map_err(|e| {
+                    tracing::error!("Database error listing workflows by status: {}", e);
+                    Status::internal(format!("Failed to list workflows: {}", e))
+                })?
+        } else {
+            // Get all workflows
+            WorkflowRepository::list(&self.pool)
+                .await
+                .map_err(|e| {
+                    tracing::error!("Database error listing workflows: {}", e);
+                    Status::internal(format!("Failed to list workflows: {}", e))
+                })?
+        };
+
+        // Apply pagination (simple offset/limit)
+        let offset = req.offset.max(0) as usize;
+        let limit = if req.limit > 0 {
+            req.limit as usize
+        } else {
+            100 // Default limit
+        };
+
+        let total = workflows.len();
+        let paginated_workflows: Vec<ProtoWorkflow> = workflows
+            .into_iter()
+            .skip(offset)
+            .take(limit)
+            .map(|w| workflow_to_proto(&w))
+            .collect();
+
+        tracing::debug!("Listed {} workflows (total: {})", paginated_workflows.len(), total);
         Ok(Response::new(ListWorkflowsResponse {
-            workflows: vec![],
-            total: 0,
+            workflows: paginated_workflows,
+            total: total as i32,
         }))
     }
 
@@ -97,8 +165,72 @@ impl WorkflowService for WorkflowServiceImpl {
     ) -> Result<Response<ProtoWorkflow>, Status> {
         let req = request.into_inner();
 
-        // In a real implementation, this would update the workflow in the database
-        Err(Status::not_found(format!("Workflow not found: {}", req.id)))
+        if req.id.is_empty() {
+            return Err(Status::invalid_argument("Workflow ID is required"));
+        }
+
+        // First check if workflow exists
+        let _workflow = WorkflowRepository::get_by_id(&self.pool, &req.id)
+            .await
+            .map_err(|e| {
+                tracing::error!("Database error getting workflow {}: {}", req.id, e);
+                Status::internal(format!("Failed to retrieve workflow: {}", e))
+            })?
+            .ok_or_else(|| {
+                tracing::warn!("Workflow not found for update: {}", req.id);
+                Status::not_found(format!("Workflow not found: {}", req.id))
+            })?;
+
+        // Update fields
+        if !req.name.is_empty() {
+            // Note: Repository doesn't have update_name method
+            tracing::warn!("Name updates not yet supported");
+        }
+
+        if !req.description.is_empty() {
+            WorkflowRepository::update_description(&self.pool, &req.id, &req.description)
+                .await
+                .map_err(|e| {
+                    tracing::error!("Failed to update workflow description: {}", e);
+                    Status::internal(format!("Failed to update workflow: {}", e))
+                })?;
+        }
+
+        if !req.definition.is_empty() {
+            // Validate definition JSON
+            serde_json::from_str::<serde_json::Value>(&req.definition)
+                .map_err(|e| Status::invalid_argument(
+                    format!("Invalid workflow definition JSON: {}", e)
+                ))?;
+
+            WorkflowRepository::update_definition(&self.pool, &req.id, &req.definition)
+                .await
+                .map_err(|e| {
+                    tracing::error!("Failed to update workflow definition: {}", e);
+                    Status::internal(format!("Failed to update workflow: {}", e))
+                })?;
+        }
+
+        if !req.status.is_empty() {
+            WorkflowRepository::update_status(&self.pool, &req.id, &req.status)
+                .await
+                .map_err(|e| {
+                    tracing::error!("Failed to update workflow status: {}", e);
+                    Status::internal(format!("Failed to update workflow: {}", e))
+                })?;
+        }
+
+        // Fetch updated workflow
+        let updated_workflow = WorkflowRepository::get_by_id(&self.pool, &req.id)
+            .await
+            .map_err(|e| {
+                tracing::error!("Database error getting updated workflow: {}", e);
+                Status::internal(format!("Failed to retrieve updated workflow: {}", e))
+            })?
+            .ok_or_else(|| Status::internal("Workflow disappeared after update"))?;
+
+        tracing::info!("Updated workflow: {}", updated_workflow.id);
+        Ok(Response::new(workflow_to_proto(&updated_workflow)))
     }
 
     async fn delete_workflow(
@@ -107,8 +239,34 @@ impl WorkflowService for WorkflowServiceImpl {
     ) -> Result<Response<DeleteWorkflowResponse>, Status> {
         let req = request.into_inner();
 
-        // In a real implementation, this would delete the workflow from the database
-        Ok(Response::new(DeleteWorkflowResponse { success: false }))
+        if req.id.is_empty() {
+            return Err(Status::invalid_argument("Workflow ID is required"));
+        }
+
+        // Check if workflow exists before deletion
+        let exists = WorkflowRepository::get_by_id(&self.pool, &req.id)
+            .await
+            .map_err(|e| {
+                tracing::error!("Database error checking workflow {}: {}", req.id, e);
+                Status::internal(format!("Failed to check workflow: {}", e))
+            })?
+            .is_some();
+
+        if !exists {
+            tracing::warn!("Attempted to delete non-existent workflow: {}", req.id);
+            return Ok(Response::new(DeleteWorkflowResponse { success: false }));
+        }
+
+        // Delete the workflow
+        WorkflowRepository::delete(&self.pool, &req.id)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to delete workflow {}: {}", req.id, e);
+                Status::internal(format!("Failed to delete workflow: {}", e))
+            })?;
+
+        tracing::info!("Deleted workflow: {}", req.id);
+        Ok(Response::new(DeleteWorkflowResponse { success: true }))
     }
 
     type ExecuteWorkflowStream = tokio_stream::wrappers::ReceiverStream<Result<ExecutionEvent, Status>>;
