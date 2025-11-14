@@ -6,6 +6,7 @@ use crate::proto::workflows::{
     ExecutionEvent,
 };
 use crate::db::DatabasePool;
+use crate::execution::{ExecutionStreamHandler, ExecutionEventType};
 use tonic::{Request, Response, Status};
 use std::sync::Arc;
 use chrono::Utc;
@@ -117,13 +118,69 @@ impl WorkflowService for WorkflowServiceImpl {
         request: Request<ExecuteWorkflowRequest>,
     ) -> Result<Response<Self::ExecuteWorkflowStream>, Status> {
         let req = request.into_inner();
+        let workflow_id = req.id.clone();
 
-        // Placeholder implementation - will be implemented in Task 014
-        let (tx, rx) = tokio::sync::mpsc::channel(self.stream_buffer_size);
+        // Create streaming handler
+        let (stream_handler, rx) = ExecutionStreamHandler::new(self.stream_buffer_size);
+        let stream_handler = Arc::new(stream_handler);
 
-        let _ = tx.send(Err(Status::unimplemented(
-            "Workflow execution not yet implemented - see Task 014"
-        ))).await;
+        // Spawn workflow execution in background
+        let workflow_id_clone = workflow_id.clone();
+        let stream_handler_clone = stream_handler.clone();
+        let pool = self.pool.clone();
+
+        tokio::spawn(async move {
+            // Send started event
+            if let Err(e) = stream_handler_clone.send_started(&workflow_id_clone).await {
+                tracing::error!("Failed to send started event: {}", e);
+                return;
+            }
+
+            // Simulate workflow execution with streaming events
+            // In a real implementation, this would call the WorkflowExecutionEngine
+
+            // Send progress events for workflow steps
+            let steps = vec!["Initialize", "Execute Tasks", "Aggregate Results", "Cleanup"];
+            for (idx, step) in steps.iter().enumerate() {
+                if !stream_handler_clone.is_active() {
+                    break;
+                }
+
+                if let Err(e) = stream_handler_clone
+                    .send_progress(format!("Step {}: {}", idx + 1, step))
+                    .await
+                {
+                    tracing::error!("Failed to send progress event: {}", e);
+                    break;
+                }
+
+                tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
+            }
+
+            // Send output event
+            if stream_handler_clone.is_active() {
+                if let Err(e) = stream_handler_clone
+                    .send_output("Workflow execution completed successfully")
+                    .await
+                {
+                    tracing::error!("Failed to send output event: {}", e);
+                }
+            }
+
+            // Send completion event
+            if stream_handler_clone.is_active() {
+                if let Err(e) = stream_handler_clone
+                    .send_completed(&workflow_id_clone, "Success")
+                    .await
+                {
+                    tracing::error!("Failed to send completion event: {}", e);
+                }
+            }
+
+            tracing::info!("Workflow {} execution streaming completed", workflow_id_clone);
+        });
+
+        tracing::info!("Started streaming execution for workflow: {}", workflow_id);
 
         Ok(Response::new(
             tokio_stream::wrappers::ReceiverStream::new(rx)

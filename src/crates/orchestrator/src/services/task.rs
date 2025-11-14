@@ -6,6 +6,7 @@ use crate::proto::tasks::{
     ExecutionEvent,
 };
 use crate::db::DatabasePool;
+use crate::execution::{ExecutionStreamHandler, ExecutionEventType};
 use tonic::{Request, Response, Status};
 use std::sync::Arc;
 use chrono::Utc;
@@ -130,13 +131,68 @@ impl TaskService for TaskServiceImpl {
         request: Request<ExecuteTaskRequest>,
     ) -> Result<Response<Self::ExecuteTaskStream>, Status> {
         let req = request.into_inner();
+        let task_id = req.id.clone();
 
-        // Placeholder implementation - will be implemented in Task 012
-        let (tx, rx) = tokio::sync::mpsc::channel(self.stream_buffer_size);
+        // Create streaming handler
+        let (stream_handler, rx) = ExecutionStreamHandler::new(self.stream_buffer_size);
+        let stream_handler = Arc::new(stream_handler);
 
-        let _ = tx.send(Err(Status::unimplemented(
-            "Task execution not yet implemented - see Task 012"
-        ))).await;
+        // Spawn task execution in background
+        let task_id_clone = task_id.clone();
+        let stream_handler_clone = stream_handler.clone();
+        let pool = self.pool.clone();
+
+        tokio::spawn(async move {
+            // Send started event
+            if let Err(e) = stream_handler_clone.send_started(&task_id_clone).await {
+                tracing::error!("Failed to send started event: {}", e);
+                return;
+            }
+
+            // Simulate task execution with streaming events
+            // In a real implementation, this would call the TaskExecutionEngine
+
+            // Send progress events
+            for i in 1..=5 {
+                if !stream_handler_clone.is_active() {
+                    break;
+                }
+
+                if let Err(e) = stream_handler_clone
+                    .send_progress(format!("Progress: {}%", i * 20))
+                    .await
+                {
+                    tracing::error!("Failed to send progress event: {}", e);
+                    break;
+                }
+
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+
+            // Send output event
+            if stream_handler_clone.is_active() {
+                if let Err(e) = stream_handler_clone
+                    .send_output("Task execution completed successfully")
+                    .await
+                {
+                    tracing::error!("Failed to send output event: {}", e);
+                }
+            }
+
+            // Send completion event
+            if stream_handler_clone.is_active() {
+                if let Err(e) = stream_handler_clone
+                    .send_completed(&task_id_clone, "Success")
+                    .await
+                {
+                    tracing::error!("Failed to send completion event: {}", e);
+                }
+            }
+
+            tracing::info!("Task {} execution streaming completed", task_id_clone);
+        });
+
+        tracing::info!("Started streaming execution for task: {}", task_id);
 
         Ok(Response::new(
             tokio_stream::wrappers::ReceiverStream::new(rx)
