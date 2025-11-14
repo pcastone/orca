@@ -88,7 +88,13 @@ pub async fn run(config: TuiConfig) -> Result<()> {
                 }
             }
             Ok(Event::Key(key)) => {
-                use crossterm::event::KeyCode;
+                use crossterm::event::{KeyCode, KeyModifiers};
+
+                // Handle Ctrl+C for quit
+                if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                    break;
+                }
+
                 match key.code {
                     KeyCode::Char('q') | KeyCode::Esc => {
                         if app.view() == View::TaskList || app.view() == View::WorkflowList || app.view() == View::Help {
@@ -143,11 +149,37 @@ pub async fn run(config: TuiConfig) -> Result<()> {
                             _ => {}
                         }
                     }
+
+                    // Direct view switching with numbers
+                    KeyCode::Char('1') => app.go_to_view(View::TaskList),
+                    KeyCode::Char('2') => app.go_to_view(View::WorkflowList),
+                    KeyCode::Char('3') => app.go_to_view(View::ExecutionStream),
+                    KeyCode::Char('4') | KeyCode::Char('?') | KeyCode::Char('h') => app.go_to_view(View::Help),
+
+                    // View navigation
                     KeyCode::Tab => app.next_view(),
                     KeyCode::BackTab => app.previous_view(),
+
+                    // Standard navigation
                     KeyCode::Up => app.previous_item(),
                     KeyCode::Down => app.next_item(),
                     KeyCode::Enter => app.select_item(),
+
+                    // Vim-style navigation
+                    KeyCode::Char('j') => app.next_item(),
+                    KeyCode::Char('k') => app.previous_item(),
+                    KeyCode::Char('g') => app.first_item(),
+                    KeyCode::Char('G') => app.last_item(),
+
+                    // Page navigation
+                    KeyCode::PageUp => app.page_up(),
+                    KeyCode::PageDown => app.page_down(),
+                    KeyCode::Home => app.first_item(),
+                    KeyCode::End => app.last_item(),
+
+                    // F1 for help
+                    KeyCode::F(1) => app.go_to_view(View::Help),
+
                     _ => {}
                 }
             }

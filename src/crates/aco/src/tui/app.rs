@@ -487,6 +487,49 @@ impl App {
         }
     }
 
+    /// Jump to first item
+    pub fn first_item(&mut self) {
+        self.selected = 0;
+        self.update_scroll();
+    }
+
+    /// Jump to last item
+    pub fn last_item(&mut self) {
+        let max = match self.state.view {
+            View::TaskList => self.tasks.len(),
+            View::WorkflowList => self.workflows.len(),
+            _ => 0,
+        };
+        if max > 0 {
+            self.selected = max - 1;
+        }
+        self.update_scroll();
+    }
+
+    /// Page up (move up by 10 items)
+    pub fn page_up(&mut self) {
+        self.selected = self.selected.saturating_sub(10);
+        self.update_scroll();
+    }
+
+    /// Page down (move down by 10 items)
+    pub fn page_down(&mut self) {
+        let max = match self.state.view {
+            View::TaskList => self.tasks.len(),
+            View::WorkflowList => self.workflows.len(),
+            _ => 0,
+        };
+        if max > 0 {
+            self.selected = (self.selected + 10).min(max - 1);
+        }
+        self.update_scroll();
+    }
+
+    /// Go directly to a specific view
+    pub fn go_to_view(&mut self, view: View) {
+        self.set_view(view);
+    }
+
     /// Get current selected task
     pub fn selected_task(&self) -> Option<&TaskItem> {
         self.tasks.get(self.selected)
@@ -727,5 +770,111 @@ mod tests {
         let app = App::new(test_config());
         // Should not refresh immediately
         assert!(!app.should_refresh());
+    }
+
+    #[test]
+    fn test_first_and_last_item() {
+        let mut app = App::new(test_config());
+
+        // Add 10 tasks
+        for i in 0..10 {
+            app.add_task(TaskItem {
+                id: format!("task-{}", i),
+                title: format!("Task {}", i),
+                description: "Description".to_string(),
+                status: "pending".to_string(),
+                task_type: "execution".to_string(),
+                config: "{}".to_string(),
+                metadata: "{}".to_string(),
+                workspace_path: format!("/tmp/task-{}", i),
+                created_at: "2024-01-01".to_string(),
+                updated_at: "2024-01-01".to_string(),
+            });
+        }
+
+        // Test first_item
+        app.selected = 5;
+        app.first_item();
+        assert_eq!(app.selected, 0);
+
+        // Test last_item
+        app.last_item();
+        assert_eq!(app.selected, 9);
+    }
+
+    #[test]
+    fn test_page_navigation() {
+        let mut app = App::new(test_config());
+
+        // Add 30 tasks
+        for i in 0..30 {
+            app.add_task(TaskItem {
+                id: format!("task-{}", i),
+                title: format!("Task {}", i),
+                description: "Description".to_string(),
+                status: "pending".to_string(),
+                task_type: "execution".to_string(),
+                config: "{}".to_string(),
+                metadata: "{}".to_string(),
+                workspace_path: format!("/tmp/task-{}", i),
+                created_at: "2024-01-01".to_string(),
+                updated_at: "2024-01-01".to_string(),
+            });
+        }
+
+        // Test page_down
+        app.selected = 0;
+        app.page_down();
+        assert_eq!(app.selected, 10);
+
+        app.page_down();
+        assert_eq!(app.selected, 20);
+
+        // Test page_up
+        app.page_up();
+        assert_eq!(app.selected, 10);
+
+        app.page_up();
+        assert_eq!(app.selected, 0);
+
+        // Test page_down doesn't exceed bounds
+        app.selected = 25;
+        app.page_down();
+        assert_eq!(app.selected, 29); // Last item
+    }
+
+    #[test]
+    fn test_go_to_view() {
+        let mut app = App::new(test_config());
+
+        app.go_to_view(View::WorkflowList);
+        assert_eq!(app.view(), View::WorkflowList);
+
+        app.go_to_view(View::ExecutionStream);
+        assert_eq!(app.view(), View::ExecutionStream);
+
+        app.go_to_view(View::Help);
+        assert_eq!(app.view(), View::Help);
+
+        app.go_to_view(View::TaskList);
+        assert_eq!(app.view(), View::TaskList);
+    }
+
+    #[test]
+    fn test_empty_list_navigation() {
+        let mut app = App::new(test_config());
+
+        // Test with no items
+        app.first_item();
+        assert_eq!(app.selected, 0);
+
+        app.last_item();
+        assert_eq!(app.selected, 0);
+
+        app.page_up();
+        assert_eq!(app.selected, 0);
+
+        app.page_down();
+        assert_eq!(app.selected, 0);
     }
 }
