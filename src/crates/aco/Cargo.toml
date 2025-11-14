@@ -15,6 +15,10 @@ description = "aco client application for tool execution"
 name = "aco"
 path = "src/main.rs"
 
+[[bench]]
+name = "tui_benchmarks"
+harness = false
+
 [dependencies]
 tokio = { workspace = true }
 tokio-tungstenite = { workspace = true }
