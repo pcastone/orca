@@ -1,0 +1,8 @@
+# Rust source directory ignores
+target/
+*.rs.bk
+
+# Build outputs
+/debug
+/release
+/incremental

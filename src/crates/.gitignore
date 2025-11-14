@@ -1,0 +1,9 @@
+# Cargo build artifacts
+target/
+Cargo.lock
+*.rs.bk
+
+# IDE
+.vscode/
+.idea/
+*.swp

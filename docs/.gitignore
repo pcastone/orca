@@ -1,0 +1,5 @@
+# Documentation build artifacts
+/build
+/site
+*.html
+.sass-cache/

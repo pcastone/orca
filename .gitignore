@@ -1,0 +1,148 @@
+# Rust
+target/
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# Build artifacts
+/build
+*.o
+*.a
+*.so
+*.dylib
+
+# IDE and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+.env.local
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-v][a-z]
+[._]sw[a-p]
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# JetBrains IDEs
+.idea/
+.gradle/
+.gradle
+.groovy
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux
+.directory
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Node.js (if needed for build tools)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Python (if needed for scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+~*
+
+# Logs
+*.log
+logs/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Test coverage
+.coverage
+htmlcov/
+coverage.xml
+
+# Docker
+.dockerignore
+
+# Generated files
+*.pb.rs
+*.pb.go
+*.pb.cc
+*.pb.h
+
+# ACO specific
+token
+.aco/
+*.sqlite
+*.sqlite3
+orchestrator.db
+config.local.toml
+
+# Secrets (never commit these)
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+private/
+
+# Build output
+out/
+dist/
+
+# Cache
+.cache
+cache/

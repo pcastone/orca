@@ -1,0 +1,15 @@
+# Playground test outputs
+*.log
+*.tmp
+test-output/
+results/
+output/
+
+# Cargo artifacts
+target/
+Cargo.lock
+*.rs.bk
+
+# IDE
+.vscode/
+.idea/

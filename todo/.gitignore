@@ -1,0 +1,10 @@
+# Task tracking files
+*.bak
+*.swp
+*~
+.DS_Store
+
+# Temporary notes
+/scratch
+/temp
+*.tmp
