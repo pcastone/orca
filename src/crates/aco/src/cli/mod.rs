@@ -2,6 +2,7 @@
 //!
 //! Provides command-line interface with subcommands for tasks, workflows, and authentication.
 
+pub mod handlers;
 pub mod output;
 
 use clap::{Parser, Subcommand};
