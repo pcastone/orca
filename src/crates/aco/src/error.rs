@@ -33,6 +33,14 @@ pub enum AcoError {
     #[error("Configuration error: {0}")]
     Config(String),
 
+    /// Connection error
+    #[error("Connection error: {0}")]
+    Connection(String),
+
+    /// Authentication error
+    #[error("Authentication error: {0}")]
+    Auth(String),
+
     /// TOML parsing error
     #[error("TOML parsing error: {0}")]
     Toml(#[from] toml::de::Error),

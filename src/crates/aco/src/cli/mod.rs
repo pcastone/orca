@@ -4,6 +4,7 @@
 
 pub mod handlers;
 pub mod output;
+pub mod workflow;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;

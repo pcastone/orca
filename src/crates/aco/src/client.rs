@@ -109,10 +109,10 @@ impl ClientConfig {
     pub async fn from_file(path: &Path) -> Result<Self> {
         let content = tokio::fs::read_to_string(path)
             .await
-            .map_err(|e| AcoError::ConfigError(format!("Failed to read config: {}", e)))?;
+            .map_err(|e| AcoError::Config(format!("Failed to read config: {}", e)))?;
 
         let config: ClientConfig = toml::from_str(&content)
-            .map_err(|e| AcoError::ConfigError(format!("Failed to parse config: {}", e)))?;
+            .map_err(|e| AcoError::Config(format!("Failed to parse config: {}", e)))?;
 
         Ok(config)
     }
@@ -120,15 +120,15 @@ impl ClientConfig {
     /// Save configuration to file
     pub async fn save_to_file(&self, path: &Path) -> Result<()> {
         let content = toml::to_string_pretty(self)
-            .map_err(|e| AcoError::ConfigError(format!("Failed to serialize config: {}", e)))?;
+            .map_err(|e| AcoError::Config(format!("Failed to serialize config: {}", e)))?;
 
         tokio::fs::create_dir_all(path.parent().unwrap_or_else(|| Path::new(".")))
             .await
-            .map_err(|e| AcoError::ConfigError(format!("Failed to create config dir: {}", e)))?;
+            .map_err(|e| AcoError::Config(format!("Failed to create config dir: {}", e)))?;
 
         tokio::fs::write(path, content)
             .await
-            .map_err(|e| AcoError::ConfigError(format!("Failed to write config: {}", e)))?;
+            .map_err(|e| AcoError::Config(format!("Failed to write config: {}", e)))?;
 
         Ok(())
     }
@@ -195,7 +195,7 @@ impl TokenManager {
         match tokio::fs::read_to_string(&self.token_path).await {
             Ok(content) => {
                 let token: AuthToken = serde_json::from_str(&content)
-                    .map_err(|e| AcoError::AuthError(format!("Failed to parse token: {}", e)))?;
+                    .map_err(|e| AcoError::Auth(format!("Failed to parse token: {}", e)))?;
 
                 if token.is_expired() {
                     warn!("Loaded token is expired");
@@ -220,14 +220,14 @@ impl TokenManager {
 
         tokio::fs::create_dir_all(token_dir)
             .await
-            .map_err(|e| AcoError::ConfigError(format!("Failed to create token dir: {}", e)))?;
+            .map_err(|e| AcoError::Config(format!("Failed to create token dir: {}", e)))?;
 
         let content = serde_json::to_string(&token)
-            .map_err(|e| AcoError::AuthError(format!("Failed to serialize token: {}", e)))?;
+            .map_err(|e| AcoError::Auth(format!("Failed to serialize token: {}", e)))?;
 
         tokio::fs::write(&self.token_path, content)
             .await
-            .map_err(|e| AcoError::AuthError(format!("Failed to write token: {}", e)))?;
+            .map_err(|e| AcoError::Auth(format!("Failed to write token: {}", e)))?;
 
         let mut current = self.current_token.write().await;
         *current = Some(token);
@@ -250,7 +250,7 @@ impl TokenManager {
         if self.token_path.exists() {
             tokio::fs::remove_file(&self.token_path)
                 .await
-                .map_err(|e| AcoError::AuthError(format!("Failed to delete token: {}", e)))?;
+                .map_err(|e| AcoError::Auth(format!("Failed to delete token: {}", e)))?;
         }
 
         info!("Token cleared");
@@ -303,7 +303,7 @@ impl AcoClient {
                 Err(e) => {
                     retries += 1;
                     if retries > self.config.retry_config.max_retries {
-                        return Err(AcoError::ConnectionError(format!(
+                        return Err(AcoError::Connection(format!(
                             "Failed to connect after {} retries: {}",
                             retries, e
                         )));
@@ -328,13 +328,13 @@ impl AcoClient {
     /// Create a tonic channel
     async fn create_channel(&self) -> Result<tonic::transport::Channel> {
         let uri = self.config.server_url.parse()
-            .map_err(|e: String| AcoError::ConnectionError(format!("Invalid server URL: {}", e)))?;
+            .map_err(|e| AcoError::Connection(format!("Invalid server URL: {}", e)))?;
 
         let channel = if self.config.use_tls {
             let tls_config = if let Some(cert_path) = &self.config.cert_path {
                 let cert = tokio::fs::read(cert_path)
                     .await
-                    .map_err(|e| AcoError::ConnectionError(format!("Failed to read cert: {}", e)))?;
+                    .map_err(|e| AcoError::Connection(format!("Failed to read cert: {}", e)))?;
 
                 let pem = tonic::transport::Certificate::from_pem(cert);
                 tonic::transport::ClientTlsConfig::new().ca_certificate(pem)
@@ -344,17 +344,17 @@ impl AcoClient {
 
             tonic::transport::Channel::builder(uri)
                 .tls_config(tls_config)
-                .map_err(|e| AcoError::ConnectionError(format!("TLS config error: {}", e)))?
+                .map_err(|e| AcoError::Connection(format!("TLS config error: {}", e)))?
                 .timeout(Duration::from_secs(self.config.timeout_seconds))
                 .connect()
                 .await
-                .map_err(|e| AcoError::ConnectionError(format!("Connection failed: {}", e)))?
+                .map_err(|e| AcoError::Connection(format!("Connection failed: {}", e)))?
         } else {
             tonic::transport::Channel::builder(uri)
                 .timeout(Duration::from_secs(self.config.timeout_seconds))
                 .connect()
                 .await
-                .map_err(|e| AcoError::ConnectionError(format!("Connection failed: {}", e)))?
+                .map_err(|e| AcoError::Connection(format!("Connection failed: {}", e)))?
         };
 
         Ok(channel)
@@ -364,7 +364,7 @@ impl AcoClient {
     pub fn channel(&self) -> Result<Arc<tonic::transport::Channel>> {
         self.channel
             .clone()
-            .ok_or_else(|| AcoError::ConnectionError("Not connected".to_string()))
+            .ok_or_else(|| AcoError::Connection("Not connected".to_string()))
     }
 
     /// Load token from disk
