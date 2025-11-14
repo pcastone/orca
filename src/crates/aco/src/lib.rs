@@ -21,4 +21,5 @@ pub use workspace::{
     PathValidator, SecurityConfig, WorkspaceInitConfig, WorkspaceInitializer, WorkspaceMetadata,
     WorkspaceValidator,
 };
+pub use client::{AcoClient, ClientConfig, AuthToken, TokenManager};
 

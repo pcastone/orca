@@ -39,6 +39,10 @@ dirs = "5.0"
 ratatui = "0.25"
 crossterm = "0.27"
 
+# gRPC
+tonic = { workspace = true }
+tonic-transport = "0.12"
+
 # Internal workspace dependencies
 tooling = { workspace = true }
 
