@@ -12,7 +12,10 @@ pub mod executor;
 pub mod integration;
 pub mod interpreter;
 pub mod pattern;
+pub mod proto;
+pub mod proto_conv;
 pub mod router;
+pub mod services;
 pub mod version;
 pub mod workflow;
 
