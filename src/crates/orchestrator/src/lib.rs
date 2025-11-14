@@ -55,7 +55,7 @@ pub enum OrchestratorError {
 pub type Result<T> = std::result::Result<T, OrchestratorError>;
 
 // Re-export commonly used types
-pub use execution::TaskExecutionEngine;
+pub use execution::{TaskExecutionEngine, WorkflowExecutionEngine, WorkflowExecutor};
 pub use executor::LlmTaskExecutor;
 
 /// Task execution status

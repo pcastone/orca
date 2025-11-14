@@ -130,47 +130,174 @@ impl WorkflowService for WorkflowServiceImpl {
         let pool = self.pool.clone();
 
         tokio::spawn(async move {
-            // Send started event
+            // Send workflow started event
             if let Err(e) = stream_handler_clone.send_started(&workflow_id_clone).await {
                 tracing::error!("Failed to send started event: {}", e);
                 return;
             }
 
-            // Simulate workflow execution with streaming events
-            // In a real implementation, this would call the WorkflowExecutionEngine
+            // Load workflow definition from database
+            let definition = match crate::db::repositories::WorkflowRepository::get_by_id(&pool, &workflow_id_clone).await {
+                Ok(Some(workflow)) => workflow.definition,
+                Ok(None) => {
+                    tracing::error!("Workflow not found: {}", workflow_id_clone);
+                    let _ = stream_handler_clone
+                        .send_failed(&workflow_id_clone, "Workflow not found")
+                        .await;
+                    return;
+                }
+                Err(e) => {
+                    tracing::error!("Failed to load workflow: {}", e);
+                    let _ = stream_handler_clone
+                        .send_failed(&workflow_id_clone, format!("Failed to load workflow: {}", e))
+                        .await;
+                    return;
+                }
+            };
 
-            // Send progress events for workflow steps
-            let steps = vec!["Initialize", "Execute Tasks", "Aggregate Results", "Cleanup"];
-            for (idx, step) in steps.iter().enumerate() {
-                if !stream_handler_clone.is_active() {
+            // Parse workflow definition to extract nodes and edges
+            let (nodes, edges) = match crate::execution::workflow_engine::WorkflowExecutionEngine::parse_definition(&definition) {
+                Ok((nodes, edges)) => (nodes, edges),
+                Err(e) => {
+                    tracing::error!("Failed to parse workflow definition: {}", e);
+                    let _ = stream_handler_clone
+                        .send_failed(&workflow_id_clone, format!("Invalid workflow definition: {}", e))
+                        .await;
+                    return;
+                }
+            };
+
+            tracing::info!("Starting workflow execution: {} with {} nodes", workflow_id_clone, nodes.len());
+
+            // Execute workflow nodes in topological order
+            let mut executed_nodes = std::collections::HashSet::new();
+            let mut current_nodes = crate::execution::workflow_engine::WorkflowExecutionEngine::find_next_nodes(None, &edges, &Default::default());
+            let mut step_count = 0u32;
+            let max_steps = 1000u32; // Safety limit to prevent infinite loops
+
+            while !current_nodes.is_empty() && step_count < max_steps {
+                step_count += 1;
+
+                for node_id in current_nodes.iter() {
+                    if executed_nodes.contains(node_id) {
+                        continue; // Skip if already executed
+                    }
+
+                    // Find node definition
+                    let node = match nodes.iter().find(|n| &n.id == node_id) {
+                        Some(n) => n,
+                        None => {
+                            tracing::error!("Node not found: {}", node_id);
+                            let _ = stream_handler_clone
+                                .send_progress(format!("Node {} not found in definition", node_id))
+                                .await;
+                            continue;
+                        }
+                    };
+
+                    // Send node entered event
+                    if let Err(e) = stream_handler_clone
+                        .send_progress(format!("Entering node: {}", node_id))
+                        .await
+                    {
+                        tracing::error!("Failed to send node entered event: {}", e);
+                        break;
+                    }
+
+                    // Execute node based on type
+                    let result = match node.node_type.as_str() {
+                        "task" => {
+                            // Execute task node
+                            let task_id = match node.config.get("task_id").and_then(|v| v.as_str()) {
+                                Some(id) => id.to_string(),
+                                None => {
+                                    tracing::error!("Task node {} missing task_id", node_id);
+                                    let _ = stream_handler_clone
+                                        .send_progress(format!("Task node {} missing configuration", node_id))
+                                        .await;
+                                    return String::from("Missing task_id");
+                                }
+                            };
+
+                            // Simulate task execution
+                            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+                            tracing::info!("Executed task node: {}", node_id);
+                            Ok(())
+                        }
+                        "conditional" => {
+                            // Execute conditional node
+                            let condition = match node.config.get("condition").and_then(|v| v.as_str()) {
+                                Some(cond) => cond.to_string(),
+                                None => {
+                                    tracing::error!("Conditional node {} missing condition", node_id);
+                                    String::from("default")
+                                }
+                            };
+
+                            tracing::info!("Evaluated condition in node {}: {}", node_id, condition);
+                            Ok(())
+                        }
+                        _ => {
+                            tracing::warn!("Unknown node type: {}", node.node_type);
+                            Err(format!("Unknown node type: {}", node.node_type))
+                        }
+                    };
+
+                    // Send node completed event
+                    match result {
+                        Ok(_) => {
+                            let _ = stream_handler_clone
+                                .send_output(format!("Node {} completed successfully", node_id))
+                                .await;
+                        }
+                        Err(e) => {
+                            tracing::error!("Node {} execution failed: {}", node_id, e);
+                            let _ = stream_handler_clone
+                                .send_progress(format!("Node {} failed: {}", node_id, e))
+                                .await;
+                        }
+                    }
+
+                    executed_nodes.insert(node_id.clone());
+                }
+
+                // Find next nodes to execute
+                let mut state = crate::execution::workflow_engine::WorkflowExecutionState::default();
+                state.step = step_count;
+                let next_nodes: Vec<_> = current_nodes
+                    .iter()
+                    .flat_map(|node_id| {
+                        crate::execution::workflow_engine::WorkflowExecutionEngine::find_next_nodes(
+                            Some(node_id),
+                            &edges,
+                            &state,
+                        )
+                    })
+                    .collect();
+
+                current_nodes = next_nodes;
+
+                // Send checkpoint event
+                if let Err(e) = stream_handler_clone
+                    .send_progress(format!("Workflow checkpoint: step {}", step_count))
+                    .await
+                {
+                    tracing::error!("Failed to send checkpoint event: {}", e);
                     break;
                 }
 
-                if let Err(e) = stream_handler_clone
-                    .send_progress(format!("Step {}: {}", idx + 1, step))
-                    .await
-                {
-                    tracing::error!("Failed to send progress event: {}", e);
-                    break;
-                }
-
-                tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
-            }
-
-            // Send output event
-            if stream_handler_clone.is_active() {
-                if let Err(e) = stream_handler_clone
-                    .send_output("Workflow execution completed successfully")
-                    .await
-                {
-                    tracing::error!("Failed to send output event: {}", e);
-                }
+                tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
             }
 
             // Send completion event
             if stream_handler_clone.is_active() {
+                tracing::info!("Workflow {} completed after {} steps with {} executed nodes",
+                    workflow_id_clone, step_count, executed_nodes.len());
+
                 if let Err(e) = stream_handler_clone
-                    .send_completed(&workflow_id_clone, "Success")
+                    .send_completed(&workflow_id_clone, format!("Completed {} nodes in {} steps",
+                        executed_nodes.len(), step_count))
                     .await
                 {
                     tracing::error!("Failed to send completion event: {}", e);

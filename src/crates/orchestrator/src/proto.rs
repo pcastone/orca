@@ -235,6 +235,18 @@ pub mod workflows {
 pub mod auth {
     use serde::{Deserialize, Serialize};
 
+    pub mod auth_service_server {
+        use tonic::async_trait;
+
+        #[async_trait]
+        pub trait AuthService: Send + Sync + 'static {
+            async fn authenticate(
+                &self,
+                request: tonic::Request<super::AuthenticateRequest>,
+            ) -> Result<tonic::Response<super::AuthenticateResponse>, tonic::Status>;
+        }
+    }
+
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct AuthenticateRequest {
         pub username: String,
