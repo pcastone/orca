@@ -85,22 +85,69 @@ fn draw_task_list(f: &mut Frame, app: &App, area: Rect) {
 /// Draw the task detail view
 fn draw_task_detail(f: &mut Frame, app: &App, area: Rect) {
     if let Some(task) = app.selected_task() {
+        // Parse status color
+        let status_color = match task.status.as_str() {
+            "pending" => Color::Yellow,
+            "running" => Color::Cyan,
+            "completed" => Color::Green,
+            "failed" => Color::Red,
+            "cancelled" => Color::DarkGray,
+            _ => Color::White,
+        };
+
         let content = vec![
             Line::from(vec![
                 Span::styled("ID: ", Style::default().add_modifier(Modifier::BOLD)),
                 Span::raw(&task.id),
             ]),
+            Line::from(""),
             Line::from(vec![
                 Span::styled("Title: ", Style::default().add_modifier(Modifier::BOLD)),
                 Span::raw(&task.title),
             ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Description: ", Style::default().add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(format!("  {}", task.description)),
+            Line::from(""),
             Line::from(vec![
                 Span::styled("Status: ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(&task.status),
+                Span::styled(&task.status, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
             ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Type: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(&task.task_type),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Workspace: ", Style::default().add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(format!("  {}", task.workspace_path)),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Config: ", Style::default().add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(format!("  {}", task.config)),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Metadata: ", Style::default().add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(format!("  {}", task.metadata)),
+            Line::from(""),
             Line::from(vec![
                 Span::styled("Created: ", Style::default().add_modifier(Modifier::BOLD)),
                 Span::raw(&task.created_at),
+            ]),
+            Line::from(vec![
+                Span::styled("Updated: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(&task.updated_at),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Press ESC to return to task list",
+                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC)),
             ]),
         ];
 

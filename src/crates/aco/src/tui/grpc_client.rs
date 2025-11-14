@@ -11,9 +11,14 @@ use std::time::Duration;
 pub struct TaskInfo {
     pub id: String,
     pub title: String,
+    pub description: String,
     pub status: String,
     pub task_type: String,
+    pub config: String,
+    pub metadata: String,
+    pub workspace_path: String,
     pub created_at: String,
+    pub updated_at: String,
 }
 
 /// Workflow info from server
@@ -26,6 +31,7 @@ pub struct WorkflowInfo {
 }
 
 /// Simple gRPC client for TUI
+#[derive(Debug)]
 pub struct TuiGrpcClient {
     server_url: String,
     timeout: Duration,
@@ -46,28 +52,46 @@ impl TuiGrpcClient {
         // TODO: Implement real gRPC call once orchestrator proto client is fixed
         tracing::debug!("Fetching tasks from {}", self.server_url);
 
+        let now = chrono::Utc::now();
+        let earlier = now - chrono::Duration::hours(2);
+
         // Mock data
         Ok(vec![
             TaskInfo {
                 id: "task-001".to_string(),
                 title: "Sample Task 1".to_string(),
+                description: "This is a detailed description of task 1, which involves processing data.".to_string(),
                 status: "pending".to_string(),
                 task_type: "execution".to_string(),
-                created_at: chrono::Utc::now().to_rfc3339(),
+                config: r#"{"timeout": 300, "retries": 3}"#.to_string(),
+                metadata: r#"{"priority": "high", "tags": ["production", "critical"]}"#.to_string(),
+                workspace_path: "/tmp/workspace/task-001".to_string(),
+                created_at: earlier.to_rfc3339(),
+                updated_at: earlier.to_rfc3339(),
             },
             TaskInfo {
                 id: "task-002".to_string(),
                 title: "Sample Task 2".to_string(),
+                description: "Task 2 is currently running and processing workflow steps.".to_string(),
                 status: "running".to_string(),
                 task_type: "workflow".to_string(),
-                created_at: chrono::Utc::now().to_rfc3339(),
+                config: r#"{"max_steps": 10, "parallel": true}"#.to_string(),
+                metadata: r#"{"priority": "medium", "tags": ["development"]}"#.to_string(),
+                workspace_path: "/tmp/workspace/task-002".to_string(),
+                created_at: earlier.to_rfc3339(),
+                updated_at: now.to_rfc3339(),
             },
             TaskInfo {
                 id: "task-003".to_string(),
                 title: "Sample Task 3".to_string(),
+                description: "Validation task that has completed successfully.".to_string(),
                 status: "completed".to_string(),
                 task_type: "validation".to_string(),
-                created_at: chrono::Utc::now().to_rfc3339(),
+                config: r#"{"validators": ["schema", "integrity"]}"#.to_string(),
+                metadata: r#"{"priority": "low", "tags": ["testing"]}"#.to_string(),
+                workspace_path: "/tmp/workspace/task-003".to_string(),
+                created_at: earlier.to_rfc3339(),
+                updated_at: now.to_rfc3339(),
             },
         ])
     }

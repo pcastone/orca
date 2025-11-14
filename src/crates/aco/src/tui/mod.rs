@@ -67,7 +67,7 @@ pub async fn run(config: TuiConfig) -> Result<()> {
     }
 
     // Create event handler
-    let event_handler = EventHandler::new(250); // 250ms tick rate
+    let event_handler = EventHandler::new(); // 60 FPS tick rate
 
     // Main event loop
     loop {
@@ -75,9 +75,9 @@ pub async fn run(config: TuiConfig) -> Result<()> {
         terminal.draw(|f| ui::draw(f, &mut app))?;
 
         // Handle events
-        match event_handler.next()? {
-            Event::Tick => {
-                // Auto-refresh on tick (every 250ms)
+        match event_handler.next() {
+            Ok(Event::Tick) => {
+                // Auto-refresh on tick
                 if app.should_refresh() {
                     if let Err(e) = app.refresh_tasks().await {
                         tracing::debug!("Task refresh failed: {}", e);
@@ -87,10 +87,16 @@ pub async fn run(config: TuiConfig) -> Result<()> {
                     }
                 }
             }
-            Event::Key(key) => {
+            Ok(Event::Key(key)) => {
                 use crossterm::event::KeyCode;
                 match key.code {
-                    KeyCode::Char('q') => break,
+                    KeyCode::Char('q') | KeyCode::Esc => {
+                        if app.view() == View::TaskList || app.view() == View::WorkflowList || app.view() == View::Help {
+                            break;
+                        } else {
+                            app.deselect_item();
+                        }
+                    }
                     KeyCode::Char('r') => {
                         // Manual refresh
                         app.refresh_tasks().await?;
@@ -101,12 +107,20 @@ pub async fn run(config: TuiConfig) -> Result<()> {
                     KeyCode::Up => app.previous_item(),
                     KeyCode::Down => app.next_item(),
                     KeyCode::Enter => app.select_item(),
-                    KeyCode::Esc => app.deselect_item(),
                     _ => {}
                 }
             }
-            Event::Mouse(_) => {}
-            Event::Resize(_, _) => {}
+            Ok(Event::Resize(_, _)) => {
+                // Terminal resized, will redraw on next loop
+            }
+            Ok(Event::Quit) => break,
+            Ok(Event::Error(e)) => {
+                tracing::error!("Event error: {}", e);
+            }
+            Err(e) => {
+                tracing::error!("Event receive error: {}", e);
+                break;
+            }
         }
 
         if app.should_quit() {

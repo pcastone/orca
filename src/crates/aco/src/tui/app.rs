@@ -126,14 +126,29 @@ pub struct TaskItem {
     /// Task title
     pub title: String,
 
+    /// Task description
+    pub description: String,
+
     /// Task status
     pub status: String,
 
     /// Task type
     pub task_type: String,
 
+    /// Task config (JSON)
+    pub config: String,
+
+    /// Task metadata (JSON)
+    pub metadata: String,
+
+    /// Workspace path
+    pub workspace_path: String,
+
     /// Task created at
     pub created_at: String,
+
+    /// Task updated at
+    pub updated_at: String,
 }
 
 /// Workflow list item
@@ -183,9 +198,14 @@ impl App {
                     self.add_task(TaskItem {
                         id: task_info.id,
                         title: task_info.title,
+                        description: task_info.description,
                         status: task_info.status,
                         task_type: task_info.task_type,
+                        config: task_info.config,
+                        metadata: task_info.metadata,
+                        workspace_path: task_info.workspace_path,
                         created_at: task_info.created_at,
+                        updated_at: task_info.updated_at,
                     });
                 }
                 self.state.last_refresh = Instant::now();
@@ -522,16 +542,26 @@ mod tests {
         app.add_task(TaskItem {
             id: "task-1".to_string(),
             title: "Task 1".to_string(),
+            description: "Description 1".to_string(),
             status: "pending".to_string(),
             task_type: "execution".to_string(),
+            config: "{}".to_string(),
+            metadata: "{}".to_string(),
+            workspace_path: "/tmp/task-1".to_string(),
             created_at: "2024-01-01".to_string(),
+            updated_at: "2024-01-01".to_string(),
         });
         app.add_task(TaskItem {
             id: "task-2".to_string(),
             title: "Task 2".to_string(),
+            description: "Description 2".to_string(),
             status: "completed".to_string(),
             task_type: "workflow".to_string(),
+            config: "{}".to_string(),
+            metadata: "{}".to_string(),
+            workspace_path: "/tmp/task-2".to_string(),
             created_at: "2024-01-02".to_string(),
+            updated_at: "2024-01-02".to_string(),
         });
 
         assert_eq!(app.selected, 0);
@@ -547,9 +577,14 @@ mod tests {
         app.add_task(TaskItem {
             id: "task-1".to_string(),
             title: "Test Task".to_string(),
+            description: "Test Description".to_string(),
             status: "pending".to_string(),
             task_type: "execution".to_string(),
+            config: "{}".to_string(),
+            metadata: "{}".to_string(),
+            workspace_path: "/tmp/task-1".to_string(),
             created_at: "2024-01-01".to_string(),
+            updated_at: "2024-01-01".to_string(),
         });
 
         assert_eq!(app.view(), View::TaskList);
@@ -567,9 +602,14 @@ mod tests {
         app.add_task(TaskItem {
             id: "task-1".to_string(),
             title: "Test Task".to_string(),
+            description: "Test Description".to_string(),
             status: "pending".to_string(),
             task_type: "execution".to_string(),
+            config: "{}".to_string(),
+            metadata: "{}".to_string(),
+            workspace_path: "/tmp/task-1".to_string(),
             created_at: "2024-01-01".to_string(),
+            updated_at: "2024-01-01".to_string(),
         });
         app.add_workflow(WorkflowItem {
             id: "wf-1".to_string(),
@@ -588,9 +628,14 @@ mod tests {
         app.add_task(TaskItem {
             id: "task-1".to_string(),
             title: "Task".to_string(),
+            description: "Description".to_string(),
             status: "pending".to_string(),
             task_type: "execution".to_string(),
+            config: "{}".to_string(),
+            metadata: "{}".to_string(),
+            workspace_path: "/tmp/task-1".to_string(),
             created_at: "2024-01-01".to_string(),
+            updated_at: "2024-01-01".to_string(),
         });
         assert_eq!(app.tasks.len(), 1);
         app.clear_tasks();
