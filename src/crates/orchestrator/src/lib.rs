@@ -9,6 +9,7 @@ pub mod config;
 pub mod context;
 pub mod db;
 pub mod executor;
+pub mod execution;
 pub mod integration;
 pub mod interpreter;
 pub mod pattern;
@@ -52,6 +53,10 @@ pub enum OrchestratorError {
 
 /// Result type for orchestrator operations
 pub type Result<T> = std::result::Result<T, OrchestratorError>;
+
+// Re-export commonly used types
+pub use execution::TaskExecutionEngine;
+pub use executor::LlmTaskExecutor;
 
 /// Task execution status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
