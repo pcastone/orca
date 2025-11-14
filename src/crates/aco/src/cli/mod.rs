@@ -4,6 +4,7 @@
 
 pub mod handlers;
 pub mod output;
+pub mod status;
 pub mod workflow;
 
 use clap::{Parser, Subcommand};
@@ -17,9 +18,18 @@ use std::path::PathBuf;
 #[command(about = "Orchestrator client for task and workflow management")]
 #[command(long_about = None)]
 pub struct Cli {
+    /// Connection string for authentication
+    /// Formats:
+    ///   none              - No authentication
+    ///   secret:<key>      - API secret key
+    ///   <user>:<pass>     - Username and password (gets JWT)
+    ///   token:<jwt>       - Pre-obtained JWT token
+    #[arg(long, global = true, env = "ACO_CONNECT")]
+    pub connect: Option<String>,
+
     /// Orchestrator server URL
-    #[arg(long, global = true, env = "ACO_SERVER")]
-    pub server: Option<String>,
+    #[arg(long, global = true, default_value = "http://localhost:50051", env = "ACO_SERVER")]
+    pub server: String,
 
     /// Enable verbose output
     #[arg(short, long, global = true)]
@@ -86,6 +96,9 @@ pub enum Commands {
         #[command(subcommand)]
         subcommand: ConfigCommands,
     },
+
+    /// Show connection status
+    Status,
 }
 
 /// Task subcommands

@@ -3,6 +3,7 @@
 //! This crate provides the aco client application that hosts the Tool Runtime
 //! and communicates with the orchestrator via WebSocket.
 
+pub mod auth;
 pub mod cli;
 pub mod client;
 pub mod config;
@@ -13,6 +14,7 @@ pub mod tui;
 pub mod version;
 pub mod workspace;
 
+pub use auth::{CachedToken, ConnectAuth};
 pub use config::{AcoConfig, ConfigLoader};
 pub use error::{AcoError, Result};
 pub use server::AcoServer;
