@@ -2,9 +2,10 @@
 
 use crate::auth::ConnectAuth;
 use crate::error::Result;
+use crate::tui::{TuiConfig, TuiGrpcClient};
 use ratatui::layout::Rect;
 use serde::{Deserialize, Serialize};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tracing::debug;
 
 /// Current view being displayed
@@ -64,6 +65,9 @@ pub struct AppState {
     /// Last update time
     pub last_update: Instant,
 
+    /// Last refresh time
+    pub last_refresh: Instant,
+
     /// Is the app running
     pub running: bool,
 
@@ -83,6 +87,7 @@ impl Default for AppState {
             server_url: "http://localhost:50051".to_string(),
             auth: ConnectAuth::None,
             last_update: Instant::now(),
+            last_refresh: Instant::now(),
             running: true,
             error: None,
             status: "Ready".to_string(),
@@ -95,6 +100,9 @@ impl Default for AppState {
 pub struct App {
     /// Application state
     state: AppState,
+
+    /// gRPC client for data loading
+    grpc_client: TuiGrpcClient,
 
     /// Task list items
     pub tasks: Vec<TaskItem>,
@@ -121,6 +129,9 @@ pub struct TaskItem {
     /// Task status
     pub status: String,
 
+    /// Task type
+    pub task_type: String,
+
     /// Task created at
     pub created_at: String,
 }
@@ -142,18 +153,161 @@ pub struct WorkflowItem {
 }
 
 impl App {
-    /// Create a new app instance
-    pub fn new(server_url: String, auth: ConnectAuth) -> Self {
+    /// Create a new app instance from config
+    pub fn new(config: TuiConfig) -> Self {
         let mut state = AppState::default();
-        state.server_url = server_url;
-        state.auth = auth;
+        state.server_url = config.server_url.clone();
+        state.auth = ConnectAuth::None;
+
+        let grpc_client = TuiGrpcClient::new(config.server_url);
 
         Self {
             state,
+            grpc_client,
             tasks: Vec::new(),
             workflows: Vec::new(),
             scroll: 0,
             selected: 0,
+        }
+    }
+
+    /// Refresh tasks from server
+    pub async fn refresh_tasks(&mut self) -> Result<()> {
+        debug!("Refreshing tasks");
+        self.set_status("Refreshing tasks...".to_string());
+
+        match self.grpc_client.fetch_tasks().await {
+            Ok(task_infos) => {
+                self.clear_tasks();
+                for task_info in task_infos {
+                    self.add_task(TaskItem {
+                        id: task_info.id,
+                        title: task_info.title,
+                        status: task_info.status,
+                        task_type: task_info.task_type,
+                        created_at: task_info.created_at,
+                    });
+                }
+                self.state.last_refresh = Instant::now();
+                self.set_status(format!("Loaded {} tasks", self.tasks.len()));
+                Ok(())
+            }
+            Err(e) => {
+                let err_msg = format!("Failed to refresh tasks: {}", e);
+                self.set_error(err_msg.clone());
+                Err(e)
+            }
+        }
+    }
+
+    /// Refresh workflows from server
+    pub async fn refresh_workflows(&mut self) -> Result<()> {
+        debug!("Refreshing workflows");
+        self.set_status("Refreshing workflows...".to_string());
+
+        match self.grpc_client.fetch_workflows().await {
+            Ok(workflow_infos) => {
+                self.clear_workflows();
+                for workflow_info in workflow_infos {
+                    self.add_workflow(WorkflowItem {
+                        id: workflow_info.id,
+                        name: workflow_info.name,
+                        status: workflow_info.status,
+                        created_at: workflow_info.created_at,
+                    });
+                }
+                self.state.last_refresh = Instant::now();
+                self.set_status(format!("Loaded {} workflows", self.workflows.len()));
+                Ok(())
+            }
+            Err(e) => {
+                let err_msg = format!("Failed to refresh workflows: {}", e);
+                self.set_error(err_msg.clone());
+                Err(e)
+            }
+        }
+    }
+
+    /// Check if data should be auto-refreshed
+    pub fn should_refresh(&self) -> bool {
+        // Auto-refresh every 10 seconds
+        self.state.last_refresh.elapsed() > Duration::from_secs(10)
+    }
+
+    /// Check if app should quit
+    pub fn should_quit(&self) -> bool {
+        !self.state.running
+    }
+
+    /// Move to next view
+    pub fn next_view(&mut self) {
+        use View::*;
+        let new_view = match self.state.view {
+            TaskList => WorkflowList,
+            WorkflowList => Help,
+            Help => TaskList,
+            TaskDetail => WorkflowDetail,
+            WorkflowDetail => ExecutionStream,
+            ExecutionStream => TaskDetail,
+        };
+        self.set_view(new_view);
+    }
+
+    /// Move to previous view
+    pub fn previous_view(&mut self) {
+        use View::*;
+        let new_view = match self.state.view {
+            TaskList => Help,
+            WorkflowList => TaskList,
+            Help => WorkflowList,
+            TaskDetail => ExecutionStream,
+            WorkflowDetail => TaskDetail,
+            ExecutionStream => WorkflowDetail,
+        };
+        self.set_view(new_view);
+    }
+
+    /// Move selection to next item
+    pub fn next_item(&mut self) {
+        self.select_next();
+    }
+
+    /// Move selection to previous item
+    pub fn previous_item(&mut self) {
+        self.select_previous();
+    }
+
+    /// Select current item (enter detail view)
+    pub fn select_item(&mut self) {
+        match self.state.view {
+            View::TaskList => {
+                if let Some(task) = self.selected_task() {
+                    self.state.selected_task_id = Some(task.id.clone());
+                    self.set_view(View::TaskDetail);
+                }
+            }
+            View::WorkflowList => {
+                if let Some(workflow) = self.selected_workflow() {
+                    self.state.selected_workflow_id = Some(workflow.id.clone());
+                    self.set_view(View::WorkflowDetail);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Deselect item (return to list view)
+    pub fn deselect_item(&mut self) {
+        match self.state.view {
+            View::TaskDetail => {
+                self.state.selected_task_id = None;
+                self.set_view(View::TaskList);
+            }
+            View::WorkflowDetail => {
+                self.state.selected_workflow_id = None;
+                self.set_view(View::WorkflowList);
+            }
+            _ => {}
         }
     }
 
@@ -249,6 +403,16 @@ impl App {
         self.workflows.get(self.selected)
     }
 
+    /// Get selected task ID
+    pub fn selected_task_id(&self) -> Option<&str> {
+        self.state.selected_task_id.as_deref()
+    }
+
+    /// Get selected workflow ID
+    pub fn selected_workflow_id(&self) -> Option<&str> {
+        self.state.selected_workflow_id.as_deref()
+    }
+
     /// Add a task to the list
     pub fn add_task(&mut self, task: TaskItem) {
         self.tasks.push(task);
@@ -292,31 +456,40 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+
+    fn test_config() -> TuiConfig {
+        TuiConfig {
+            server_url: "http://localhost:50051".to_string(),
+            workspace: PathBuf::from("/tmp"),
+            verbose: false,
+        }
+    }
 
     #[test]
     fn test_app_creation() {
-        let app = App::new("http://localhost:50051".to_string(), ConnectAuth::None);
+        let app = App::new(test_config());
         assert!(app.is_running());
         assert_eq!(app.view(), View::TaskList);
     }
 
     #[test]
     fn test_app_quit() {
-        let mut app = App::new("http://localhost:50051".to_string(), ConnectAuth::None);
+        let mut app = App::new(test_config());
         app.quit();
         assert!(!app.is_running());
     }
 
     #[test]
     fn test_set_status() {
-        let mut app = App::new("http://localhost:50051".to_string(), ConnectAuth::None);
+        let mut app = App::new(test_config());
         app.set_status("Loading...".to_string());
         assert_eq!(app.status(), "Loading...");
     }
 
     #[test]
     fn test_set_error() {
-        let mut app = App::new("http://localhost:50051".to_string(), ConnectAuth::None);
+        let mut app = App::new(test_config());
         app.set_error("Error occurred".to_string());
         assert!(app.error().is_some());
         app.clear_error();
@@ -325,25 +498,39 @@ mod tests {
 
     #[test]
     fn test_view_switching() {
-        let mut app = App::new("http://localhost:50051".to_string(), ConnectAuth::None);
+        let mut app = App::new(test_config());
         assert_eq!(app.view(), View::TaskList);
         app.set_view(View::Help);
         assert_eq!(app.view(), View::Help);
     }
 
     #[test]
+    fn test_view_navigation() {
+        let mut app = App::new(test_config());
+        assert_eq!(app.view(), View::TaskList);
+        app.next_view();
+        assert_eq!(app.view(), View::WorkflowList);
+        app.next_view();
+        assert_eq!(app.view(), View::Help);
+        app.previous_view();
+        assert_eq!(app.view(), View::WorkflowList);
+    }
+
+    #[test]
     fn test_task_selection() {
-        let mut app = App::new("http://localhost:50051".to_string(), ConnectAuth::None);
+        let mut app = App::new(test_config());
         app.add_task(TaskItem {
             id: "task-1".to_string(),
             title: "Task 1".to_string(),
             status: "pending".to_string(),
+            task_type: "execution".to_string(),
             created_at: "2024-01-01".to_string(),
         });
         app.add_task(TaskItem {
             id: "task-2".to_string(),
             title: "Task 2".to_string(),
             status: "completed".to_string(),
+            task_type: "workflow".to_string(),
             created_at: "2024-01-02".to_string(),
         });
 
@@ -355,12 +542,33 @@ mod tests {
     }
 
     #[test]
-    fn test_add_tasks_and_workflows() {
-        let mut app = App::new("http://localhost:50051".to_string(), ConnectAuth::None);
+    fn test_select_and_deselect_item() {
+        let mut app = App::new(test_config());
         app.add_task(TaskItem {
             id: "task-1".to_string(),
             title: "Test Task".to_string(),
             status: "pending".to_string(),
+            task_type: "execution".to_string(),
+            created_at: "2024-01-01".to_string(),
+        });
+
+        assert_eq!(app.view(), View::TaskList);
+        app.select_item();
+        assert_eq!(app.view(), View::TaskDetail);
+        assert!(app.selected_task_id().is_some());
+        app.deselect_item();
+        assert_eq!(app.view(), View::TaskList);
+        assert!(app.selected_task_id().is_none());
+    }
+
+    #[test]
+    fn test_add_tasks_and_workflows() {
+        let mut app = App::new(test_config());
+        app.add_task(TaskItem {
+            id: "task-1".to_string(),
+            title: "Test Task".to_string(),
+            status: "pending".to_string(),
+            task_type: "execution".to_string(),
             created_at: "2024-01-01".to_string(),
         });
         app.add_workflow(WorkflowItem {
@@ -376,11 +584,12 @@ mod tests {
 
     #[test]
     fn test_clear_lists() {
-        let mut app = App::new("http://localhost:50051".to_string(), ConnectAuth::None);
+        let mut app = App::new(test_config());
         app.add_task(TaskItem {
             id: "task-1".to_string(),
             title: "Task".to_string(),
             status: "pending".to_string(),
+            task_type: "execution".to_string(),
             created_at: "2024-01-01".to_string(),
         });
         assert_eq!(app.tasks.len(), 1);
@@ -392,5 +601,12 @@ mod tests {
     fn test_view_display() {
         assert_eq!(View::TaskList.to_string(), "Task List");
         assert_eq!(View::Help.to_string(), "Help");
+    }
+
+    #[test]
+    fn test_should_refresh() {
+        let app = App::new(test_config());
+        // Should not refresh immediately
+        assert!(!app.should_refresh());
     }
 }
