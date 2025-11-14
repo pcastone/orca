@@ -118,6 +118,140 @@ impl TuiGrpcClient {
             },
         ])
     }
+
+    /// Execute a task and return execution events
+    pub async fn execute_task(&self, task_id: &str) -> Result<Vec<crate::tui::app::ExecutionEvent>> {
+        // For now, return mock execution events
+        // TODO: Implement real gRPC streaming call
+        tracing::debug!("Executing task {} on {}", task_id, self.server_url);
+
+        // Simulate execution delay
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        Ok(vec![
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "started".to_string(),
+                message: format!("Task {} started", task_id),
+                status: "started".to_string(),
+            },
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "progress".to_string(),
+                message: "Initializing execution environment...".to_string(),
+                status: "in_progress".to_string(),
+            },
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "output".to_string(),
+                message: "Processing data from input sources".to_string(),
+                status: "in_progress".to_string(),
+            },
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "tool_call".to_string(),
+                message: "Tool: file_read | Input: {\"path\": \"/data/input.txt\"}".to_string(),
+                status: "in_progress".to_string(),
+            },
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "tool_result".to_string(),
+                message: "Tool: file_read | Result: Successfully read 1024 bytes".to_string(),
+                status: "in_progress".to_string(),
+            },
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "progress".to_string(),
+                message: "Analyzing data patterns...".to_string(),
+                status: "in_progress".to_string(),
+            },
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "output".to_string(),
+                message: "Found 42 matching patterns in the dataset".to_string(),
+                status: "in_progress".to_string(),
+            },
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "completed".to_string(),
+                message: format!("Task {} completed successfully", task_id),
+                status: "completed".to_string(),
+            },
+        ])
+    }
+
+    /// Execute a workflow and return execution events
+    pub async fn execute_workflow(&self, workflow_id: &str) -> Result<Vec<crate::tui::app::ExecutionEvent>> {
+        // For now, return mock execution events
+        // TODO: Implement real gRPC streaming call
+        tracing::debug!("Executing workflow {} on {}", workflow_id, self.server_url);
+
+        // Simulate execution delay
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        Ok(vec![
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "started".to_string(),
+                message: format!("Workflow {} started", workflow_id),
+                status: "started".to_string(),
+            },
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "progress".to_string(),
+                message: "Entering node: start_node".to_string(),
+                status: "in_progress".to_string(),
+            },
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "output".to_string(),
+                message: "Node start_node completed successfully".to_string(),
+                status: "in_progress".to_string(),
+            },
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "progress".to_string(),
+                message: "Entering node: process_node".to_string(),
+                status: "in_progress".to_string(),
+            },
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "tool_call".to_string(),
+                message: "Tool: data_processor | Input: {\"mode\": \"batch\"}".to_string(),
+                status: "in_progress".to_string(),
+            },
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "tool_result".to_string(),
+                message: "Tool: data_processor | Result: Processed 156 records".to_string(),
+                status: "in_progress".to_string(),
+            },
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "progress".to_string(),
+                message: "Workflow checkpoint: step 1".to_string(),
+                status: "in_progress".to_string(),
+            },
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "progress".to_string(),
+                message: "Entering node: end_node".to_string(),
+                status: "in_progress".to_string(),
+            },
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "output".to_string(),
+                message: "Node end_node completed successfully".to_string(),
+                status: "in_progress".to_string(),
+            },
+            crate::tui::app::ExecutionEvent {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                event_type: "completed".to_string(),
+                message: format!("Workflow {} completed: Completed 3 nodes in 1 steps", workflow_id),
+                status: "completed".to_string(),
+            },
+        ])
+    }
 }
 
 #[cfg(test)]

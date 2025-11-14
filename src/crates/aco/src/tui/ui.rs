@@ -240,23 +240,98 @@ fn draw_workflow_detail(f: &mut Frame, app: &App, area: Rect) {
 
 /// Draw the execution stream view
 fn draw_execution_stream(f: &mut Frame, app: &App, area: Rect) {
-    let content = vec![
-        Line::from("Execution Stream View"),
-        Line::from(""),
-        Line::from("Real-time execution output will be displayed here"),
-        Line::from(format!("Status: {}", app.status())),
-    ];
+    if app.execution_events.is_empty() {
+        let empty_msg = vec![
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("No execution in progress",
+                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC)),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Press 'e' on a task or workflow to execute it",
+                    Style::default().fg(Color::DarkGray)),
+            ]),
+        ];
 
-    let paragraph = Paragraph::new(content)
-        .block(
-            Block::default()
-                .title(" Execution Stream ")
-                .borders(Borders::ALL)
-                .border_type(ratatui::widgets::BorderType::Rounded),
-        )
-        .wrap(Wrap { trim: true });
+        let paragraph = Paragraph::new(empty_msg)
+            .block(
+                Block::default()
+                    .title(" Execution Stream ")
+                    .borders(Borders::ALL)
+                    .border_type(ratatui::widgets::BorderType::Rounded),
+            )
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true });
 
-    f.render_widget(paragraph, area);
+        f.render_widget(paragraph, area);
+    } else {
+        let title = if let Some(id) = app.executing_id() {
+            format!(" Execution Stream - {} ", id)
+        } else {
+            " Execution Stream ".to_string()
+        };
+
+        let mut lines: Vec<Line> = Vec::new();
+
+        for event in &app.execution_events {
+            // Color code by event type
+            let (icon, color) = match event.event_type.as_str() {
+                "started" => ("▶", Color::Green),
+                "progress" => ("⋯", Color::Cyan),
+                "output" => ("◉", Color::Yellow),
+                "tool_call" => ("🔧", Color::Magenta),
+                "tool_result" => ("✓", Color::Blue),
+                "completed" => ("✔", Color::Green),
+                "failed" => ("✗", Color::Red),
+                _ => ("•", Color::White),
+            };
+
+            // Extract timestamp (just time part)
+            let time = event.timestamp
+                .split('T')
+                .nth(1)
+                .and_then(|t| t.split('.').next())
+                .unwrap_or("00:00:00");
+
+            lines.push(Line::from(vec![
+                Span::styled(
+                    format!("[{}] ", time),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(
+                    format!("{} ", icon),
+                    Style::default().fg(color).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!("{}: ", event.event_type.to_uppercase()),
+                    Style::default().fg(color).add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(&event.message),
+            ]));
+        }
+
+        // Add help text at the bottom
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![
+            Span::styled(
+                "Press ESC to return",
+                Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+            ),
+        ]));
+
+        let paragraph = Paragraph::new(lines)
+            .block(
+                Block::default()
+                    .title(title)
+                    .borders(Borders::ALL)
+                    .border_type(ratatui::widgets::BorderType::Rounded),
+            )
+            .wrap(Wrap { trim: false })
+            .scroll((app.scroll as u16, 0));
+
+        f.render_widget(paragraph, area);
+    }
 }
 
 /// Draw the help view
@@ -272,15 +347,19 @@ fn draw_help(f: &mut Frame, app: &App, area: Rect) {
         Line::from("Navigation:"),
         Line::from("  ↑/↓       - Navigate up/down"),
         Line::from("  Enter    - View details"),
-        Line::from("  Ctrl+R   - Refresh"),
+        Line::from("  Tab      - Next view"),
+        Line::from("  Esc      - Back / Quit"),
+        Line::from(""),
+        Line::from("Actions:"),
+        Line::from("  e        - Execute selected task/workflow"),
+        Line::from("  r        - Refresh data"),
         Line::from(""),
         Line::from("Views:"),
-        Line::from("  1        - Task List"),
-        Line::from("  2        - Workflow List"),
-        Line::from("  3        - Execution Stream"),
+        Line::from("  Tab      - Cycle through views"),
+        Line::from("             (Tasks → Workflows → Help)"),
         Line::from(""),
         Line::from("General:"),
-        Line::from("  q/Esc    - Quit"),
+        Line::from("  q        - Quit"),
         Line::from("  ?/h/F1   - Help"),
         Line::from(""),
         Line::from(format!("Server: {}", app.server_url())),

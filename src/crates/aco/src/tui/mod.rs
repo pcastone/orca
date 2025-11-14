@@ -10,7 +10,7 @@ pub mod events;
 pub mod grpc_client;
 pub mod ui;
 
-pub use app::{App, AppState, View, TaskItem, WorkflowItem};
+pub use app::{App, AppState, View, TaskItem, WorkflowItem, ExecutionEvent};
 pub use events::{EventHandler, Event};
 pub use grpc_client::TuiGrpcClient;
 
@@ -93,6 +93,9 @@ pub async fn run(config: TuiConfig) -> Result<()> {
                     KeyCode::Char('q') | KeyCode::Esc => {
                         if app.view() == View::TaskList || app.view() == View::WorkflowList || app.view() == View::Help {
                             break;
+                        } else if app.view() == View::ExecutionStream {
+                            app.clear_execution();
+                            app.set_view(View::TaskList);
                         } else {
                             app.deselect_item();
                         }
@@ -101,6 +104,44 @@ pub async fn run(config: TuiConfig) -> Result<()> {
                         // Manual refresh
                         app.refresh_tasks().await?;
                         app.refresh_workflows().await?;
+                    }
+                    KeyCode::Char('e') => {
+                        // Execute selected task or workflow
+                        match app.view() {
+                            View::TaskDetail => {
+                                if let Some(task_id) = app.selected_task_id() {
+                                    let task_id = task_id.to_string();
+                                    if let Err(e) = app.execute_task(task_id).await {
+                                        app.set_error(format!("Execution failed: {}", e));
+                                    }
+                                }
+                            }
+                            View::WorkflowDetail => {
+                                if let Some(workflow_id) = app.selected_workflow_id() {
+                                    let workflow_id = workflow_id.to_string();
+                                    if let Err(e) = app.execute_workflow(workflow_id).await {
+                                        app.set_error(format!("Execution failed: {}", e));
+                                    }
+                                }
+                            }
+                            View::TaskList => {
+                                if let Some(task) = app.selected_task() {
+                                    let task_id = task.id.clone();
+                                    if let Err(e) = app.execute_task(task_id).await {
+                                        app.set_error(format!("Execution failed: {}", e));
+                                    }
+                                }
+                            }
+                            View::WorkflowList => {
+                                if let Some(workflow) = app.selected_workflow() {
+                                    let workflow_id = workflow.id.clone();
+                                    if let Err(e) = app.execute_workflow(workflow_id).await {
+                                        app.set_error(format!("Execution failed: {}", e));
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
                     }
                     KeyCode::Tab => app.next_view(),
                     KeyCode::BackTab => app.previous_view(),

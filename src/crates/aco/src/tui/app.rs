@@ -110,6 +110,12 @@ pub struct App {
     /// Workflow list items
     pub workflows: Vec<WorkflowItem>,
 
+    /// Execution events
+    pub execution_events: Vec<ExecutionEvent>,
+
+    /// Executing task/workflow ID
+    pub executing_id: Option<String>,
+
     /// Scroll position for lists
     pub scroll: usize,
 
@@ -167,6 +173,22 @@ pub struct WorkflowItem {
     pub created_at: String,
 }
 
+/// Execution event
+#[derive(Debug, Clone)]
+pub struct ExecutionEvent {
+    /// Event timestamp
+    pub timestamp: String,
+
+    /// Event type (started, progress, output, tool_call, tool_result, completed, failed)
+    pub event_type: String,
+
+    /// Event message
+    pub message: String,
+
+    /// Event status
+    pub status: String,
+}
+
 impl App {
     /// Create a new app instance from config
     pub fn new(config: TuiConfig) -> Self {
@@ -181,6 +203,8 @@ impl App {
             grpc_client,
             tasks: Vec::new(),
             workflows: Vec::new(),
+            execution_events: Vec::new(),
+            executing_id: None,
             scroll: 0,
             selected: 0,
         }
@@ -252,6 +276,56 @@ impl App {
     pub fn should_refresh(&self) -> bool {
         // Auto-refresh every 10 seconds
         self.state.last_refresh.elapsed() > Duration::from_secs(10)
+    }
+
+    /// Start executing a task
+    pub async fn execute_task(&mut self, task_id: String) -> Result<()> {
+        debug!("Starting task execution: {}", task_id);
+        self.executing_id = Some(task_id.clone());
+        self.execution_events.clear();
+        self.set_view(View::ExecutionStream);
+        self.set_status(format!("Executing task: {}", task_id));
+
+        // Start streaming execution events (async)
+        let events = self.grpc_client.execute_task(&task_id).await?;
+        for event in events {
+            self.add_execution_event(event);
+        }
+
+        Ok(())
+    }
+
+    /// Start executing a workflow
+    pub async fn execute_workflow(&mut self, workflow_id: String) -> Result<()> {
+        debug!("Starting workflow execution: {}", workflow_id);
+        self.executing_id = Some(workflow_id.clone());
+        self.execution_events.clear();
+        self.set_view(View::ExecutionStream);
+        self.set_status(format!("Executing workflow: {}", workflow_id));
+
+        // Start streaming execution events (async)
+        let events = self.grpc_client.execute_workflow(&workflow_id).await?;
+        for event in events {
+            self.add_execution_event(event);
+        }
+
+        Ok(())
+    }
+
+    /// Add an execution event
+    pub fn add_execution_event(&mut self, event: ExecutionEvent) {
+        self.execution_events.push(event);
+    }
+
+    /// Clear execution events
+    pub fn clear_execution(&mut self) {
+        self.execution_events.clear();
+        self.executing_id = None;
+    }
+
+    /// Get executing ID
+    pub fn executing_id(&self) -> Option<&str> {
+        self.executing_id.as_deref()
     }
 
     /// Check if app should quit
