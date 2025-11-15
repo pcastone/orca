@@ -373,7 +373,7 @@ impl WorkflowService for WorkflowServiceImpl {
                                     let _ = stream_handler_clone
                                         .send_progress(format!("Task node {} missing configuration", node_id))
                                         .await;
-                                    return String::from("Missing task_id");
+                                    return;
                                 }
                             };
 

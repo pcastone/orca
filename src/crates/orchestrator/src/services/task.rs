@@ -47,7 +47,7 @@ impl TaskService for TaskServiceImpl {
         // Parse and validate config JSON if provided
         if let Some(ref config) = req.config {
             if !config.is_empty() {
-                serde_json::from_str::<serde_json::Value>(config)
+                let _: serde_json::Value = serde_json::from_str(config)
                     .map_err(|e| Status::invalid_argument(
                         format!("Invalid config JSON: {}", e)
                     ))?;
@@ -57,7 +57,7 @@ impl TaskService for TaskServiceImpl {
         // Parse and validate metadata JSON if provided
         if let Some(ref metadata) = req.metadata {
             if !metadata.is_empty() {
-                serde_json::from_str::<serde_json::Value>(metadata)
+                let _: serde_json::Value = serde_json::from_str(metadata)
                     .map_err(|e| Status::invalid_argument(
                         format!("Invalid metadata JSON: {}", e)
                     ))?;

@@ -492,7 +492,7 @@ mod tests {
         match deserialized {
             WsMessage::ToolRequest(req) => {
                 assert_eq!(req.request_id, "req-123");
-                assert_eq!(req.tool_name, "file_read");
+                assert_eq!(req.tool, "file_read");
             }
             _ => panic!("Wrong message type deserialized"),
         }
