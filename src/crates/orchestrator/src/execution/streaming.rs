@@ -691,10 +691,11 @@ mod tests {
         handler.send_progress("Event 1").await.unwrap();
 
         // Second send will block until first is consumed
-        let send_future = handler.send_progress("Event 2");
-
-        // Spawn send in background
-        let send_handle = tokio::spawn(send_future);
+        // Clone handler for background task
+        let handler_clone = handler.clone();
+        let send_handle = tokio::spawn(async move {
+            handler_clone.send_progress("Event 2").await
+        });
 
         // Small delay
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
