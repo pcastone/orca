@@ -28,7 +28,80 @@ pub fn draw(f: &mut Frame, app: &App) {
 
 /// Draw the header bar
 fn draw_header(f: &mut Frame, app: &App, area: Rect) {
-    let header_text = format!("ACO - {}", app.view());
+    // Count statuses based on current view
+    let stats = match app.view() {
+        View::TaskList | View::TaskDetail => {
+            let mut pending = 0;
+            let mut running = 0;
+            let mut completed = 0;
+            let mut failed = 0;
+
+            for task in &app.tasks {
+                match task.status.as_str() {
+                    "pending" => pending += 1,
+                    "running" => running += 1,
+                    "completed" => completed += 1,
+                    "failed" | "cancelled" => failed += 1,
+                    _ => {}
+                }
+            }
+
+            {
+                let mut parts = vec![format!(" | {} Tasks:", app.tasks.len())];
+                if pending > 0 {
+                    parts.push(format!(" ⏸{}", pending));
+                }
+                if running > 0 {
+                    parts.push(format!(" ▶{}", running));
+                }
+                if completed > 0 {
+                    parts.push(format!(" ✔{}", completed));
+                }
+                if failed > 0 {
+                    parts.push(format!(" ✗{}", failed));
+                }
+                parts.join("")
+            }
+        }
+        View::WorkflowList | View::WorkflowDetail => {
+            let mut draft = 0;
+            let mut active = 0;
+            let mut running = 0;
+
+            for workflow in &app.workflows {
+                match workflow.status.as_str() {
+                    "draft" => draft += 1,
+                    "active" => active += 1,
+                    "running" => running += 1,
+                    _ => {}
+                }
+            }
+
+            {
+                let mut parts = vec![format!(" | {} Workflows:", app.workflows.len())];
+                if draft > 0 {
+                    parts.push(format!(" ◯{}", draft));
+                }
+                if active > 0 {
+                    parts.push(format!(" ◉{}", active));
+                }
+                if running > 0 {
+                    parts.push(format!(" ▶{}", running));
+                }
+                parts.join("")
+            }
+        }
+        View::ExecutionStream => {
+            if let Some(id) = app.executing_id() {
+                format!(" | Executing: {} | {} events", id, app.execution_events.len())
+            } else {
+                String::new()
+            }
+        }
+        _ => String::new(),
+    };
+
+    let header_text = format!("ACO - {}{}", app.view(), stats);
     let header = Paragraph::new(header_text)
         .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
         .block(Block::default().borders(Borders::BOTTOM))
@@ -56,26 +129,62 @@ fn draw_task_list(f: &mut Frame, app: &App, area: Rect) {
         .iter()
         .enumerate()
         .map(|(idx, task)| {
-            let style = if idx == app.selected {
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::White)
+            // Status icon and color
+            let (status_icon, status_color) = match task.status.as_str() {
+                "pending" => ("⏸", Color::Yellow),
+                "running" => ("▶", Color::Cyan),
+                "completed" => ("✔", Color::Green),
+                "failed" => ("✗", Color::Red),
+                "cancelled" => ("⊗", Color::DarkGray),
+                _ => ("•", Color::White),
             };
-            let prefix = if idx == app.selected { "▶ " } else { "  " };
-            let content = format!(
-                "{}[{}] {}",
-                prefix, task.status, task.title
-            );
-            ListItem::new(content).style(style)
+
+            // Selection indicator
+            let selector = if idx == app.selected { "▸ " } else { "  " };
+
+            // Task type badge
+            let type_badge = match task.task_type.as_str() {
+                "execution" => "[EXEC]",
+                "workflow" => "[FLOW]",
+                "validation" => "[VALD]",
+                _ => "[TASK]",
+            };
+
+            let line = Line::from(vec![
+                Span::raw(selector),
+                Span::styled(
+                    format!("{} ", status_icon),
+                    Style::default().fg(status_color).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    type_badge,
+                    Style::default().fg(Color::Blue),
+                ),
+                Span::raw(" "),
+                Span::styled(
+                    &task.title,
+                    if idx == app.selected {
+                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::White)
+                    },
+                ),
+            ]);
+
+            let style = if idx == app.selected {
+                Style::default().bg(Color::DarkGray)
+            } else {
+                Style::default()
+            };
+
+            ListItem::new(line).style(style)
         })
         .collect();
 
+    let title = format!(" Tasks ({}) ", app.tasks.len());
     let list = List::new(items).block(
         Block::default()
-            .title(" Tasks ")
+            .title(title)
             .borders(Borders::ALL),
     );
 
@@ -85,22 +194,69 @@ fn draw_task_list(f: &mut Frame, app: &App, area: Rect) {
 /// Draw the task detail view
 fn draw_task_detail(f: &mut Frame, app: &App, area: Rect) {
     if let Some(task) = app.selected_task() {
+        // Parse status color
+        let status_color = match task.status.as_str() {
+            "pending" => Color::Yellow,
+            "running" => Color::Cyan,
+            "completed" => Color::Green,
+            "failed" => Color::Red,
+            "cancelled" => Color::DarkGray,
+            _ => Color::White,
+        };
+
         let content = vec![
             Line::from(vec![
                 Span::styled("ID: ", Style::default().add_modifier(Modifier::BOLD)),
                 Span::raw(&task.id),
             ]),
+            Line::from(""),
             Line::from(vec![
                 Span::styled("Title: ", Style::default().add_modifier(Modifier::BOLD)),
                 Span::raw(&task.title),
             ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Description: ", Style::default().add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(format!("  {}", task.description)),
+            Line::from(""),
             Line::from(vec![
                 Span::styled("Status: ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(&task.status),
+                Span::styled(&task.status, Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
             ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Type: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(&task.task_type),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Workspace: ", Style::default().add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(format!("  {}", task.workspace_path)),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Config: ", Style::default().add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(format!("  {}", task.config)),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Metadata: ", Style::default().add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(format!("  {}", task.metadata)),
+            Line::from(""),
             Line::from(vec![
                 Span::styled("Created: ", Style::default().add_modifier(Modifier::BOLD)),
                 Span::raw(&task.created_at),
+            ]),
+            Line::from(vec![
+                Span::styled("Updated: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(&task.updated_at),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Press ESC to return to task list",
+                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC)),
             ]),
         ];
 
@@ -125,26 +281,55 @@ fn draw_workflow_list(f: &mut Frame, app: &App, area: Rect) {
         .iter()
         .enumerate()
         .map(|(idx, workflow)| {
-            let style = if idx == app.selected {
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::White)
+            // Status icon and color
+            let (status_icon, status_color) = match workflow.status.as_str() {
+                "draft" => ("◯", Color::DarkGray),
+                "active" => ("◉", Color::Green),
+                "running" => ("▶", Color::Cyan),
+                "paused" => ("⏸", Color::Yellow),
+                "completed" => ("✔", Color::Green),
+                "failed" => ("✗", Color::Red),
+                _ => ("•", Color::White),
             };
-            let prefix = if idx == app.selected { "▶ " } else { "  " };
-            let content = format!(
-                "{}[{}] {}",
-                prefix, workflow.status, workflow.name
-            );
-            ListItem::new(content).style(style)
+
+            // Selection indicator
+            let selector = if idx == app.selected { "▸ " } else { "  " };
+
+            let line = Line::from(vec![
+                Span::raw(selector),
+                Span::styled(
+                    format!("{} ", status_icon),
+                    Style::default().fg(status_color).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "[WORKFLOW]",
+                    Style::default().fg(Color::Magenta),
+                ),
+                Span::raw(" "),
+                Span::styled(
+                    &workflow.name,
+                    if idx == app.selected {
+                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::White)
+                    },
+                ),
+            ]);
+
+            let style = if idx == app.selected {
+                Style::default().bg(Color::DarkGray)
+            } else {
+                Style::default()
+            };
+
+            ListItem::new(line).style(style)
         })
         .collect();
 
+    let title = format!(" Workflows ({}) ", app.workflows.len());
     let list = List::new(items).block(
         Block::default()
-            .title(" Workflows ")
+            .title(title)
             .borders(Borders::ALL),
     );
 
@@ -193,51 +378,191 @@ fn draw_workflow_detail(f: &mut Frame, app: &App, area: Rect) {
 
 /// Draw the execution stream view
 fn draw_execution_stream(f: &mut Frame, app: &App, area: Rect) {
-    let content = vec![
-        Line::from("Execution Stream View"),
-        Line::from(""),
-        Line::from("Real-time execution output will be displayed here"),
-        Line::from(format!("Status: {}", app.status())),
-    ];
+    if app.execution_events.is_empty() {
+        let empty_msg = vec![
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("No execution in progress",
+                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC)),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Press 'e' on a task or workflow to execute it",
+                    Style::default().fg(Color::DarkGray)),
+            ]),
+        ];
 
-    let paragraph = Paragraph::new(content)
-        .block(
-            Block::default()
-                .title(" Execution Stream ")
-                .borders(Borders::ALL)
-                .border_type(ratatui::widgets::BorderType::Rounded),
-        )
-        .wrap(Wrap { trim: true });
+        let paragraph = Paragraph::new(empty_msg)
+            .block(
+                Block::default()
+                    .title(" Execution Stream ")
+                    .borders(Borders::ALL)
+                    .border_type(ratatui::widgets::BorderType::Rounded),
+            )
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true });
 
-    f.render_widget(paragraph, area);
+        f.render_widget(paragraph, area);
+    } else {
+        let title = if let Some(id) = app.executing_id() {
+            format!(" Execution Stream - {} ", id)
+        } else {
+            " Execution Stream ".to_string()
+        };
+
+        let mut lines: Vec<Line> = Vec::new();
+
+        for event in &app.execution_events {
+            // Color code by event type
+            let (icon, color) = match event.event_type.as_str() {
+                "started" => ("▶", Color::Green),
+                "progress" => ("⋯", Color::Cyan),
+                "output" => ("◉", Color::Yellow),
+                "tool_call" => ("🔧", Color::Magenta),
+                "tool_result" => ("✓", Color::Blue),
+                "completed" => ("✔", Color::Green),
+                "failed" => ("✗", Color::Red),
+                _ => ("•", Color::White),
+            };
+
+            // Extract timestamp (just time part)
+            let time = event.timestamp
+                .split('T')
+                .nth(1)
+                .and_then(|t| t.split('.').next())
+                .unwrap_or("00:00:00");
+
+            lines.push(Line::from(vec![
+                Span::styled(
+                    format!("[{}] ", time),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(
+                    format!("{} ", icon),
+                    Style::default().fg(color).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!("{}: ", event.event_type.to_uppercase()),
+                    Style::default().fg(color).add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(&event.message),
+            ]));
+        }
+
+        // Add help text at the bottom
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![
+            Span::styled(
+                "Press ESC to return",
+                Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+            ),
+        ]));
+
+        let paragraph = Paragraph::new(lines)
+            .block(
+                Block::default()
+                    .title(title)
+                    .borders(Borders::ALL)
+                    .border_type(ratatui::widgets::BorderType::Rounded),
+            )
+            .wrap(Wrap { trim: false })
+            .scroll((app.scroll as u16, 0));
+
+        f.render_widget(paragraph, area);
+    }
 }
 
 /// Draw the help view
 fn draw_help(f: &mut Frame, app: &App, area: Rect) {
     let help_text = vec![
         Line::from(vec![Span::styled(
-            "ACO TUI - Help",
+            "ACO TUI - Keyboard Shortcuts & Status Indicators",
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         )]),
         Line::from(""),
-        Line::from("Navigation:"),
-        Line::from("  ↑/↓       - Navigate up/down"),
-        Line::from("  Enter    - View details"),
-        Line::from("  Ctrl+R   - Refresh"),
+        Line::from(vec![Span::styled("Navigation:", Style::default().add_modifier(Modifier::BOLD))]),
+        Line::from("  ↑/↓, j/k    - Navigate up/down (Vim-style also supported)"),
+        Line::from("  Enter       - View details / Select item"),
+        Line::from("  Esc         - Back / Return to list / Quit"),
+        Line::from("  Home, g     - Jump to first item"),
+        Line::from("  End, G      - Jump to last item"),
+        Line::from("  PgUp        - Scroll up one page (10 items)"),
+        Line::from("  PgDn        - Scroll down one page (10 items)"),
         Line::from(""),
-        Line::from("Views:"),
-        Line::from("  1        - Task List"),
-        Line::from("  2        - Workflow List"),
-        Line::from("  3        - Execution Stream"),
+        Line::from(vec![Span::styled("View Switching:", Style::default().add_modifier(Modifier::BOLD))]),
+        Line::from("  Tab         - Cycle to next view"),
+        Line::from("  Shift+Tab   - Cycle to previous view"),
+        Line::from("  1           - Tasks List"),
+        Line::from("  2           - Workflows List"),
+        Line::from("  3           - Execution Stream"),
+        Line::from("  4, ?, h, F1 - Help"),
         Line::from(""),
-        Line::from("General:"),
-        Line::from("  q/Esc    - Quit"),
-        Line::from("  ?/h/F1   - Help"),
+        Line::from(vec![Span::styled("Actions:", Style::default().add_modifier(Modifier::BOLD))]),
+        Line::from("  e           - Execute selected task/workflow"),
+        Line::from("  r           - Refresh data from server"),
         Line::from(""),
-        Line::from(format!("Server: {}", app.server_url())),
-        Line::from(format!("Auth: {}", app.auth())),
+        Line::from(vec![Span::styled("Task Status Indicators:", Style::default().add_modifier(Modifier::BOLD))]),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled("⏸", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::raw(" Pending   "),
+            Span::styled("▶", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::raw(" Running   "),
+            Span::styled("✔", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::raw(" Completed"),
+        ]),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled("✗", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::raw(" Failed    "),
+            Span::styled("⊗", Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)),
+            Span::raw(" Cancelled"),
+        ]),
+        Line::from(""),
+        Line::from(vec![Span::styled("Workflow Status Indicators:", Style::default().add_modifier(Modifier::BOLD))]),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled("◯", Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)),
+            Span::raw(" Draft     "),
+            Span::styled("◉", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::raw(" Active    "),
+            Span::styled("▶", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::raw(" Running"),
+        ]),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled("⏸", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::raw(" Paused    "),
+            Span::styled("✔", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::raw(" Completed "),
+            Span::styled("✗", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::raw(" Failed"),
+        ]),
+        Line::from(""),
+        Line::from(vec![Span::styled("Type Badges:", Style::default().add_modifier(Modifier::BOLD))]),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled("[EXEC]", Style::default().fg(Color::Blue)),
+            Span::raw(" Execution task  "),
+            Span::styled("[FLOW]", Style::default().fg(Color::Blue)),
+            Span::raw(" Workflow task"),
+        ]),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled("[VALD]", Style::default().fg(Color::Blue)),
+            Span::raw(" Validation task "),
+            Span::styled("[WORKFLOW]", Style::default().fg(Color::Magenta)),
+            Span::raw(" Workflow"),
+        ]),
+        Line::from(""),
+        Line::from(vec![Span::styled("General:", Style::default().add_modifier(Modifier::BOLD))]),
+        Line::from("  q, Ctrl+C   - Quit application"),
+        Line::from(""),
+        Line::from(vec![Span::styled("Connection:", Style::default().add_modifier(Modifier::BOLD))]),
+        Line::from(format!("  Server: {}", app.server_url())),
+        Line::from(format!("  Auth: {}", app.auth())),
     ];
 
     let paragraph = Paragraph::new(help_text)

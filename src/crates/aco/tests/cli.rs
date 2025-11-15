@@ -265,13 +265,14 @@ fn test_cli_global_flags() {
     // Test that CLI supports global flags
     // server, verbose, format should be global
     let cli = Cli {
-        server: Some("http://localhost:50051".to_string()),
+        connect: None,
+        server: "http://localhost:50051".to_string(),
         verbose: true,
         format: OutputFormat::Json,
         command: None,
     };
 
-    assert_eq!(cli.server, Some("http://localhost:50051".to_string()));
+    assert_eq!(cli.server, "http://localhost:50051");
     assert!(cli.verbose);
     assert!(matches!(cli.format, OutputFormat::Json));
 }
