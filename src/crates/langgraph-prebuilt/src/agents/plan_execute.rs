@@ -675,4 +675,559 @@ mod tests {
         assert_eq!(state.objective, deserialized.objective);
         assert_eq!(state.current_step, deserialized.current_step);
     }
+
+    // ========== Config and Builder Tests ==========
+
+    #[test]
+    fn test_config_default_values() {
+        let planner: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("plan")) }));
+        let executor: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("exec")) }));
+
+        let config = PlanExecuteConfig::new(planner, executor, vec![]);
+
+        assert_eq!(config.max_replans, 3);
+        assert_eq!(config.max_steps, 10);
+        assert!(config.planner_prompt.is_none());
+        assert!(config.executor_prompt.is_none());
+    }
+
+    #[test]
+    fn test_config_builder_pattern() {
+        let planner: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("plan")) }));
+        let executor: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("exec")) }));
+
+        let config = create_plan_execute_agent(planner, executor, vec![])
+            .with_max_replans(5)
+            .with_max_steps(15)
+            .with_planner_prompt("Custom planner")
+            .with_executor_prompt("Custom executor");
+
+        assert_eq!(config.max_replans, 5);
+        assert_eq!(config.max_steps, 15);
+        assert_eq!(config.planner_prompt.unwrap(), "Custom planner");
+        assert_eq!(config.executor_prompt.unwrap(), "Custom executor");
+    }
+
+    #[test]
+    fn test_config_with_max_replans() {
+        let planner: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("plan")) }));
+        let executor: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("exec")) }));
+
+        let config = PlanExecuteConfig::new(planner, executor, vec![])
+            .with_max_replans(7);
+
+        assert_eq!(config.max_replans, 7);
+        assert_eq!(config.max_steps, 10); // Default unchanged
+    }
+
+    #[test]
+    fn test_config_with_max_steps() {
+        let planner: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("plan")) }));
+        let executor: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("exec")) }));
+
+        let config = PlanExecuteConfig::new(planner, executor, vec![])
+            .with_max_steps(20);
+
+        assert_eq!(config.max_steps, 20);
+        assert_eq!(config.max_replans, 3); // Default unchanged
+    }
+
+    #[test]
+    fn test_config_chaining() {
+        let planner: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("plan")) }));
+        let executor: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("exec")) }));
+
+        let config = PlanExecuteConfig::new(planner, executor, vec![])
+            .with_max_replans(1)
+            .with_max_steps(2)
+            .with_planner_prompt("A")
+            .with_executor_prompt("B");
+
+        assert_eq!(config.max_replans, 1);
+        assert_eq!(config.max_steps, 2);
+        assert_eq!(config.planner_prompt.unwrap(), "A");
+        assert_eq!(config.executor_prompt.unwrap(), "B");
+    }
+
+    #[test]
+    fn test_config_zero_values() {
+        let planner: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("plan")) }));
+        let executor: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("exec")) }));
+
+        let config = PlanExecuteConfig::new(planner, executor, vec![])
+            .with_max_replans(0)
+            .with_max_steps(0);
+
+        assert_eq!(config.max_replans, 0);
+        assert_eq!(config.max_steps, 0);
+    }
+
+    // ========== Plan Generation Tests ==========
+
+    #[test]
+    fn test_parse_plan_default_max_steps() {
+        let response = Message::ai("Create a plan with steps");
+        let plan = parse_plan_from_response(&response, 10);
+
+        assert_eq!(plan.len(), 3); // Default creates 3 steps
+        assert_eq!(plan[0].step_number, 1);
+        assert_eq!(plan[1].step_number, 2);
+        assert_eq!(plan[2].step_number, 3);
+    }
+
+    #[test]
+    fn test_parse_plan_respects_max_steps() {
+        let response = Message::ai("Plan");
+        let plan = parse_plan_from_response(&response, 2);
+
+        assert_eq!(plan.len(), 2);
+        assert_eq!(plan[0].step_number, 1);
+        assert_eq!(plan[1].step_number, 2);
+    }
+
+    #[test]
+    fn test_parse_plan_with_large_max_steps() {
+        let response = Message::ai("Plan");
+        let plan = parse_plan_from_response(&response, 100);
+
+        assert_eq!(plan.len(), 3); // Still caps at 3 in current implementation
+    }
+
+    #[test]
+    fn test_parse_plan_structure() {
+        let response = Message::ai("Test plan");
+        let plan = parse_plan_from_response(&response, 5);
+
+        for (i, step) in plan.iter().enumerate() {
+            assert_eq!(step.step_number, i + 1);
+            assert!(step.description.contains(&format!("Step {}", i + 1)));
+            assert!(step.expected_outcome.contains(&format!("step {}", i + 1)));
+            assert!(!step.completed);
+            assert!(step.result.is_none());
+            assert!(step.tool.is_none());
+            assert!(step.tool_args.is_none());
+        }
+    }
+
+    #[test]
+    fn test_parse_plan_zero_max_steps() {
+        let response = Message::ai("Plan");
+        let plan = parse_plan_from_response(&response, 0);
+
+        assert!(plan.is_empty());
+    }
+
+    #[test]
+    fn test_parse_plan_one_max_step() {
+        let response = Message::ai("Plan");
+        let plan = parse_plan_from_response(&response, 1);
+
+        assert_eq!(plan.len(), 1);
+        assert_eq!(plan[0].step_number, 1);
+    }
+
+    #[test]
+    fn test_plan_step_default_fields() {
+        let step = PlanStep {
+            step_number: 42,
+            description: "Test".to_string(),
+            tool: None,
+            tool_args: None,
+            expected_outcome: "Success".to_string(),
+            completed: false,
+            result: None,
+        };
+
+        assert_eq!(step.step_number, 42);
+        assert!(!step.completed);
+        assert!(step.result.is_none());
+        assert!(step.tool.is_none());
+    }
+
+    // ========== Step Execution Tests ==========
+
+    #[test]
+    fn test_extract_result_from_response() {
+        let response = Message::ai("Execution completed successfully");
+        let result = extract_result_from_response(&response);
+
+        assert_eq!(result, "Execution completed successfully");
+    }
+
+    #[test]
+    fn test_extract_result_empty_content() {
+        let response = Message::ai("");
+        let result = extract_result_from_response(&response);
+
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_extract_result_special_characters() {
+        let response = Message::ai("Result: {\"key\": \"value\", \"count\": 42}");
+        let result = extract_result_from_response(&response);
+
+        assert_eq!(result, "Result: {\"key\": \"value\", \"count\": 42}");
+    }
+
+    #[test]
+    fn test_plan_step_completion() {
+        let mut step = PlanStep {
+            step_number: 1,
+            description: "Test step".to_string(),
+            tool: None,
+            tool_args: None,
+            expected_outcome: "Success".to_string(),
+            completed: false,
+            result: None,
+        };
+
+        assert!(!step.completed);
+        assert!(step.result.is_none());
+
+        step.completed = true;
+        step.result = Some("Step completed successfully".to_string());
+
+        assert!(step.completed);
+        assert_eq!(step.result.unwrap(), "Step completed successfully");
+    }
+
+    #[test]
+    fn test_plan_step_with_tool() {
+        let step = PlanStep {
+            step_number: 1,
+            description: "Calculate sum".to_string(),
+            tool: Some("calculator".to_string()),
+            tool_args: Some(json!({"a": 5, "b": 10})),
+            expected_outcome: "Result is 15".to_string(),
+            completed: false,
+            result: None,
+        };
+
+        assert_eq!(step.tool.unwrap(), "calculator");
+        let args = step.tool_args.unwrap();
+        assert_eq!(args["a"], 5);
+        assert_eq!(args["b"], 10);
+    }
+
+    // ========== Replanning Logic Tests ==========
+
+    #[test]
+    fn test_should_replan_with_error() {
+        let state = json!({
+            "plan": [
+                {
+                    "step_number": 1,
+                    "description": "Test",
+                    "expected_outcome": "Success",
+                    "completed": true,
+                    "result": "error occurred during execution"
+                }
+            ]
+        });
+
+        assert!(should_replan(&state));
+    }
+
+    #[test]
+    fn test_should_replan_with_failed() {
+        let state = json!({
+            "plan": [
+                {
+                    "step_number": 1,
+                    "description": "Test",
+                    "expected_outcome": "Success",
+                    "completed": true,
+                    "result": "Step failed to complete"
+                }
+            ]
+        });
+
+        assert!(should_replan(&state));
+    }
+
+    #[test]
+    fn test_should_not_replan_with_success() {
+        let state = json!({
+            "plan": [
+                {
+                    "step_number": 1,
+                    "description": "Test",
+                    "expected_outcome": "Success",
+                    "completed": true,
+                    "result": "Completed successfully"
+                }
+            ]
+        });
+
+        assert!(!should_replan(&state));
+    }
+
+    #[test]
+    fn test_should_not_replan_empty_plan() {
+        let state = json!({
+            "plan": []
+        });
+
+        assert!(!should_replan(&state));
+    }
+
+    #[test]
+    fn test_should_not_replan_no_plan() {
+        let state = json!({
+            "other_field": "value"
+        });
+
+        assert!(!should_replan(&state));
+    }
+
+    #[test]
+    fn test_should_not_replan_incomplete_steps() {
+        let state = json!({
+            "plan": [
+                {
+                    "step_number": 1,
+                    "description": "Test",
+                    "expected_outcome": "Success",
+                    "completed": false,
+                    "result": null
+                }
+            ]
+        });
+
+        assert!(!should_replan(&state));
+    }
+
+    #[test]
+    fn test_should_replan_mixed_results() {
+        let state = json!({
+            "plan": [
+                {
+                    "step_number": 1,
+                    "description": "Test1",
+                    "expected_outcome": "Success",
+                    "completed": true,
+                    "result": "Success"
+                },
+                {
+                    "step_number": 2,
+                    "description": "Test2",
+                    "expected_outcome": "Success",
+                    "completed": true,
+                    "result": "error in step 2"
+                }
+            ]
+        });
+
+        assert!(should_replan(&state));
+    }
+
+    #[test]
+    fn test_should_replan_lowercase_error() {
+        let state = json!({
+            "plan": [
+                {
+                    "step_number": 1,
+                    "description": "Test",
+                    "expected_outcome": "Success",
+                    "completed": true,
+                    "result": "error: something went wrong"
+                }
+            ]
+        });
+
+        assert!(should_replan(&state));
+    }
+
+    // ========== State Management Tests ==========
+
+    #[test]
+    fn test_state_initialization() {
+        let state = PlanExecuteState {
+            objective: "Complete task".to_string(),
+            plan: vec![],
+            messages: vec![],
+            current_step: 0,
+            replan_count: 0,
+            final_answer: None,
+        };
+
+        assert_eq!(state.objective, "Complete task");
+        assert_eq!(state.current_step, 0);
+        assert_eq!(state.replan_count, 0);
+        assert!(state.final_answer.is_none());
+        assert!(state.plan.is_empty());
+        assert!(state.messages.is_empty());
+    }
+
+    #[test]
+    fn test_state_with_plan() {
+        let steps = vec![
+            PlanStep {
+                step_number: 1,
+                description: "Step 1".to_string(),
+                tool: None,
+                tool_args: None,
+                expected_outcome: "Outcome 1".to_string(),
+                completed: false,
+                result: None,
+            },
+            PlanStep {
+                step_number: 2,
+                description: "Step 2".to_string(),
+                tool: None,
+                tool_args: None,
+                expected_outcome: "Outcome 2".to_string(),
+                completed: false,
+                result: None,
+            },
+        ];
+
+        let state = PlanExecuteState {
+            objective: "Test".to_string(),
+            plan: steps,
+            messages: vec![],
+            current_step: 0,
+            replan_count: 0,
+            final_answer: None,
+        };
+
+        assert_eq!(state.plan.len(), 2);
+        assert_eq!(state.plan[0].step_number, 1);
+        assert_eq!(state.plan[1].step_number, 2);
+    }
+
+    #[test]
+    fn test_state_progress_tracking() {
+        let mut state = PlanExecuteState {
+            objective: "Test".to_string(),
+            plan: vec![
+                PlanStep {
+                    step_number: 1,
+                    description: "Step 1".to_string(),
+                    tool: None,
+                    tool_args: None,
+                    expected_outcome: "Outcome 1".to_string(),
+                    completed: true,
+                    result: Some("Done".to_string()),
+                },
+            ],
+            messages: vec![],
+            current_step: 1,
+            replan_count: 0,
+            final_answer: None,
+        };
+
+        assert_eq!(state.current_step, 1);
+        assert!(state.plan[0].completed);
+
+        state.current_step = 2;
+        assert_eq!(state.current_step, 2);
+    }
+
+    #[test]
+    fn test_state_replan_tracking() {
+        let mut state = PlanExecuteState {
+            objective: "Test".to_string(),
+            plan: vec![],
+            messages: vec![],
+            current_step: 0,
+            replan_count: 0,
+            final_answer: None,
+        };
+
+        assert_eq!(state.replan_count, 0);
+
+        state.replan_count += 1;
+        assert_eq!(state.replan_count, 1);
+
+        state.replan_count += 1;
+        assert_eq!(state.replan_count, 2);
+    }
+
+    #[test]
+    fn test_state_final_answer() {
+        let mut state = PlanExecuteState {
+            objective: "Test".to_string(),
+            plan: vec![],
+            messages: vec![],
+            current_step: 0,
+            replan_count: 0,
+            final_answer: None,
+        };
+
+        assert!(state.final_answer.is_none());
+
+        state.final_answer = Some("Task completed successfully".to_string());
+        assert_eq!(state.final_answer.unwrap(), "Task completed successfully");
+    }
+
+    // ========== Complex Serialization Tests ==========
+
+    #[test]
+    fn test_plan_step_complex_serialization() {
+        let step = PlanStep {
+            step_number: 5,
+            description: "Complex step with special chars: \n\t\"quotes\"".to_string(),
+            tool: Some("web_search".to_string()),
+            tool_args: Some(json!({
+                "query": "rust async",
+                "limit": 10,
+                "filters": ["recent", "popular"]
+            })),
+            expected_outcome: "Find 10 recent popular results".to_string(),
+            completed: true,
+            result: Some("Found 10 results:\n1. Result 1\n2. Result 2".to_string()),
+        };
+
+        let json_str = serde_json::to_string(&step).unwrap();
+        let deserialized: PlanStep = serde_json::from_str(&json_str).unwrap();
+
+        assert_eq!(step.step_number, deserialized.step_number);
+        assert_eq!(step.description, deserialized.description);
+        assert_eq!(step.tool, deserialized.tool);
+        assert_eq!(step.expected_outcome, deserialized.expected_outcome);
+        assert_eq!(step.completed, deserialized.completed);
+        assert_eq!(step.result, deserialized.result);
+    }
+
+    #[test]
+    fn test_state_complex_serialization() {
+        let state = PlanExecuteState {
+            objective: "Complex objective with unicode: 🚀 测试".to_string(),
+            plan: vec![
+                PlanStep {
+                    step_number: 1,
+                    description: "First step".to_string(),
+                    tool: Some("tool1".to_string()),
+                    tool_args: Some(json!({"key": "value"})),
+                    expected_outcome: "Outcome 1".to_string(),
+                    completed: true,
+                    result: Some("Result 1".to_string()),
+                },
+                PlanStep {
+                    step_number: 2,
+                    description: "Second step".to_string(),
+                    tool: None,
+                    tool_args: None,
+                    expected_outcome: "Outcome 2".to_string(),
+                    completed: false,
+                    result: None,
+                },
+            ],
+            messages: vec![],
+            current_step: 1,
+            replan_count: 2,
+            final_answer: Some("Partial answer".to_string()),
+        };
+
+        let json_str = serde_json::to_string(&state).unwrap();
+        let deserialized: PlanExecuteState = serde_json::from_str(&json_str).unwrap();
+
+        assert_eq!(state.objective, deserialized.objective);
+        assert_eq!(state.plan.len(), deserialized.plan.len());
+        assert_eq!(state.current_step, deserialized.current_step);
+        assert_eq!(state.replan_count, deserialized.replan_count);
+        assert_eq!(state.final_answer, deserialized.final_answer);
+    }
 }
