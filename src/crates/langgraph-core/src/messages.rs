@@ -2325,4 +2325,740 @@ mod tests {
         assert_eq!(opts.include_system, false);
         assert_eq!(opts.start_on_human, false);
     }
+
+    // ========================================================================
+    // Phase 10.1: Langgraph-Core Messages - Tool Call/Result Matching
+    // ========================================================================
+
+    #[test]
+    fn test_tool_call_result_matching_basic() {
+        use crate::tool::ToolCall;
+
+        // Create an assistant message with a tool call
+        let tool_call = ToolCall {
+            id: "call_abc123".to_string(),
+            name: "search".to_string(),
+            args: serde_json::json!({"query": "weather"}),
+        };
+
+        let assistant_msg = Message::assistant("Let me search that")
+            .with_id("msg_1")
+            .with_tool_calls(vec![tool_call]);
+
+        // Create a tool result message
+        let tool_result = Message::tool("Sunny, 72°F", "call_abc123").with_id("msg_2");
+
+        // Verify the tool_call_id matches
+        assert_eq!(
+            assistant_msg.tool_calls.as_ref().unwrap()[0].id,
+            tool_result.tool_call_id.unwrap()
+        );
+    }
+
+    #[test]
+    fn test_tool_call_result_matching_multiple_calls() {
+        use crate::tool::ToolCall;
+
+        // Create multiple tool calls
+        let tool_calls = vec![
+            ToolCall {
+                id: "call_1".to_string(),
+                name: "search".to_string(),
+                args: serde_json::json!({"query": "weather"}),
+            },
+            ToolCall {
+                id: "call_2".to_string(),
+                name: "calculator".to_string(),
+                args: serde_json::json!({"expr": "2+2"}),
+            },
+        ];
+
+        let assistant_msg = Message::assistant("Let me help")
+            .with_tool_calls(tool_calls.clone());
+
+        // Create tool results
+        let result_1 = Message::tool("Sunny", "call_1");
+        let result_2 = Message::tool("4", "call_2");
+
+        // Verify matching
+        assert_eq!(
+            assistant_msg.tool_calls.as_ref().unwrap()[0].id,
+            result_1.tool_call_id.unwrap()
+        );
+        assert_eq!(
+            assistant_msg.tool_calls.as_ref().unwrap()[1].id,
+            result_2.tool_call_id.unwrap()
+        );
+    }
+
+    #[test]
+    fn test_tool_call_result_mismatch() {
+        use crate::tool::ToolCall;
+
+        let tool_call = ToolCall {
+            id: "call_abc".to_string(),
+            name: "search".to_string(),
+            args: serde_json::json!({"query": "test"}),
+        };
+
+        let assistant_msg = Message::assistant("Searching")
+            .with_tool_calls(vec![tool_call]);
+
+        // Tool result with different ID
+        let tool_result = Message::tool("Result", "call_xyz");
+
+        // Verify IDs don't match
+        assert_ne!(
+            assistant_msg.tool_calls.unwrap()[0].id,
+            tool_result.tool_call_id.unwrap()
+        );
+    }
+
+    #[test]
+    fn test_tool_call_with_complex_args() {
+        use crate::tool::ToolCall;
+
+        let complex_args = serde_json::json!({
+            "query": "weather forecast",
+            "location": {
+                "city": "San Francisco",
+                "country": "US"
+            },
+            "days": 7,
+            "units": "imperial"
+        });
+
+        let tool_call = ToolCall {
+            id: "call_complex".to_string(),
+            name: "weather_api".to_string(),
+            args: complex_args.clone(),
+        };
+
+        let msg = Message::assistant("Checking weather").with_tool_calls(vec![tool_call.clone()]);
+
+        assert_eq!(msg.tool_calls.unwrap()[0].args, complex_args);
+    }
+
+    #[test]
+    fn test_tool_call_empty_args() {
+        use crate::tool::ToolCall;
+
+        let tool_call = ToolCall {
+            id: "call_empty".to_string(),
+            name: "get_time".to_string(),
+            args: serde_json::json!({}),
+        };
+
+        let msg = Message::assistant("Getting time").with_tool_calls(vec![tool_call]);
+
+        assert!(msg.tool_calls.is_some());
+        assert_eq!(msg.tool_calls.unwrap()[0].args, serde_json::json!({}));
+    }
+
+    #[test]
+    fn test_tool_result_without_corresponding_call() {
+        // Tool result can exist independently (orphaned result)
+        let tool_result = Message::tool("Some result", "orphan_call_id");
+
+        assert_eq!(tool_result.role, MessageRole::Tool);
+        assert_eq!(tool_result.tool_call_id, Some("orphan_call_id".to_string()));
+        assert_eq!(tool_result.text(), Some("Some result"));
+    }
+
+    // ========================================================================
+    // Phase 10.1: Message ID Collision Handling
+    // ========================================================================
+
+    #[test]
+    fn test_message_id_collision_replacement() {
+        // When two messages have the same ID, the second replaces the first
+        let msg1 = vec![Message::human("First version").with_id("same_id")];
+        let msg2 = vec![Message::human("Second version").with_id("same_id")];
+
+        let result = add_messages(msg1, msg2);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, Some("same_id".to_string()));
+        assert_eq!(result[0].text(), Some("Second version"));
+    }
+
+    #[test]
+    fn test_message_id_collision_with_different_roles() {
+        // Same ID but different roles - second still replaces first
+        let msg1 = vec![Message::human("User message").with_id("id_1")];
+        let msg2 = vec![Message::assistant("AI message").with_id("id_1")];
+
+        let result = add_messages(msg1, msg2);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, Some("id_1".to_string()));
+        assert_eq!(result[0].role, MessageRole::Assistant);
+        assert_eq!(result[0].text(), Some("AI message"));
+    }
+
+    #[test]
+    fn test_message_id_collision_multiple_updates() {
+        // Multiple sequential updates with same ID
+        let msg1 = vec![Message::human("Version 1").with_id("evolving")];
+        let msg2 = vec![Message::human("Version 2").with_id("evolving")];
+
+        let intermediate = add_messages(msg1, msg2);
+        assert_eq!(intermediate[0].text(), Some("Version 2"));
+
+        let msg3 = vec![Message::human("Version 3").with_id("evolving")];
+        let final_result = add_messages(intermediate, msg3);
+
+        assert_eq!(final_result.len(), 1);
+        assert_eq!(final_result[0].text(), Some("Version 3"));
+    }
+
+    #[test]
+    fn test_message_id_collision_preserves_order() {
+        // When replacing by ID, position should be preserved
+        let msgs1 = vec![
+            Message::human("First").with_id("1"),
+            Message::human("Second").with_id("2"),
+            Message::human("Third").with_id("3"),
+        ];
+
+        let msgs2 = vec![
+            Message::human("Updated Second").with_id("2"),
+        ];
+
+        let result = add_messages(msgs1, msgs2);
+
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].text(), Some("First"));
+        assert_eq!(result[1].text(), Some("Updated Second")); // Position preserved
+        assert_eq!(result[2].text(), Some("Third"));
+    }
+
+    #[test]
+    fn test_message_id_auto_generation_avoids_collision() {
+        // Auto-generated IDs should be unique
+        let mut msg1 = Message::human("First");
+        msg1.id = None;
+        let mut msg2 = Message::human("Second");
+        msg2.id = None;
+
+        let result = add_messages(vec![msg1], vec![msg2]);
+
+        assert_eq!(result.len(), 2);
+        assert!(result[0].id.is_some());
+        assert!(result[1].id.is_some());
+        assert_ne!(result[0].id, result[1].id, "Auto-generated IDs should be unique");
+    }
+
+    #[test]
+    fn test_ensure_id_generates_unique_ids() {
+        let mut msg1 = Message::human("First");
+        let mut msg2 = Message::human("Second");
+        msg1.id = None;
+        msg2.id = None;
+
+        msg1.ensure_id();
+        msg2.ensure_id();
+
+        assert!(msg1.id.is_some());
+        assert!(msg2.id.is_some());
+        assert_ne!(msg1.id, msg2.id);
+    }
+
+    #[test]
+    fn test_ensure_id_preserves_existing_id() {
+        let mut msg = Message::human("Test").with_id("custom_id");
+        let original_id = msg.id.clone();
+
+        msg.ensure_id();
+
+        assert_eq!(msg.id, original_id);
+        assert_eq!(msg.id, Some("custom_id".to_string()));
+    }
+
+    // ========================================================================
+    // Phase 10.1: RemoveMessage Edge Cases
+    // ========================================================================
+
+    #[test]
+    fn test_remove_message_first_position() {
+        let msgs1 = vec![
+            MessageLike::Message(Message::human("First").with_id("1")),
+            MessageLike::Message(Message::human("Second").with_id("2")),
+            MessageLike::Message(Message::human("Third").with_id("3")),
+        ];
+
+        let msgs2 = vec![MessageLike::Remove(RemoveMessage::new("1"))];
+
+        let result = add_message_likes(msgs1, msgs2);
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].text(), Some("Second"));
+        assert_eq!(result[1].text(), Some("Third"));
+    }
+
+    #[test]
+    fn test_remove_message_last_position() {
+        let msgs1 = vec![
+            MessageLike::Message(Message::human("First").with_id("1")),
+            MessageLike::Message(Message::human("Second").with_id("2")),
+            MessageLike::Message(Message::human("Third").with_id("3")),
+        ];
+
+        let msgs2 = vec![MessageLike::Remove(RemoveMessage::new("3"))];
+
+        let result = add_message_likes(msgs1, msgs2);
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].text(), Some("First"));
+        assert_eq!(result[1].text(), Some("Second"));
+    }
+
+    #[test]
+    fn test_remove_all_messages_one_by_one() {
+        let msgs1 = vec![
+            MessageLike::Message(Message::human("First").with_id("1")),
+            MessageLike::Message(Message::human("Second").with_id("2")),
+        ];
+
+        let msgs2 = vec![
+            MessageLike::Remove(RemoveMessage::new("1")),
+            MessageLike::Remove(RemoveMessage::new("2")),
+        ];
+
+        let result = add_message_likes(msgs1, msgs2);
+
+        assert_eq!(result.len(), 0, "All messages should be removed");
+    }
+
+    #[test]
+    fn test_remove_message_marker_serialization() {
+        let remove = RemoveMessage::new("test_id");
+        let json = serde_json::to_string(&remove).unwrap();
+        let deserialized: RemoveMessage = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.id, "test_id");
+    }
+
+    #[test]
+    fn test_remove_all_constant() {
+        assert_eq!(RemoveMessage::REMOVE_ALL, "__remove_all__");
+
+        let remove_all = RemoveMessage::remove_all();
+        assert_eq!(remove_all.id, "__remove_all__");
+    }
+
+    #[test]
+    fn test_remove_all_with_empty_right_side() {
+        let msgs1 = vec![
+            MessageLike::Message(Message::human("Old").with_id("1")),
+        ];
+
+        let msgs2 = vec![
+            MessageLike::Remove(RemoveMessage::remove_all()),
+        ];
+
+        let result = add_message_likes(msgs1, msgs2);
+
+        assert_eq!(result.len(), 0, "REMOVE_ALL with no messages after should clear everything");
+    }
+
+    #[test]
+    fn test_remove_all_ignores_left_side() {
+        let msgs1 = vec![
+            MessageLike::Message(Message::human("Old 1").with_id("1")),
+            MessageLike::Message(Message::human("Old 2").with_id("2")),
+            MessageLike::Message(Message::human("Old 3").with_id("3")),
+        ];
+
+        let msgs2 = vec![
+            MessageLike::Remove(RemoveMessage::remove_all()),
+            MessageLike::Message(Message::human("New").with_id("4")),
+        ];
+
+        let result = add_message_likes(msgs1, msgs2);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].text(), Some("New"));
+        assert_eq!(result[0].id, Some("4".to_string()));
+    }
+
+    // ========================================================================
+    // Phase 10.1: merge_consecutive_messages Edge Cases
+    // ========================================================================
+
+    #[test]
+    fn test_merge_consecutive_messages_empty_list() {
+        let messages: Vec<Message> = vec![];
+        let result = merge_consecutive_messages(messages);
+
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_merge_consecutive_messages_single_message() {
+        let messages = vec![Message::human("Only one")];
+        let result = merge_consecutive_messages(messages);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].text(), Some("Only one"));
+    }
+
+    #[test]
+    fn test_merge_consecutive_messages_no_consecutive_same_role() {
+        let messages = vec![
+            Message::human("First"),
+            Message::assistant("Second"),
+            Message::human("Third"),
+            Message::assistant("Fourth"),
+        ];
+
+        let result = merge_consecutive_messages(messages);
+
+        assert_eq!(result.len(), 4, "No merging should occur");
+    }
+
+    #[test]
+    fn test_merge_consecutive_messages_all_same_role() {
+        let messages = vec![
+            Message::human("First"),
+            Message::human("Second"),
+            Message::human("Third"),
+        ];
+
+        let result = merge_consecutive_messages(messages);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].text(), Some("First\nSecond\nThird"));
+        assert_eq!(result[0].role, MessageRole::Human);
+    }
+
+    #[test]
+    fn test_merge_consecutive_messages_with_multipart_content() {
+        // Messages with non-text content should not merge content
+        let msg1 = Message::human(MessageContent::Parts(vec![
+            ContentPart::text("Text part"),
+            ContentPart::image_url("http://example.com/img.jpg"),
+        ]));
+
+        let msg2 = Message::human("Simple text");
+
+        let result = merge_consecutive_messages(vec![msg1.clone(), msg2]);
+
+        // Should still merge (keep first message's content structure)
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].role, MessageRole::Human);
+
+        // Content should match first message (non-text content not merged)
+        match &result[0].content {
+            MessageContent::Parts(parts) => {
+                assert_eq!(parts.len(), 2);
+            }
+            MessageContent::Text(_) => panic!("Expected Parts content"),
+        }
+    }
+
+    #[test]
+    fn test_merge_consecutive_preserves_first_message_metadata() {
+        let msg1 = Message::human("First")
+            .with_id("id_1")
+            .with_name("User1")
+            .with_metadata(serde_json::json!({"key": "value"}));
+
+        let msg2 = Message::human("Second")
+            .with_id("id_2")
+            .with_name("User2");
+
+        let result = merge_consecutive_messages(vec![msg1, msg2]);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, Some("id_1".to_string()));
+        assert_eq!(result[0].name, Some("User1".to_string()));
+        assert_eq!(result[0].metadata, Some(serde_json::json!({"key": "value"})));
+    }
+
+    #[test]
+    fn test_merge_consecutive_with_system_messages() {
+        let messages = vec![
+            Message::system("System instruction 1"),
+            Message::system("System instruction 2"),
+            Message::human("User query"),
+        ];
+
+        let result = merge_consecutive_messages(messages);
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].role, MessageRole::System);
+        assert_eq!(result[0].text(), Some("System instruction 1\nSystem instruction 2"));
+        assert_eq!(result[1].role, MessageRole::Human);
+    }
+
+    #[test]
+    fn test_merge_consecutive_with_tool_messages() {
+        let messages = vec![
+            Message::tool("Result 1", "call_1"),
+            Message::tool("Result 2", "call_2"),
+            Message::assistant("Thanks"),
+        ];
+
+        let result = merge_consecutive_messages(messages);
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].role, MessageRole::Tool);
+        assert_eq!(result[0].text(), Some("Result 1\nResult 2"));
+        assert_eq!(result[1].role, MessageRole::Assistant);
+    }
+
+    // ========================================================================
+    // Phase 10.1: Message Deduplication
+    // ========================================================================
+
+    #[test]
+    fn test_deduplication_by_id_basic() {
+        let msgs1 = vec![
+            Message::human("First").with_id("1"),
+            Message::human("Second").with_id("2"),
+        ];
+
+        let msgs2 = vec![
+            Message::human("First (duplicate)").with_id("1"),
+        ];
+
+        let result = add_messages(msgs1, msgs2);
+
+        assert_eq!(result.len(), 2);
+        // Message with id "1" should be replaced
+        assert_eq!(result[0].text(), Some("First (duplicate)"));
+        assert_eq!(result[1].text(), Some("Second"));
+    }
+
+    #[test]
+    fn test_deduplication_preserves_insertion_order() {
+        let msgs1 = vec![
+            Message::human("A").with_id("a"),
+            Message::human("B").with_id("b"),
+            Message::human("C").with_id("c"),
+        ];
+
+        let msgs2 = vec![
+            Message::human("B updated").with_id("b"),
+            Message::human("D new").with_id("d"),
+        ];
+
+        let result = add_messages(msgs1, msgs2);
+
+        assert_eq!(result.len(), 4);
+        assert_eq!(result[0].id, Some("a".to_string()));
+        assert_eq!(result[1].id, Some("b".to_string()));
+        assert_eq!(result[1].text(), Some("B updated"));
+        assert_eq!(result[2].id, Some("c".to_string()));
+        assert_eq!(result[3].id, Some("d".to_string()));
+    }
+
+    #[test]
+    fn test_deduplication_with_auto_generated_ids() {
+        // Messages without IDs get auto-generated IDs, which should be unique
+        let mut msg1 = Message::human("First");
+        let mut msg2 = Message::human("Second");
+        msg1.id = None;
+        msg2.id = None;
+
+        let msgs = vec![msg1, msg2];
+        let empty: Vec<Message> = vec![];
+
+        let result = add_messages(msgs, empty);
+
+        assert_eq!(result.len(), 2);
+        assert!(result[0].id.is_some());
+        assert!(result[1].id.is_some());
+        assert_ne!(result[0].id, result[1].id);
+    }
+
+    #[test]
+    fn test_deduplication_with_mixed_ids() {
+        let msg1 = Message::human("Has ID").with_id("custom");
+        let mut msg2 = Message::human("No ID");
+        msg2.id = None;
+
+        let result = add_messages(vec![msg1], vec![msg2]);
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].id, Some("custom".to_string()));
+        assert!(result[1].id.is_some());
+        assert_ne!(result[0].id, result[1].id);
+    }
+
+    #[test]
+    fn test_deduplication_complex_scenario() {
+        // Complex scenario with multiple updates and removals
+        let msgs1 = vec![
+            MessageLike::Message(Message::human("Msg 1").with_id("1")),
+            MessageLike::Message(Message::human("Msg 2").with_id("2")),
+            MessageLike::Message(Message::human("Msg 3").with_id("3")),
+        ];
+
+        let msgs2 = vec![
+            MessageLike::Message(Message::human("Msg 1 updated").with_id("1")), // Update
+            MessageLike::Remove(RemoveMessage::new("2")), // Remove
+            MessageLike::Message(Message::human("Msg 4").with_id("4")), // Add new
+            MessageLike::Message(Message::human("Msg 3 updated").with_id("3")), // Update
+        ];
+
+        let result = add_message_likes(msgs1, msgs2);
+
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].text(), Some("Msg 1 updated"));
+        assert_eq!(result[1].text(), Some("Msg 3 updated"));
+        assert_eq!(result[2].text(), Some("Msg 4"));
+    }
+
+    #[test]
+    fn test_deduplication_tuple_messages() {
+        let msgs1 = vec![
+            MessageLike::Tuple(("human".to_string(), "First".to_string())),
+            MessageLike::Message(Message::human("Second").with_id("2")),
+        ];
+
+        let msgs2 = vec![
+            MessageLike::Tuple(("assistant".to_string(), "Response".to_string())),
+            MessageLike::Message(Message::human("Updated Second").with_id("2")),
+        ];
+
+        let result = add_message_likes(msgs1, msgs2);
+
+        // Tuple messages get auto-generated IDs, so first tuple won't be deduplicated
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[1].text(), Some("Updated Second"));
+    }
+
+    #[test]
+    fn test_message_content_conversion_from_string() {
+        let content: MessageContent = "Hello".into();
+        match content {
+            MessageContent::Text(s) => assert_eq!(s, "Hello"),
+            _ => panic!("Expected Text variant"),
+        }
+
+        let content2: MessageContent = String::from("World").into();
+        match content2 {
+            MessageContent::Text(s) => assert_eq!(s, "World"),
+            _ => panic!("Expected Text variant"),
+        }
+    }
+
+    #[test]
+    fn test_message_content_conversion_from_parts() {
+        let parts = vec![ContentPart::text("Test")];
+        let content: MessageContent = parts.into();
+
+        match content {
+            MessageContent::Parts(p) => assert_eq!(p.len(), 1),
+            _ => panic!("Expected Parts variant"),
+        }
+    }
+
+    #[test]
+    fn test_content_part_text_with_cache() {
+        let cache_control = serde_json::json!({"type": "ephemeral"});
+        let part = ContentPart::text_with_cache("Cached text", cache_control.clone());
+
+        match part {
+            ContentPart::Text { text, cache_control: cc } => {
+                assert_eq!(text, "Cached text");
+                assert_eq!(cc, Some(cache_control));
+            }
+            _ => panic!("Expected Text variant"),
+        }
+    }
+
+    #[test]
+    fn test_content_part_image_data() {
+        let part = ContentPart::image_data("image/png", "base64data");
+
+        match part {
+            ContentPart::Image { url, source } => {
+                assert_eq!(url, None);
+                assert!(source.is_some());
+                let src = source.unwrap();
+                assert_eq!(src["type"], "base64");
+                assert_eq!(src["media_type"], "image/png");
+                assert_eq!(src["data"], "base64data");
+            }
+            _ => panic!("Expected Image variant"),
+        }
+    }
+
+    #[test]
+    fn test_message_role_serialization() {
+        assert_eq!(
+            serde_json::to_string(&MessageRole::System).unwrap(),
+            r#""system""#
+        );
+        assert_eq!(
+            serde_json::to_string(&MessageRole::Human).unwrap(),
+            r#""human""#
+        );
+        assert_eq!(
+            serde_json::to_string(&MessageRole::Assistant).unwrap(),
+            r#""assistant""#
+        );
+        assert_eq!(
+            serde_json::to_string(&MessageRole::Tool).unwrap(),
+            r#""tool""#
+        );
+    }
+
+    #[test]
+    fn test_message_role_custom_serialization() {
+        let custom = MessageRole::Custom("moderator".to_string());
+        let json = serde_json::to_string(&custom).unwrap();
+
+        // Custom roles serialize as their string value
+        assert!(json.contains("moderator"));
+    }
+
+    #[test]
+    fn test_filter_by_role_custom() {
+        let messages = vec![
+            Message::new(MessageRole::Custom("bot".to_string()), "Bot message"),
+            Message::human("Human message"),
+            Message::new(MessageRole::Custom("bot".to_string()), "Another bot"),
+        ];
+
+        let bot_msgs = filter_by_role(&messages, MessageRole::Custom("bot".to_string()));
+        assert_eq!(bot_msgs.len(), 2);
+    }
+
+    #[test]
+    fn test_convert_to_messages_with_custom_roles() {
+        let values = vec![
+            MessageLike::Tuple(("moderator".to_string(), "Warning".to_string())),
+            MessageLike::Tuple(("system".to_string(), "Instructions".to_string())),
+        ];
+
+        let messages = convert_to_messages(values);
+        assert_eq!(messages.len(), 2);
+
+        match &messages[0].role {
+            MessageRole::Custom(role) => assert_eq!(role, "moderator"),
+            _ => panic!("Expected Custom role"),
+        }
+
+        assert_eq!(messages[1].role, MessageRole::System);
+    }
+
+    #[test]
+    fn test_convert_to_messages_filters_remove_markers() {
+        let values = vec![
+            MessageLike::Message(Message::human("Keep this")),
+            MessageLike::Remove(RemoveMessage::new("some_id")),
+            MessageLike::Tuple(("assistant".to_string(), "Also keep".to_string())),
+        ];
+
+        let messages = convert_to_messages(values);
+
+        // RemoveMessage should be filtered out
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].text(), Some("Keep this"));
+        assert_eq!(messages[1].text(), Some("Also keep"));
+    }
 }
