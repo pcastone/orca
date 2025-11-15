@@ -1,10 +1,29 @@
 # Unit Testing Implementation Progress
 
-## Latest Update (Session 3)
+## Latest Update (Session 3 - Part 2)
 
 **Date**: November 15, 2025
 
-### Completed in This Session ✅
+### Bug Fix: langgraph-core Tests ✅
+
+**Fixed InMemoryCheckpointSaver metadata filtering bug**
+- **Issue**: 2 failing tests in langgraph-core (302/304 passing)
+  - `test_filtered_state_history`
+  - `test_get_latest_matching`
+- **Root Cause**: Filter was checking `metadata.extra` for all fields, but `source`, `step` are top-level fields
+- **Solution**: Enhanced filter matching to handle special top-level metadata fields (source, step, min_step, max_step, node)
+- **Result**: ✅ **All 304 tests now passing** (100% pass rate)
+
+**Files Modified**:
+- `src/crates/langgraph-checkpoint/src/memory.rs` (+58 lines)
+
+---
+
+## Session 3 - Part 1
+
+**Date**: November 15, 2025
+
+### Completed ✅
 
 1. **Direct Bridge Security Tests** - Added 18 comprehensive tests
    - 4 tests for permission enforcement integration (Deny/Allow/RequiresApproval)
