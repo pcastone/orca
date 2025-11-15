@@ -273,6 +273,12 @@ struct DeepseekUsage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use langgraph_core::llm::ReasoningMode;
+    use std::time::Duration;
+
+    // ============================================================
+    // Existing Tests
+    // ============================================================
 
     #[test]
     fn test_client_creation() {
@@ -318,6 +324,401 @@ mod tests {
         assert_eq!(answer, "The answer is 42.");
         assert!(reasoning.is_some());
         assert_eq!(reasoning.unwrap().content, "Let me analyze this...");
+    }
+
+    // ============================================================
+    // Message Conversion Tests
+    // ============================================================
+
+    #[test]
+    fn test_message_conversion_all_roles() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.deepseek.com",
+            "deepseek-chat",
+        );
+        let client = DeepseekClient::new(config);
+
+        let sys_msg = Message::system("You are helpful");
+        let deepseek_sys = client.convert_message(&sys_msg);
+        assert_eq!(deepseek_sys.role, "system");
+        assert_eq!(deepseek_sys.content, "You are helpful");
+
+        let user_msg = Message::human("Hello");
+        let deepseek_user = client.convert_message(&user_msg);
+        assert_eq!(deepseek_user.role, "user");
+        assert_eq!(deepseek_user.content, "Hello");
+
+        let asst_msg = Message::assistant("Hi there!");
+        let deepseek_asst = client.convert_message(&asst_msg);
+        assert_eq!(deepseek_asst.role, "assistant");
+        assert_eq!(deepseek_asst.content, "Hi there!");
+    }
+
+    #[test]
+    fn test_message_conversion_tool_role() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.deepseek.com",
+            "deepseek-chat",
+        );
+        let client = DeepseekClient::new(config);
+
+        let mut tool_msg = Message::human("tool result");
+        tool_msg.role = MessageRole::Tool;
+
+        let deepseek_msg = client.convert_message(&tool_msg);
+
+        // Tool messages are converted to user role
+        assert_eq!(deepseek_msg.role, "user");
+        assert_eq!(deepseek_msg.content, "tool result");
+    }
+
+    // ============================================================
+    // R1 Model Detection Tests
+    // ============================================================
+
+    #[test]
+    fn test_r1_model_detection_variants() {
+        // Test "reasoner" variant
+        let config1 = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.deepseek.com",
+            "deepseek-reasoner",
+        );
+        let client1 = DeepseekClient::new(config1);
+        assert!(client1.is_thinking_model());
+
+        // Test "r1" variant
+        let config2 = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.deepseek.com",
+            "deepseek-r1",
+        );
+        let client2 = DeepseekClient::new(config2);
+        assert!(client2.is_thinking_model());
+
+        // Test regular chat model
+        let config3 = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.deepseek.com",
+            "deepseek-chat",
+        );
+        let client3 = DeepseekClient::new(config3);
+        assert!(!client3.is_thinking_model());
+
+        // Test coder model
+        let config4 = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.deepseek.com",
+            "deepseek-coder",
+        );
+        let client4 = DeepseekClient::new(config4);
+        assert!(!client4.is_thinking_model());
+    }
+
+    // ============================================================
+    // Reasoning Extraction Tests
+    // ============================================================
+
+    #[test]
+    fn test_reasoning_extraction_with_think_tags() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.deepseek.com",
+            "deepseek-reasoner",
+        );
+        let client = DeepseekClient::new(config);
+
+        let content = "<think>Step 1: Analyze the problem\nStep 2: Consider alternatives\nStep 3: Choose best solution</think>The optimal solution is to use approach B.";
+        let (answer, reasoning) = client.extract_reasoning(content);
+
+        assert_eq!(answer, "The optimal solution is to use approach B.");
+        assert!(reasoning.is_some());
+        let reasoning_content = reasoning.unwrap();
+        assert_eq!(
+            reasoning_content.content,
+            "Step 1: Analyze the problem\nStep 2: Consider alternatives\nStep 3: Choose best solution"
+        );
+    }
+
+    #[test]
+    fn test_reasoning_extraction_no_tags() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.deepseek.com",
+            "deepseek-reasoner",
+        );
+        let client = DeepseekClient::new(config);
+
+        let content = "This is a regular response without thinking tags.";
+        let (answer, reasoning) = client.extract_reasoning(content);
+
+        assert_eq!(answer, "This is a regular response without thinking tags.");
+        assert!(reasoning.is_none());
+    }
+
+    #[test]
+    fn test_reasoning_extraction_empty_think() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.deepseek.com",
+            "deepseek-reasoner",
+        );
+        let client = DeepseekClient::new(config);
+
+        let content = "<think></think>Answer with no reasoning.";
+        let (answer, reasoning) = client.extract_reasoning(content);
+
+        assert_eq!(answer, "Answer with no reasoning.");
+        assert!(reasoning.is_some());
+        assert_eq!(reasoning.unwrap().content, "");
+    }
+
+    // ============================================================
+    // Response Conversion Tests
+    // ============================================================
+
+    #[test]
+    fn test_response_conversion_basic() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.deepseek.com",
+            "deepseek-chat",
+        );
+        let client = DeepseekClient::new(config);
+
+        let request = ChatRequest::new(vec![Message::human("Hello")]);
+
+        let deepseek_response = DeepseekResponse {
+            id: "chatcmpl-123".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "deepseek-chat".to_string(),
+            choices: vec![DeepseekChoice {
+                index: 0,
+                message: DeepseekMessage {
+                    role: "assistant".to_string(),
+                    content: "Hi there!".to_string(),
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: Some(DeepseekUsage {
+                prompt_tokens: 5,
+                completion_tokens: 10,
+                total_tokens: 15,
+                reasoning_tokens: None,
+            }),
+        };
+
+        let response = client.convert_response(&request, deepseek_response);
+
+        assert_eq!(response.message.text(), Some("Hi there!"));
+        assert_eq!(response.message.role, MessageRole::Assistant);
+        assert_eq!(response.usage.as_ref().unwrap().input_tokens, 5);
+        assert_eq!(response.usage.as_ref().unwrap().output_tokens, 10);
+        assert!(response.metadata.contains_key("model"));
+        assert!(response.metadata.contains_key("finish_reason"));
+    }
+
+    #[test]
+    fn test_response_conversion_with_reasoning_tokens() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.deepseek.com",
+            "deepseek-reasoner",
+        );
+        let client = DeepseekClient::new(config);
+
+        let mut request = ChatRequest::new(vec![Message::human("Solve this")]);
+        request.config.reasoning_mode = ReasoningMode::Separated;
+
+        let deepseek_response = DeepseekResponse {
+            id: "chatcmpl-r1-456".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "deepseek-reasoner".to_string(),
+            choices: vec![DeepseekChoice {
+                index: 0,
+                message: DeepseekMessage {
+                    role: "assistant".to_string(),
+                    content: "<think>Analyzing the problem...</think>Solution found.".to_string(),
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: Some(DeepseekUsage {
+                prompt_tokens: 10,
+                completion_tokens: 50,
+                total_tokens: 100,
+                reasoning_tokens: Some(40),
+            }),
+        };
+
+        let response = client.convert_response(&request, deepseek_response);
+
+        assert_eq!(response.message.text(), Some("Solution found."));
+        assert!(response.reasoning.is_some());
+        assert_eq!(
+            response.reasoning.as_ref().unwrap().content,
+            "Analyzing the problem..."
+        );
+        assert_eq!(response.usage.as_ref().unwrap().input_tokens, 10);
+        assert_eq!(response.usage.as_ref().unwrap().output_tokens, 50);
+        assert_eq!(response.usage.as_ref().unwrap().reasoning_tokens, Some(40));
+    }
+
+    #[test]
+    fn test_response_conversion_reasoning_mode_disabled() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.deepseek.com",
+            "deepseek-reasoner",
+        );
+        let client = DeepseekClient::new(config);
+
+        let mut request = ChatRequest::new(vec![Message::human("Question")]);
+        request.config.reasoning_mode = ReasoningMode::Disabled;
+
+        let deepseek_response = DeepseekResponse {
+            id: "chatcmpl-789".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "deepseek-reasoner".to_string(),
+            choices: vec![DeepseekChoice {
+                index: 0,
+                message: DeepseekMessage {
+                    role: "assistant".to_string(),
+                    content: "<think>Hidden thinking</think>Answer".to_string(),
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: None,
+        };
+
+        let response = client.convert_response(&request, deepseek_response);
+
+        // When reasoning mode is Disabled, should not extract reasoning
+        assert!(response.reasoning.is_none());
+        assert_eq!(
+            response.message.text(),
+            Some("<think>Hidden thinking</think>Answer")
+        );
+    }
+
+    #[test]
+    fn test_response_conversion_non_thinking_model() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.deepseek.com",
+            "deepseek-chat",
+        );
+        let client = DeepseekClient::new(config);
+
+        let mut request = ChatRequest::new(vec![Message::human("Question")]);
+        request.config.reasoning_mode = ReasoningMode::Separated;
+
+        let deepseek_response = DeepseekResponse {
+            id: "chatcmpl-999".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "deepseek-chat".to_string(),
+            choices: vec![DeepseekChoice {
+                index: 0,
+                message: DeepseekMessage {
+                    role: "assistant".to_string(),
+                    content: "<think>Some text</think>Answer".to_string(),
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: None,
+        };
+
+        let response = client.convert_response(&request, deepseek_response);
+
+        // Non-thinking models should not extract reasoning even if tags present
+        assert!(response.reasoning.is_none());
+        assert_eq!(
+            response.message.text(),
+            Some("<think>Some text</think>Answer")
+        );
+    }
+
+    // ============================================================
+    // Configuration Tests
+    // ============================================================
+
+    #[test]
+    fn test_config_with_custom_timeout() {
+        let mut config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.deepseek.com",
+            "deepseek-reasoner",
+        );
+        config.timeout = Duration::from_secs(90);
+
+        let client = DeepseekClient::new(config.clone());
+        assert_eq!(client.config.timeout, Duration::from_secs(90));
+    }
+
+    // ============================================================
+    // Future Implementation Tests (Marked #[ignore])
+    // ============================================================
+
+    /// Test: Streaming support
+    ///
+    /// Verifies that Deepseek streaming returns token-by-token responses.
+    ///
+    /// NOTE: Currently ignored - streaming not yet implemented for Deepseek.
+    /// See line 211-214 in chat implementation.
+    #[tokio::test]
+    #[ignore]
+    async fn test_streaming_basic() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.deepseek.com",
+            "deepseek-chat",
+        );
+        let client = DeepseekClient::new(config);
+
+        let request = ChatRequest::new(vec![Message::human("Count to 5")]);
+
+        // TODO: Currently returns error "Streaming not yet implemented"
+        // Once implemented, should work like:
+        // let stream = client.stream(request).await.unwrap();
+        // while let Some(result) = stream.receiver.recv().await {
+        //     match result {
+        //         Ok(event) => { /* process streaming event */ },
+        //         Err(_) => break,
+        //     }
+        // }
+
+        // For now, just verify it returns an error
+        let result = client.stream(request).await;
+        assert!(result.is_err());
+    }
+
+    /// Test: Streaming with R1 reasoning
+    ///
+    /// Verifies that Deepseek R1 streaming includes reasoning tokens.
+    ///
+    /// NOTE: Currently ignored - streaming not yet implemented for Deepseek.
+    #[tokio::test]
+    #[ignore]
+    async fn test_streaming_r1_reasoning() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.deepseek.com",
+            "deepseek-reasoner",
+        );
+        let client = DeepseekClient::new(config);
+
+        let mut request = ChatRequest::new(vec![Message::human("Complex problem")]);
+        request.config.reasoning_mode = ReasoningMode::Separated;
+
+        // TODO: Once streaming is implemented for R1
+        // Should stream thinking tokens separately from answer tokens
+        // let stream = client.stream(request).await.unwrap();
+        // Verify reasoning is streamed before answer
     }
 }
 
