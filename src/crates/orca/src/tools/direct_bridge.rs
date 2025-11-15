@@ -354,4 +354,378 @@ mod tests {
         let schemas = bridge.get_all_schemas();
         assert!(!schemas.is_empty());
     }
+
+    // =================================================================
+    // SECURITY TESTS - Permission Enforcement Integration
+    // =================================================================
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_permission_enforcement_deny() {
+        use crate::testing::TestDatabase;
+
+        let test_db = TestDatabase::new().await.unwrap();
+        let temp_dir = TempDir::new().unwrap();
+
+        let bridge = DirectToolBridge::new(
+            temp_dir.path().to_path_buf(),
+            "test-session".to_string(),
+        )
+        .unwrap()
+        .with_permission_enforcement(
+            Arc::new(test_db.manager),
+            PermissionLevel::Denied,
+        );
+
+        // Attempt to execute a tool - should be denied by default policy
+        let result = bridge.execute_tool("file_read", json!({"path": "test.txt"})).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("Permission denied") ||
+                error.to_string().contains("denied"));
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_permission_enforcement_requires_approval() {
+        use crate::testing::TestDatabase;
+
+        let test_db = TestDatabase::new().await.unwrap();
+        let temp_dir = TempDir::new().unwrap();
+
+        let bridge = DirectToolBridge::new(
+            temp_dir.path().to_path_buf(),
+            "test-session".to_string(),
+        )
+        .unwrap()
+        .with_permission_enforcement(
+            Arc::new(test_db.manager),
+            PermissionLevel::RequiresApproval,
+        );
+
+        // Attempt to execute a tool - should require approval
+        let result = bridge.execute_tool("shell_exec", json!({"command": "ls"})).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("Approval required") ||
+                error.to_string().contains("approval"));
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_permission_enforcement_allow() {
+        use crate::testing::TestDatabase;
+
+        let test_db = TestDatabase::new().await.unwrap();
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create a test file to read
+        std::fs::write(temp_dir.path().join("test.txt"), "test content").unwrap();
+
+        let bridge = DirectToolBridge::new(
+            temp_dir.path().to_path_buf(),
+            "test-session".to_string(),
+        )
+        .unwrap()
+        .with_permission_enforcement(
+            Arc::new(test_db.manager),
+            PermissionLevel::Allowed,
+        );
+
+        // Execute with Allow permission - should succeed
+        let result = bridge.execute_tool("file_read", json!({
+            "path": temp_dir.path().join("test.txt").to_str().unwrap()
+        })).await;
+
+        // May fail due to tool implementation, but should NOT fail due to permissions
+        if result.is_err() {
+            let error = result.unwrap_err();
+            assert!(!error.to_string().contains("Permission denied"));
+            assert!(!error.to_string().contains("Approval required"));
+        }
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_permission_check_error_propagation() {
+        use crate::testing::TestDatabase;
+
+        let test_db = TestDatabase::new().await.unwrap();
+        let temp_dir = TempDir::new().unwrap();
+
+        let bridge = DirectToolBridge::new(
+            temp_dir.path().to_path_buf(),
+            "test-session".to_string(),
+        )
+        .unwrap()
+        .with_permission_enforcement(
+            Arc::new(test_db.manager),
+            PermissionLevel::Denied,
+        );
+
+        // Execute tool - permission check should happen before tool execution
+        let result = bridge.execute_tool("nonexistent_tool", json!({})).await;
+
+        assert!(result.is_err());
+        // Should fail with permission error, not "tool not found"
+        let error = result.unwrap_err().to_string();
+        assert!(error.contains("Permission") || error.contains("denied"));
+    }
+
+    // =================================================================
+    // SECURITY TESTS - Tool Registry Security
+    // =================================================================
+
+    #[tokio::test]
+    async fn test_tool_registry_only_registered_tools() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = DirectToolBridge::new(
+            temp_dir.path().to_path_buf(),
+            "test-session".to_string(),
+        ).unwrap();
+
+        // Verify dangerous tool names are NOT registered
+        let tools = bridge.list_tools();
+        assert!(!tools.contains(&"exec".to_string()));
+        assert!(!tools.contains(&"eval".to_string()));
+        assert!(!tools.contains(&"system".to_string()));
+        assert!(!tools.contains(&"__import__".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_tool_registry_rejects_unknown_tools() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = DirectToolBridge::new(
+            temp_dir.path().to_path_buf(),
+            "test-session".to_string(),
+        ).unwrap();
+
+        // Attempt to execute various unregistered tool names
+        let dangerous_tools = vec![
+            "exec", "eval", "system", "__import__",
+            "rm", "delete_all", "format_drive"
+        ];
+
+        for tool_name in dangerous_tools {
+            let result = bridge.execute_tool(tool_name, json!({})).await;
+            assert!(result.is_err(), "Tool '{}' should not be executable", tool_name);
+            assert!(result.unwrap_err().to_string().contains("not found"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_tool_registry_expected_tools_registered() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = DirectToolBridge::new(
+            temp_dir.path().to_path_buf(),
+            "test-session".to_string(),
+        ).unwrap();
+
+        // Verify all expected safe tools are registered
+        let tools = bridge.list_tools();
+
+        // Filesystem tools
+        assert!(tools.contains(&"file_read".to_string()));
+        assert!(tools.contains(&"file_write".to_string()));
+        assert!(tools.contains(&"fs_list".to_string()));
+
+        // Git tools
+        assert!(tools.contains(&"git_status".to_string()));
+        assert!(tools.contains(&"git_diff".to_string()));
+
+        // Should have reasonable number of tools (not empty, not excessive)
+        assert!(tools.len() >= 10, "Should have at least 10 tools");
+        assert!(tools.len() <= 30, "Should not have excessive tools");
+    }
+
+    #[tokio::test]
+    async fn test_tool_schema_retrieval_security() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = DirectToolBridge::new(
+            temp_dir.path().to_path_buf(),
+            "test-session".to_string(),
+        ).unwrap();
+
+        // Should be able to get schemas for registered tools
+        let result = bridge.get_tool_schema("file_read");
+        assert!(result.is_ok());
+
+        // Should NOT be able to get schemas for unregistered tools
+        let result = bridge.get_tool_schema("nonexistent_tool");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    // =================================================================
+    // SECURITY TESTS - Error Propagation
+    // =================================================================
+
+    #[tokio::test]
+    async fn test_error_propagation_tool_not_found() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = DirectToolBridge::new(
+            temp_dir.path().to_path_buf(),
+            "test-session".to_string(),
+        ).unwrap();
+
+        let result = bridge.execute_tool("nonexistent_tool", json!({})).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        let error_str = error.to_string();
+
+        // Error should be clear and informative
+        assert!(error_str.contains("not found") || error_str.contains("Tool"));
+        assert!(error_str.contains("nonexistent_tool"));
+    }
+
+    #[tokio::test]
+    async fn test_error_context_preservation() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = DirectToolBridge::new(
+            temp_dir.path().to_path_buf(),
+            "test-session".to_string(),
+        ).unwrap();
+
+        // Execute with invalid arguments (should fail during execution)
+        let result = bridge.execute_tool("file_read", json!({
+            "invalid_argument": "value"
+        })).await;
+
+        if result.is_err() {
+            let error = result.unwrap_err();
+            let error_str = error.to_string();
+
+            // Error should contain context about what failed
+            assert!(!error_str.is_empty());
+            // Should mention either the tool name or execution failure
+            assert!(error_str.contains("file_read") ||
+                    error_str.contains("Failed") ||
+                    error_str.contains("execute"));
+        }
+    }
+
+    // =================================================================
+    // SECURITY TESTS - Execution Context Isolation
+    // =================================================================
+
+    #[tokio::test]
+    async fn test_workspace_root_isolation() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_path = temp_dir.path().to_path_buf();
+
+        let bridge = DirectToolBridge::new(
+            workspace_path.clone(),
+            "test-session".to_string(),
+        ).unwrap();
+
+        // Verify workspace root is set correctly
+        assert_eq!(bridge.workspace_root(), &workspace_path);
+
+        // Workspace root should be absolute
+        assert!(bridge.workspace_root().is_absolute());
+    }
+
+    #[tokio::test]
+    async fn test_session_id_isolation() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create two bridges with different session IDs
+        let bridge1 = DirectToolBridge::new(
+            temp_dir.path().to_path_buf(),
+            "session-1".to_string(),
+        ).unwrap();
+
+        let bridge2 = DirectToolBridge::new(
+            temp_dir.path().to_path_buf(),
+            "session-2".to_string(),
+        ).unwrap();
+
+        // Each should maintain its own session ID
+        assert_eq!(bridge1.session_id(), "session-1");
+        assert_eq!(bridge2.session_id(), "session-2");
+        assert_ne!(bridge1.session_id(), bridge2.session_id());
+    }
+
+    #[tokio::test]
+    async fn test_multiple_bridge_instances_isolated() {
+        let temp_dir1 = TempDir::new().unwrap();
+        let temp_dir2 = TempDir::new().unwrap();
+
+        let bridge1 = DirectToolBridge::new(
+            temp_dir1.path().to_path_buf(),
+            "session-1".to_string(),
+        ).unwrap();
+
+        let bridge2 = DirectToolBridge::new(
+            temp_dir2.path().to_path_buf(),
+            "session-2".to_string(),
+        ).unwrap();
+
+        // Each bridge should have isolated workspace
+        assert_ne!(bridge1.workspace_root(), bridge2.workspace_root());
+
+        // Both should have same tool registry
+        assert_eq!(bridge1.list_tools().len(), bridge2.list_tools().len());
+    }
+
+    // =================================================================
+    // SECURITY TESTS - Execution Logging
+    // =================================================================
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_execution_logging_denied_tools() {
+        use crate::testing::TestDatabase;
+
+        let test_db = TestDatabase::new().await.unwrap();
+        let temp_dir = TempDir::new().unwrap();
+
+        let bridge = DirectToolBridge::new(
+            temp_dir.path().to_path_buf(),
+            "test-session".to_string(),
+        )
+        .unwrap()
+        .with_permission_enforcement(
+            Arc::new(test_db.manager),
+            PermissionLevel::Denied,
+        );
+
+        // Execute denied tool
+        let _ = bridge.execute_tool("shell_exec", json!({"command": "ls"})).await;
+
+        // TODO: Verify execution was logged in database
+        // This requires querying the tool_executions table
+        // which would need database access from test_db.manager
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires database setup
+    async fn test_execution_logging_successful_tools() {
+        use crate::testing::TestDatabase;
+
+        let test_db = TestDatabase::new().await.unwrap();
+        let temp_dir = TempDir::new().unwrap();
+
+        std::fs::write(temp_dir.path().join("test.txt"), "content").unwrap();
+
+        let bridge = DirectToolBridge::new(
+            temp_dir.path().to_path_buf(),
+            "test-session".to_string(),
+        )
+        .unwrap()
+        .with_permission_enforcement(
+            Arc::new(test_db.manager),
+            PermissionLevel::Allowed,
+        );
+
+        // Execute allowed tool
+        let _ = bridge.execute_tool("file_read", json!({
+            "path": temp_dir.path().join("test.txt").to_str().unwrap()
+        })).await;
+
+        // TODO: Verify execution was logged in database
+    }
 }

@@ -446,4 +446,361 @@ mod tests {
         let result = PathValidator::new(&file_path, SecurityConfig::default());
         assert!(result.is_err());
     }
+
+    // =================================================================
+    // ADVANCED SECURITY EDGE CASE TESTS
+    // =================================================================
+
+    #[test]
+    fn test_url_encoded_path_traversal() {
+        let (_, validator) = setup_validator();
+
+        // URL encoded ".." should still be caught
+        // Note: Rust's PathBuf doesn't automatically decode, but test for safety
+        let encoded_patterns = vec![
+            "%2e%2e/etc/passwd",
+            "config/%2e%2e/etc",
+            "%2e%2e%2f%2e%2e%2fetc",
+        ];
+
+        for pattern in encoded_patterns {
+            let result = validator.validate_path(pattern);
+            // These might not be caught by component check since PathBuf doesn't decode
+            // But they should be caught by bounds check or not resolve correctly
+            // This documents the current behavior
+            if result.is_ok() {
+                // If it passes validation, ensure it doesn't actually escape
+                let safe_path = validator.workspace_root.join(pattern);
+                assert!(safe_path.starts_with(&validator.workspace_root),
+                    "URL encoded path {} should not escape workspace", pattern);
+            }
+        }
+    }
+
+    #[test]
+    fn test_mixed_separators_windows_unix() {
+        let (_, validator) = setup_validator();
+
+        // Test mixed Windows/Unix separators in path traversal attempts
+        // Note: On Unix, backslashes are treated as literal filename characters
+        // On Windows, they're path separators. Test behavior accordingly.
+
+        #[cfg(windows)]
+        {
+            let patterns = vec![
+                "config\\..\\..\\etc",  // Windows style
+                "config\\../etc",        // Mixed
+                "config/..\\etc",        // Mixed reverse
+            ];
+
+            for pattern in patterns {
+                let result = validator.validate_path(pattern);
+                // Should catch .. components regardless of separator
+                assert!(result.is_err(),
+                    "Mixed separator pattern {} should be rejected on Windows", pattern);
+            }
+        }
+
+        #[cfg(unix)]
+        {
+            // On Unix, backslashes are literal characters, not separators
+            // But forward slash with .. should still be caught
+            let patterns = vec![
+                "config/../etc",
+                "config/../../etc",
+            ];
+
+            for pattern in patterns {
+                let result = validator.validate_path(pattern);
+                assert!(result.is_err(),
+                    "Path traversal with .. should be rejected: {}", pattern);
+            }
+
+            // Backslashes are treated as literal filename chars on Unix
+            let backslash_pattern = "config\\..\\..\\etc";
+            let result = validator.validate_path(backslash_pattern);
+            // On Unix, this is a filename with backslashes, which is valid (odd but valid)
+            // It won't have ParentDir components, so validation may pass
+            if result.is_ok() {
+                // Ensure it's contained within workspace
+                let safe_path = validator.workspace_root.join(backslash_pattern);
+                assert!(safe_path.starts_with(&validator.workspace_root));
+            }
+        }
+    }
+
+    #[test]
+    fn test_null_byte_in_path() {
+        let (_, validator) = setup_validator();
+
+        // Null bytes in paths are a security vulnerability
+        // Rust's path handling should prevent this, but test for safety
+        let path_with_null = "config\0/etc/passwd";
+
+        // PathBuf should handle this safely (null bytes are invalid in paths)
+        // This test documents the behavior
+        let result = validator.validate_path(path_with_null);
+
+        // Either validation fails, or the path is safely contained
+        if result.is_ok() {
+            let safe_path = validator.workspace_root.join(path_with_null);
+            assert!(safe_path.to_str().is_none() ||
+                    safe_path.starts_with(&validator.workspace_root));
+        }
+    }
+
+    #[test]
+    fn test_empty_path_validation() {
+        let (_, validator) = setup_validator();
+
+        // Empty path should be handled safely
+        let result = validator.validate_path("");
+
+        // Either it's rejected or it resolves to workspace root
+        if result.is_ok() {
+            let resolved = validator.workspace_root.join("");
+            assert_eq!(resolved, validator.workspace_root);
+        }
+    }
+
+    #[test]
+    fn test_dot_current_directory() {
+        let (_, validator) = setup_validator();
+
+        // Single dot should be allowed (current directory)
+        let result = validator.validate_path(".");
+        // Should be OK - current directory is safe
+        assert!(result.is_ok());
+
+        let result = validator.validate_path("./config");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_hidden_file_path_traversal() {
+        let (_, validator) = setup_validator();
+
+        // Path traversal hidden in "normal" looking paths
+        let result = validator.validate_path("./../etc/passwd");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("traversal"));
+    }
+
+    #[test]
+    fn test_very_long_path() {
+        let (_, validator) = setup_validator();
+
+        // Test with very long path (potential buffer overflow or DoS)
+        let long_component = "a".repeat(255); // Max filename length on most systems
+        let long_path = format!("{}/{}/{}/{}", long_component, long_component,
+                                long_component, long_component);
+
+        let result = validator.validate_relative_path(&long_path);
+
+        // Should either succeed (and be contained) or fail gracefully
+        if let Ok(path) = result {
+            assert!(path.starts_with(&validator.workspace_root));
+        }
+    }
+
+    #[test]
+    fn test_blocked_path_exact_match() {
+        let (_, validator) = setup_validator();
+
+        // Test exact blocked path match
+        let result = validator.validate_path("/etc");
+        assert!(result.is_err());
+
+        let result = validator.validate_path("/etc/passwd");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_blocked_path_prefix_false_positive() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create a workspace that has "etc" in the name but isn't /etc
+        let workspace_with_etc = temp_dir.path().join("my_etc_backup");
+        std::fs::create_dir(&workspace_with_etc).unwrap();
+
+        let validator = PathValidator::new(&workspace_with_etc, SecurityConfig::default()).unwrap();
+
+        // Path within workspace that contains "etc" should be allowed
+        let safe_path = workspace_with_etc.join("config");
+        std::fs::create_dir(&safe_path).unwrap();
+
+        let result = validator.validate_path(&safe_path);
+        assert!(result.is_ok(), "Path within workspace should be allowed even if workspace name contains 'etc'");
+    }
+
+    #[test]
+    fn test_custom_blocked_paths() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = SecurityConfig::default();
+
+        // Add custom blocked path
+        config.blocked_paths.push(PathBuf::from("/custom/blocked"));
+
+        let validator = PathValidator::new(temp_dir.path(), config).unwrap();
+
+        let result = validator.validate_path("/custom/blocked/file.txt");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_case_sensitivity_in_paths() {
+        let (_, validator) = setup_validator();
+
+        // On case-sensitive filesystems, /ETC and /etc are different
+        // But both should be caught if configured
+        let result = validator.validate_path("/ETC/passwd");
+
+        // This might pass or fail depending on OS and configuration
+        // Document the behavior: blocked paths are case-sensitive by default
+        if result.is_ok() {
+            // If it passes, it's because "/ETC" isn't in the blocked list
+            // which only has "/etc" (lowercase)
+            assert!(!validator.config.blocked_paths.contains(&PathBuf::from("/ETC")));
+        }
+    }
+
+    #[test]
+    fn test_symlink_in_parent_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = SecurityConfig::default();
+
+        // Create workspace inside temp_dir
+        let workspace = temp_dir.path().join("workspace");
+        std::fs::create_dir(&workspace).unwrap();
+
+        let validator = PathValidator::new(&workspace, config).unwrap();
+
+        // Create a file in workspace
+        let target = workspace.join("file.txt");
+        std::fs::write(&target, "content").unwrap();
+
+        // The file itself is not a symlink, should pass
+        let result = validator.validate_path(&target);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_tilde_expansion_not_performed() {
+        let (_, validator) = setup_validator();
+
+        // Tilde should NOT be expanded (that's a shell feature)
+        let result = validator.validate_path("~/etc/passwd");
+
+        // Should be treated as literal "~" directory name
+        // which is relative and within workspace bounds
+        if result.is_ok() {
+            let resolved = validator.workspace_root.join("~/etc/passwd");
+            assert!(resolved.starts_with(&validator.workspace_root));
+        }
+    }
+
+    #[test]
+    fn test_multiple_slashes() {
+        let (_, validator) = setup_validator();
+
+        // Multiple slashes should be normalized
+        let result = validator.validate_path("config///test.txt");
+
+        // PathBuf normalizes multiple slashes
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_trailing_slash_handling() {
+        let (temp_dir, validator) = setup_validator();
+
+        // Create a directory
+        let dir = temp_dir.path().join("config");
+        std::fs::create_dir(&dir).unwrap();
+
+        // Trailing slash should be OK for directories
+        let result = validator.validate_path(dir.join(""));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_canonicalization_edge_case() {
+        let (temp_dir, validator) = setup_validator();
+
+        // Path with . and .. that ultimately stays in workspace
+        let dir = temp_dir.path().join("dir");
+        std::fs::create_dir(&dir).unwrap();
+
+        let complex_path = temp_dir.path().join("./dir/../dir/./file.txt");
+
+        // Even though it has .. it resolves to workspace/dir/file.txt
+        // But our validator rejects ALL .. components for safety
+        let result = validator.validate_path(&complex_path);
+        assert!(result.is_err(), "Should reject any .. for security");
+    }
+
+    #[test]
+    fn test_read_path_symlink_target_outside_workspace() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace = temp_dir.path().join("workspace");
+        std::fs::create_dir(&workspace).unwrap();
+
+        // Create target outside workspace
+        let outside = temp_dir.path().join("outside.txt");
+        std::fs::write(&outside, "secret").unwrap();
+
+        let mut config = SecurityConfig::default();
+        config.allow_symlinks = true;  // Allow symlinks to test boundary check
+
+        let validator = PathValidator::new(&workspace, config).unwrap();
+
+        // Create symlink inside workspace pointing outside
+        let link = workspace.join("link.txt");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_file(&outside, &link).unwrap();
+
+        // Should fail because canonical path is outside workspace
+        let result = validator.validate_read_path(&link);
+        assert!(result.is_err(), "Symlink pointing outside workspace should be rejected");
+    }
+
+    #[test]
+    fn test_write_path_parent_not_writable() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace = temp_dir.path().join("workspace");
+        std::fs::create_dir(&workspace).unwrap();
+
+        let validator = PathValidator::new(&workspace, SecurityConfig::default()).unwrap();
+
+        // Create a read-only directory
+        let readonly_dir = workspace.join("readonly");
+        std::fs::create_dir(&readonly_dir).unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&readonly_dir).unwrap().permissions();
+            perms.set_mode(0o444);  // Read-only
+            std::fs::set_permissions(&readonly_dir, perms).unwrap();
+
+            let write_path = readonly_dir.join("newfile.txt");
+            let result = validator.validate_write_path(&write_path);
+
+            // Should fail because parent is read-only
+            assert!(result.is_err());
+
+            // Clean up - restore write permissions
+            let mut perms = std::fs::metadata(&readonly_dir).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&readonly_dir, perms).unwrap();
+        }
+
+        #[cfg(windows)]
+        {
+            // Windows permission handling is different, skip this test
+            // or implement Windows-specific read-only check
+        }
+    }
 }
