@@ -1293,4 +1293,476 @@ mod tests {
         // Verify special channel identifiers
         assert_eq!(TASKS, "__tasks__");
     }
+
+    // ========================================================================
+    // Phase 10.2: Conditional Edge Routing Tests
+    // ========================================================================
+
+    #[test]
+    fn test_conditional_edge_basic() {
+        use std::collections::HashMap;
+        use crate::send::ConditionalEdgeResult;
+
+        let mut graph = Graph::new();
+
+        let branches = HashMap::from([
+            ("yes".to_string(), "node_a".to_string()),
+            ("no".to_string(), "node_b".to_string()),
+        ]);
+
+        graph.add_conditional_edge(
+            START.to_string(),
+            Arc::new(|_state| {
+                ConditionalEdgeResult::Node("yes".to_string())
+            }),
+            branches,
+        );
+
+        assert_eq!(graph.edges.len(), 1);
+        assert!(graph.edges.contains_key(START));
+
+        let edges = graph.edges.get(START).unwrap();
+        assert_eq!(edges.len(), 1);
+
+        match &edges[0] {
+            Edge::Conditional { branches, .. } => {
+                assert_eq!(branches.len(), 2);
+                assert_eq!(branches.get("yes"), Some(&"node_a".to_string()));
+                assert_eq!(branches.get("no"), Some(&"node_b".to_string()));
+            }
+            _ => panic!("Expected conditional edge"),
+        }
+    }
+
+    #[test]
+    fn test_conditional_edge_multiple_branches() {
+        use std::collections::HashMap;
+        use crate::send::ConditionalEdgeResult;
+
+        let mut graph = Graph::new();
+
+        let branches = HashMap::from([
+            ("route1".to_string(), "node1".to_string()),
+            ("route2".to_string(), "node2".to_string()),
+            ("route3".to_string(), "node3".to_string()),
+            ("route4".to_string(), "node4".to_string()),
+        ]);
+
+        graph.add_conditional_edge(
+            "start_node".to_string(),
+            Arc::new(|state| {
+                let route = state["route"].as_str().unwrap_or("route1");
+                ConditionalEdgeResult::Node(route.to_string())
+            }),
+            branches.clone(),
+        );
+
+        let edges = graph.edges.get("start_node").unwrap();
+        match &edges[0] {
+            Edge::Conditional { branches: b, .. } => {
+                assert_eq!(b.len(), 4);
+                assert_eq!(b.get("route1"), Some(&"node1".to_string()));
+                assert_eq!(b.get("route4"), Some(&"node4".to_string()));
+            }
+            _ => panic!("Expected conditional edge"),
+        }
+    }
+
+    #[test]
+    fn test_conditional_edge_to_end() {
+        use std::collections::HashMap;
+        use crate::send::ConditionalEdgeResult;
+
+        let mut graph = Graph::new();
+
+        let branches = HashMap::from([
+            ("continue".to_string(), "next_node".to_string()),
+            ("finish".to_string(), END.to_string()),
+        ]);
+
+        graph.add_conditional_edge(
+            "decision_node".to_string(),
+            Arc::new(|_| ConditionalEdgeResult::Node("finish".to_string())),
+            branches,
+        );
+
+        let edges = graph.edges.get("decision_node").unwrap();
+        match &edges[0] {
+            Edge::Conditional { branches, .. } => {
+                assert_eq!(branches.get("finish"), Some(&END.to_string()));
+            }
+            _ => panic!("Expected conditional edge"),
+        }
+    }
+
+    #[test]
+    fn test_mixed_edge_types() {
+        use std::collections::HashMap;
+        use crate::send::ConditionalEdgeResult;
+
+        let mut graph = Graph::new();
+
+        // Add direct edge
+        graph.add_edge(START.to_string(), "node1".to_string());
+
+        // Add conditional edge from different node
+        let branches = HashMap::from([
+            ("a".to_string(), "node2".to_string()),
+            ("b".to_string(), END.to_string()),
+        ]);
+
+        graph.add_conditional_edge(
+            "node1".to_string(),
+            Arc::new(|_| ConditionalEdgeResult::Node("a".to_string())),
+            branches,
+        );
+
+        // Add another direct edge
+        graph.add_edge("node2".to_string(), END.to_string());
+
+        assert_eq!(graph.edges.len(), 3);
+
+        // Verify START has direct edge
+        let start_edges = graph.edges.get(START).unwrap();
+        assert_eq!(start_edges.len(), 1);
+        match &start_edges[0] {
+            Edge::Direct(target) => assert_eq!(target, "node1"),
+            _ => panic!("Expected direct edge"),
+        }
+
+        // Verify node1 has conditional edge
+        let node1_edges = graph.edges.get("node1").unwrap();
+        assert_eq!(node1_edges.len(), 1);
+        match &node1_edges[0] {
+            Edge::Conditional { .. } => {}
+            _ => panic!("Expected conditional edge"),
+        }
+
+        // Verify node2 has direct edge to END
+        let node2_edges = graph.edges.get("node2").unwrap();
+        assert_eq!(node2_edges.len(), 1);
+        match &node2_edges[0] {
+            Edge::Direct(target) => assert_eq!(target, END),
+            _ => panic!("Expected direct edge"),
+        }
+    }
+
+    #[test]
+    fn test_validation_conditional_edge_missing_target() {
+        use std::collections::HashMap;
+        use crate::send::ConditionalEdgeResult;
+
+        let mut graph = Graph::new();
+
+        // Add node1 but not node2
+        graph.add_node(
+            "node1".to_string(),
+            NodeSpec {
+                name: "node1".to_string(),
+                executor: Arc::new(|s| Box::pin(async move { Ok(s) })),
+                reads: vec![],
+                writes: vec![],
+                subgraph: None,
+            },
+        );
+
+        let branches = HashMap::from([
+            ("exists".to_string(), "node1".to_string()),
+            ("missing".to_string(), "node2".to_string()),  // This node doesn't exist
+        ]);
+
+        graph.add_conditional_edge(
+            START.to_string(),
+            Arc::new(|_| ConditionalEdgeResult::Node("exists".to_string())),
+            branches,
+        );
+
+        // Validation should fail because node2 doesn't exist
+        assert!(graph.validate().is_err());
+    }
+
+    #[test]
+    fn test_validation_conditional_edge_to_end_ok() {
+        use std::collections::HashMap;
+        use crate::send::ConditionalEdgeResult;
+
+        let mut graph = Graph::new();
+
+        let branches = HashMap::from([
+            ("finish".to_string(), END.to_string()),  // END is allowed
+        ]);
+
+        graph.add_conditional_edge(
+            START.to_string(),
+            Arc::new(|_| ConditionalEdgeResult::Node("finish".to_string())),
+            branches,
+        );
+
+        // Validation should succeed because END is a special allowed target
+        assert!(graph.validate().is_ok());
+    }
+
+    // ========================================================================
+    // Phase 10.2: Channel Management Tests
+    // ========================================================================
+
+    #[test]
+    fn test_channel_spec_last_value() {
+        let channel = ChannelSpec {
+            name: "state".to_string(),
+            channel_type: ChannelType::LastValue,
+            reducer: None,
+        };
+
+        assert_eq!(channel.name, "state");
+        assert_eq!(channel.channel_type, ChannelType::LastValue);
+        assert!(channel.reducer.is_none());
+    }
+
+    #[test]
+    fn test_channel_spec_topic() {
+        let channel = ChannelSpec {
+            name: "messages".to_string(),
+            channel_type: ChannelType::Topic,
+            reducer: None,
+        };
+
+        assert_eq!(channel.name, "messages");
+        assert_eq!(channel.channel_type, ChannelType::Topic);
+        assert!(channel.reducer.is_none());
+    }
+
+    #[test]
+    fn test_channel_spec_binary_op_with_reducer() {
+        use serde_json::json;
+
+        let sum_reducer: ReducerFn = Arc::new(|a, b| {
+            json!(a.as_i64().unwrap_or(0) + b.as_i64().unwrap_or(0))
+        });
+
+        let channel = ChannelSpec {
+            name: "counter".to_string(),
+            channel_type: ChannelType::BinaryOp,
+            reducer: Some(sum_reducer.clone()),
+        };
+
+        assert_eq!(channel.name, "counter");
+        assert_eq!(channel.channel_type, ChannelType::BinaryOp);
+        assert!(channel.reducer.is_some());
+
+        // Test the reducer
+        let reducer = channel.reducer.unwrap();
+        let result = reducer(json!(5), json!(3));
+        assert_eq!(result, json!(8));
+    }
+
+    #[test]
+    fn test_channel_reducer_sum() {
+        use serde_json::json;
+
+        let sum: ReducerFn = Arc::new(|a, b| {
+            json!(a.as_i64().unwrap_or(0) + b.as_i64().unwrap_or(0))
+        });
+
+        assert_eq!(sum(json!(10), json!(20)), json!(30));
+        assert_eq!(sum(json!(0), json!(5)), json!(5));
+        assert_eq!(sum(json!(-5), json!(3)), json!(-2));
+    }
+
+    #[test]
+    fn test_channel_reducer_merge_objects() {
+        use serde_json::{json, Value};
+
+        let merge: ReducerFn = Arc::new(|a, b| {
+            if let (Some(a_obj), Some(b_obj)) = (a.as_object(), b.as_object()) {
+                let mut result = a_obj.clone();
+                for (k, v) in b_obj {
+                    result.insert(k.clone(), v.clone());
+                }
+                Value::Object(result)
+            } else {
+                b
+            }
+        });
+
+        let obj1 = json!({"a": 1, "b": 2});
+        let obj2 = json!({"b": 3, "c": 4});
+        let result = merge(obj1, obj2);
+
+        assert_eq!(result["a"], json!(1));
+        assert_eq!(result["b"], json!(3));  // obj2 overwrites
+        assert_eq!(result["c"], json!(4));
+    }
+
+    #[test]
+    fn test_channel_reducer_append_arrays() {
+        use serde_json::{json, Value};
+
+        let append: ReducerFn = Arc::new(|a, b| {
+            if let (Some(a_arr), Some(b_arr)) = (a.as_array(), b.as_array()) {
+                let mut result = a_arr.clone();
+                result.extend(b_arr.iter().cloned());
+                Value::Array(result)
+            } else {
+                b
+            }
+        });
+
+        let arr1 = json!([1, 2, 3]);
+        let arr2 = json!([4, 5]);
+        let result = append(arr1, arr2);
+
+        assert_eq!(result, json!([1, 2, 3, 4, 5]));
+    }
+
+    #[test]
+    fn test_channel_type_serialization() {
+        use serde_json;
+
+        let last_value = ChannelType::LastValue;
+        let json = serde_json::to_string(&last_value).unwrap();
+        assert_eq!(json, r#""last_value""#);
+
+        let topic = ChannelType::Topic;
+        let json = serde_json::to_string(&topic).unwrap();
+        assert_eq!(json, r#""topic""#);
+
+        let binary_op = ChannelType::BinaryOp;
+        let json = serde_json::to_string(&binary_op).unwrap();
+        assert_eq!(json, r#""binary_op""#);
+    }
+
+    #[test]
+    fn test_channel_type_deserialization() {
+        use serde_json;
+
+        let last_value: ChannelType = serde_json::from_str(r#""last_value""#).unwrap();
+        assert_eq!(last_value, ChannelType::LastValue);
+
+        let topic: ChannelType = serde_json::from_str(r#""topic""#).unwrap();
+        assert_eq!(topic, ChannelType::Topic);
+
+        let binary_op: ChannelType = serde_json::from_str(r#""binary_op""#).unwrap();
+        assert_eq!(binary_op, ChannelType::BinaryOp);
+    }
+
+    #[test]
+    fn test_graph_with_channels() {
+        use serde_json::json;
+
+        let mut graph = Graph::new();
+
+        // Add channels
+        graph.channels.insert(
+            "state".to_string(),
+            ChannelSpec {
+                name: "state".to_string(),
+                channel_type: ChannelType::LastValue,
+                reducer: None,
+            },
+        );
+
+        graph.channels.insert(
+            "logs".to_string(),
+            ChannelSpec {
+                name: "logs".to_string(),
+                channel_type: ChannelType::Topic,
+                reducer: None,
+            },
+        );
+
+        let sum_reducer: ReducerFn = Arc::new(|a, b| {
+            json!(a.as_i64().unwrap_or(0) + b.as_i64().unwrap_or(0))
+        });
+
+        graph.channels.insert(
+            "counter".to_string(),
+            ChannelSpec {
+                name: "counter".to_string(),
+                channel_type: ChannelType::BinaryOp,
+                reducer: Some(sum_reducer),
+            },
+        );
+
+        assert_eq!(graph.channels.len(), 3);
+        assert_eq!(graph.channels.get("state").unwrap().channel_type, ChannelType::LastValue);
+        assert_eq!(graph.channels.get("logs").unwrap().channel_type, ChannelType::Topic);
+        assert_eq!(graph.channels.get("counter").unwrap().channel_type, ChannelType::BinaryOp);
+    }
+
+    #[test]
+    fn test_node_spec_with_channel_reads_writes() {
+        let node = NodeSpec {
+            name: "processor".to_string(),
+            executor: Arc::new(|s| Box::pin(async move { Ok(s) })),
+            reads: vec!["input".to_string(), "config".to_string()],
+            writes: vec!["output".to_string(), "logs".to_string()],
+            subgraph: None,
+        };
+
+        assert_eq!(node.reads.len(), 2);
+        assert_eq!(node.writes.len(), 2);
+        assert!(node.reads.contains(&"input".to_string()));
+        assert!(node.reads.contains(&"config".to_string()));
+        assert!(node.writes.contains(&"output".to_string()));
+        assert!(node.writes.contains(&"logs".to_string()));
+    }
+
+    #[test]
+    fn test_edge_debug_formatting() {
+        use std::collections::HashMap;
+        use crate::send::ConditionalEdgeResult;
+
+        // Direct edge
+        let direct = Edge::Direct("node1".to_string());
+        let debug_str = format!("{:?}", direct);
+        assert!(debug_str.contains("Direct"));
+        assert!(debug_str.contains("node1"));
+
+        // Conditional edge
+        let branches = HashMap::from([
+            ("a".to_string(), "node2".to_string()),
+        ]);
+        let conditional = Edge::Conditional {
+            router: Arc::new(|_| ConditionalEdgeResult::Node("a".to_string())),
+            branches,
+        };
+        let debug_str = format!("{:?}", conditional);
+        assert!(debug_str.contains("Conditional"));
+        assert!(debug_str.contains("function"));  // Router shows as <function>
+        assert!(debug_str.contains("branches"));
+    }
+
+    #[test]
+    fn test_graph_default() {
+        let graph = Graph::default();
+
+        assert_eq!(graph.nodes.len(), 0);
+        assert_eq!(graph.edges.len(), 0);
+        assert_eq!(graph.entry, START);
+        assert_eq!(graph.channels.len(), 0);
+    }
+
+    #[test]
+    fn test_channel_spec_clone() {
+        use serde_json::json;
+
+        let reducer: ReducerFn = Arc::new(|a, b| json!(a.as_i64().unwrap_or(0) + b.as_i64().unwrap_or(0)));
+
+        let channel = ChannelSpec {
+            name: "test".to_string(),
+            channel_type: ChannelType::BinaryOp,
+            reducer: Some(reducer.clone()),
+        };
+
+        let cloned = channel.clone();
+
+        assert_eq!(cloned.name, "test");
+        assert_eq!(cloned.channel_type, ChannelType::BinaryOp);
+        assert!(cloned.reducer.is_some());
+
+        // Test that the cloned reducer works
+        let cloned_reducer = cloned.reducer.unwrap();
+        assert_eq!(cloned_reducer(json!(5), json!(10)), json!(15));
+    }
 }
