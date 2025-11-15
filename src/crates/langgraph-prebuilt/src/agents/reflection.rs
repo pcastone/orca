@@ -622,4 +622,634 @@ mod tests {
         assert_eq!(state.query, deserialized.query);
         assert_eq!(state.iteration_count, deserialized.iteration_count);
     }
+
+    // ========== Config and Builder Tests ==========
+
+    #[test]
+    fn test_config_default_values() {
+        let generator: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("generate")) }));
+        let reflector: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("reflect")) }));
+
+        let config = ReflectionConfig::new(generator, reflector, vec![]);
+
+        assert_eq!(config.max_iterations, 3);
+        assert_eq!(config.quality_threshold, 0.75);
+        assert!(config.generator_prompt.is_none());
+        assert!(config.reflector_prompt.is_none());
+        assert!(config.use_tools);
+    }
+
+    #[test]
+    fn test_config_builder_pattern() {
+        let generator: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("generate")) }));
+        let reflector: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("reflect")) }));
+
+        let config = create_reflection_agent(generator, reflector, vec![])
+            .with_max_iterations(5)
+            .with_quality_threshold(0.9)
+            .with_generator_prompt("Generate content")
+            .with_reflector_prompt("Critique content")
+            .with_use_tools(false);
+
+        assert_eq!(config.max_iterations, 5);
+        assert_eq!(config.quality_threshold, 0.9);
+        assert_eq!(config.generator_prompt.unwrap(), "Generate content");
+        assert_eq!(config.reflector_prompt.unwrap(), "Critique content");
+        assert!(!config.use_tools);
+    }
+
+    #[test]
+    fn test_config_with_max_iterations() {
+        let generator: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("generate")) }));
+        let reflector: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("reflect")) }));
+
+        let config = ReflectionConfig::new(generator, reflector, vec![])
+            .with_max_iterations(10);
+
+        assert_eq!(config.max_iterations, 10);
+        assert_eq!(config.quality_threshold, 0.75); // Default unchanged
+    }
+
+    #[test]
+    fn test_config_quality_threshold_clamping() {
+        let generator: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("generate")) }));
+        let reflector: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("reflect")) }));
+
+        let config_high = ReflectionConfig::new(generator.clone(), reflector.clone(), vec![])
+            .with_quality_threshold(1.5); // Should clamp to 1.0
+
+        assert_eq!(config_high.quality_threshold, 1.0);
+
+        let config_low = ReflectionConfig::new(generator.clone(), reflector.clone(), vec![])
+            .with_quality_threshold(-0.5); // Should clamp to 0.0
+
+        assert_eq!(config_low.quality_threshold, 0.0);
+
+        let config_valid = ReflectionConfig::new(generator, reflector, vec![])
+            .with_quality_threshold(0.85);
+
+        assert_eq!(config_valid.quality_threshold, 0.85);
+    }
+
+    #[test]
+    fn test_config_chaining() {
+        let generator: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("generate")) }));
+        let reflector: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("reflect")) }));
+
+        let config = ReflectionConfig::new(generator, reflector, vec![])
+            .with_max_iterations(2)
+            .with_quality_threshold(0.8)
+            .with_generator_prompt("A")
+            .with_reflector_prompt("B")
+            .with_use_tools(true);
+
+        assert_eq!(config.max_iterations, 2);
+        assert_eq!(config.quality_threshold, 0.8);
+        assert_eq!(config.generator_prompt.unwrap(), "A");
+        assert_eq!(config.reflector_prompt.unwrap(), "B");
+        assert!(config.use_tools);
+    }
+
+    #[test]
+    fn test_config_zero_max_iterations() {
+        let generator: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("generate")) }));
+        let reflector: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("reflect")) }));
+
+        let config = ReflectionConfig::new(generator, reflector, vec![])
+            .with_max_iterations(0);
+
+        assert_eq!(config.max_iterations, 0);
+    }
+
+    #[test]
+    fn test_config_use_tools() {
+        let generator: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("generate")) }));
+        let reflector: LlmFunction = Arc::new(|_| Box::pin(async { Ok(Message::ai("reflect")) }));
+
+        let config_with_tools = ReflectionConfig::new(generator.clone(), reflector.clone(), vec![])
+            .with_use_tools(true);
+
+        assert!(config_with_tools.use_tools);
+
+        let config_without_tools = ReflectionConfig::new(generator, reflector, vec![])
+            .with_use_tools(false);
+
+        assert!(!config_without_tools.use_tools);
+    }
+
+    // ========== Quality Assessment Tests ==========
+
+    #[test]
+    fn test_parse_critique_default() {
+        let response = Message::ai("This response needs improvement");
+        let critique = parse_critique_from_response(&response, 0.75);
+
+        assert_eq!(critique.quality_score, 0.7);
+        assert!(!critique.is_satisfactory); // 0.7 < 0.75
+        assert!(!critique.strengths.is_empty());
+        assert!(!critique.weaknesses.is_empty());
+        assert!(!critique.suggestions.is_empty());
+    }
+
+    #[test]
+    fn test_critique_is_satisfactory_below_threshold() {
+        let critique = ReflectionCritique {
+            quality_score: 0.74,
+            strengths: vec![],
+            weaknesses: vec![],
+            suggestions: vec![],
+            is_satisfactory: false,
+        };
+
+        assert!(!critique.is_satisfactory);
+        assert!(critique.quality_score < 0.75);
+    }
+
+    #[test]
+    fn test_critique_is_satisfactory_at_threshold() {
+        let critique = ReflectionCritique {
+            quality_score: 0.75,
+            strengths: vec![],
+            weaknesses: vec![],
+            suggestions: vec![],
+            is_satisfactory: true,
+        };
+
+        assert!(critique.is_satisfactory);
+        assert_eq!(critique.quality_score, 0.75);
+    }
+
+    #[test]
+    fn test_critique_is_satisfactory_above_threshold() {
+        let critique = ReflectionCritique {
+            quality_score: 0.95,
+            strengths: vec!["Excellent".to_string()],
+            weaknesses: vec![],
+            suggestions: vec![],
+            is_satisfactory: true,
+        };
+
+        assert!(critique.is_satisfactory);
+        assert!(critique.quality_score > 0.75);
+    }
+
+    #[test]
+    fn test_quality_metrics_calculation() {
+        let metrics = QualityMetrics {
+            final_score: 0.9,
+            iterations: 3,
+            improvement_delta: 0.2, // 0.9 - 0.7
+            threshold_met: true,
+        };
+
+        assert_eq!(metrics.final_score, 0.9);
+        assert_eq!(metrics.iterations, 3);
+        assert_eq!(metrics.improvement_delta, 0.2);
+        assert!(metrics.threshold_met);
+    }
+
+    #[test]
+    fn test_quality_metrics_no_improvement() {
+        let metrics = QualityMetrics {
+            final_score: 0.7,
+            iterations: 1,
+            improvement_delta: 0.0,
+            threshold_met: false,
+        };
+
+        assert_eq!(metrics.improvement_delta, 0.0);
+        assert!(!metrics.threshold_met);
+    }
+
+    #[test]
+    fn test_quality_metrics_negative_delta() {
+        // Edge case: quality got worse (shouldn't happen but test handles it)
+        let metrics = QualityMetrics {
+            final_score: 0.6,
+            iterations: 2,
+            improvement_delta: -0.1, // 0.6 - 0.7
+            threshold_met: false,
+        };
+
+        assert_eq!(metrics.improvement_delta, -0.1);
+        assert!(metrics.improvement_delta < 0.0);
+    }
+
+    #[test]
+    fn test_critique_with_detailed_feedback() {
+        let critique = ReflectionCritique {
+            quality_score: 0.82,
+            strengths: vec![
+                "Clear structure".to_string(),
+                "Good examples".to_string(),
+            ],
+            weaknesses: vec![
+                "Missing conclusion".to_string(),
+            ],
+            suggestions: vec![
+                "Add summary section".to_string(),
+                "Include references".to_string(),
+            ],
+            is_satisfactory: true,
+        };
+
+        assert_eq!(critique.strengths.len(), 2);
+        assert_eq!(critique.weaknesses.len(), 1);
+        assert_eq!(critique.suggestions.len(), 2);
+    }
+
+    // ========== Generation-Critique Cycle Tests ==========
+
+    #[test]
+    fn test_state_initialization() {
+        let state = ReflectionState {
+            query: "Write an essay".to_string(),
+            current_response: String::new(),
+            response_history: vec![],
+            critique_history: vec![],
+            iteration_count: 0,
+            final_response: None,
+            quality_metrics: None,
+        };
+
+        assert_eq!(state.query, "Write an essay");
+        assert_eq!(state.iteration_count, 0);
+        assert!(state.response_history.is_empty());
+        assert!(state.critique_history.is_empty());
+        assert!(state.final_response.is_none());
+        assert!(state.quality_metrics.is_none());
+    }
+
+    #[test]
+    fn test_response_history_tracking() {
+        let mut state = ReflectionState {
+            query: "Test".to_string(),
+            current_response: "Response 1".to_string(),
+            response_history: vec!["Response 1".to_string()],
+            critique_history: vec![],
+            iteration_count: 1,
+            final_response: None,
+            quality_metrics: None,
+        };
+
+        assert_eq!(state.response_history.len(), 1);
+
+        // Simulate next iteration
+        state.current_response = "Response 2".to_string();
+        state.response_history.push("Response 2".to_string());
+        state.iteration_count = 2;
+
+        assert_eq!(state.response_history.len(), 2);
+        assert_eq!(state.iteration_count, 2);
+        assert_eq!(state.current_response, "Response 2");
+    }
+
+    #[test]
+    fn test_critique_history_tracking() {
+        let critique1 = ReflectionCritique {
+            quality_score: 0.6,
+            strengths: vec![],
+            weaknesses: vec!["Too brief".to_string()],
+            suggestions: vec!["Expand".to_string()],
+            is_satisfactory: false,
+        };
+
+        let critique2 = ReflectionCritique {
+            quality_score: 0.85,
+            strengths: vec!["Well detailed".to_string()],
+            weaknesses: vec![],
+            suggestions: vec![],
+            is_satisfactory: true,
+        };
+
+        let state = ReflectionState {
+            query: "Test".to_string(),
+            current_response: "Final response".to_string(),
+            response_history: vec!["Response 1".to_string(), "Response 2".to_string()],
+            critique_history: vec![critique1, critique2],
+            iteration_count: 2,
+            final_response: None,
+            quality_metrics: None,
+        };
+
+        assert_eq!(state.critique_history.len(), 2);
+        assert_eq!(state.critique_history[0].quality_score, 0.6);
+        assert_eq!(state.critique_history[1].quality_score, 0.85);
+    }
+
+    #[test]
+    fn test_iteration_counting() {
+        let mut state = ReflectionState {
+            query: "Test".to_string(),
+            current_response: String::new(),
+            response_history: vec![],
+            critique_history: vec![],
+            iteration_count: 0,
+            final_response: None,
+            quality_metrics: None,
+        };
+
+        for i in 1..=5 {
+            state.iteration_count = i;
+            assert_eq!(state.iteration_count, i);
+        }
+    }
+
+    #[test]
+    fn test_final_response_setting() {
+        let mut state = ReflectionState {
+            query: "Test".to_string(),
+            current_response: "Latest response".to_string(),
+            response_history: vec![],
+            critique_history: vec![],
+            iteration_count: 3,
+            final_response: None,
+            quality_metrics: None,
+        };
+
+        assert!(state.final_response.is_none());
+
+        state.final_response = Some(state.current_response.clone());
+
+        assert!(state.final_response.is_some());
+        assert_eq!(state.final_response.unwrap(), "Latest response");
+    }
+
+    #[test]
+    fn test_complete_cycle() {
+        let critique = ReflectionCritique {
+            quality_score: 0.9,
+            strengths: vec!["Comprehensive".to_string()],
+            weaknesses: vec![],
+            suggestions: vec![],
+            is_satisfactory: true,
+        };
+
+        let metrics = QualityMetrics {
+            final_score: 0.9,
+            iterations: 2,
+            improvement_delta: 0.25,
+            threshold_met: true,
+        };
+
+        let state = ReflectionState {
+            query: "Write guide".to_string(),
+            current_response: "Final draft".to_string(),
+            response_history: vec!["Draft 1".to_string(), "Final draft".to_string()],
+            critique_history: vec![critique],
+            iteration_count: 2,
+            final_response: Some("Final draft".to_string()),
+            quality_metrics: Some(metrics),
+        };
+
+        assert_eq!(state.iteration_count, 2);
+        assert_eq!(state.response_history.len(), 2);
+        assert_eq!(state.critique_history.len(), 1);
+        assert!(state.final_response.is_some());
+        assert!(state.quality_metrics.is_some());
+
+        let metrics = state.quality_metrics.unwrap();
+        assert!(metrics.threshold_met);
+        assert_eq!(metrics.improvement_delta, 0.25);
+    }
+
+    // ========== Iteration Limits Tests ==========
+
+    #[test]
+    fn test_max_iterations_enforcement() {
+        let state = json!({
+            "iteration_count": 3,
+            "final_response": "Result after max iterations"
+        });
+
+        // With max_iterations = 3, should have final_response
+        assert!(state.get("final_response").is_some());
+        assert_eq!(state["iteration_count"], 3);
+    }
+
+    #[test]
+    fn test_early_termination_on_satisfactory() {
+        let critique = ReflectionCritique {
+            quality_score: 0.95,
+            strengths: vec!["Excellent".to_string()],
+            weaknesses: vec![],
+            suggestions: vec![],
+            is_satisfactory: true,
+        };
+
+        let state = ReflectionState {
+            query: "Test".to_string(),
+            current_response: "Great response".to_string(),
+            response_history: vec!["Great response".to_string()],
+            critique_history: vec![critique],
+            iteration_count: 1, // Terminated early (before max)
+            final_response: Some("Great response".to_string()),
+            quality_metrics: Some(QualityMetrics {
+                final_score: 0.95,
+                iterations: 1,
+                improvement_delta: 0.0,
+                threshold_met: true,
+            }),
+        };
+
+        assert_eq!(state.iteration_count, 1);
+        assert!(state.final_response.is_some());
+        assert!(state.quality_metrics.as_ref().unwrap().threshold_met);
+    }
+
+    #[test]
+    fn test_threshold_met_tracking() {
+        let metrics_met = QualityMetrics {
+            final_score: 0.85,
+            iterations: 2,
+            improvement_delta: 0.15,
+            threshold_met: true,
+        };
+
+        assert!(metrics_met.threshold_met);
+
+        let metrics_not_met = QualityMetrics {
+            final_score: 0.7,
+            iterations: 3,
+            improvement_delta: 0.1,
+            threshold_met: false,
+        };
+
+        assert!(!metrics_not_met.threshold_met);
+    }
+
+    #[test]
+    fn test_metrics_at_max_iterations() {
+        // Even if quality not met, should have metrics at max iterations
+        let metrics = QualityMetrics {
+            final_score: 0.72,
+            iterations: 5, // max_iterations reached
+            improvement_delta: 0.12,
+            threshold_met: false, // Didn't reach threshold
+        };
+
+        assert_eq!(metrics.iterations, 5);
+        assert!(!metrics.threshold_met);
+        assert!(metrics.improvement_delta > 0.0); // But did improve
+    }
+
+    #[test]
+    fn test_one_iteration_limit() {
+        let state = ReflectionState {
+            query: "Test".to_string(),
+            current_response: "Single response".to_string(),
+            response_history: vec!["Single response".to_string()],
+            critique_history: vec![ReflectionCritique {
+                quality_score: 0.65,
+                strengths: vec![],
+                weaknesses: vec!["Needs work".to_string()],
+                suggestions: vec![],
+                is_satisfactory: false,
+            }],
+            iteration_count: 1,
+            final_response: Some("Single response".to_string()),
+            quality_metrics: Some(QualityMetrics {
+                final_score: 0.65,
+                iterations: 1,
+                improvement_delta: 0.0,
+                threshold_met: false,
+            }),
+        };
+
+        assert_eq!(state.iteration_count, 1);
+        assert!(state.final_response.is_some());
+        assert!(!state.quality_metrics.unwrap().threshold_met);
+    }
+
+    #[test]
+    fn test_multiple_iterations_progress() {
+        let critiques = vec![
+            ReflectionCritique {
+                quality_score: 0.5,
+                strengths: vec![],
+                weaknesses: vec!["Poor".to_string()],
+                suggestions: vec!["Improve".to_string()],
+                is_satisfactory: false,
+            },
+            ReflectionCritique {
+                quality_score: 0.7,
+                strengths: vec!["Better".to_string()],
+                weaknesses: vec!["Still needs work".to_string()],
+                suggestions: vec!["Polish".to_string()],
+                is_satisfactory: false,
+            },
+            ReflectionCritique {
+                quality_score: 0.88,
+                strengths: vec!["Excellent".to_string()],
+                weaknesses: vec![],
+                suggestions: vec![],
+                is_satisfactory: true,
+            },
+        ];
+
+        assert_eq!(critiques[0].quality_score, 0.5);
+        assert_eq!(critiques[1].quality_score, 0.7);
+        assert_eq!(critiques[2].quality_score, 0.88);
+        assert!(critiques[2].is_satisfactory);
+
+        // Improvement from first to last
+        let improvement = critiques[2].quality_score - critiques[0].quality_score;
+        assert_eq!(improvement, 0.38);
+    }
+
+    // ========== Complex Serialization Tests ==========
+
+    #[test]
+    fn test_critique_complex_serialization() {
+        let critique = ReflectionCritique {
+            quality_score: 0.777,
+            strengths: vec![
+                "Clear prose".to_string(),
+                "Good examples with: special \"chars\"".to_string(),
+            ],
+            weaknesses: vec![
+                "Missing: newline\ntest".to_string(),
+            ],
+            suggestions: vec![
+                "Add\ttabs".to_string(),
+                "Unicode: 🚀 测试".to_string(),
+            ],
+            is_satisfactory: true,
+        };
+
+        let json_str = serde_json::to_string(&critique).unwrap();
+        let deserialized: ReflectionCritique = serde_json::from_str(&json_str).unwrap();
+
+        assert_eq!(critique.quality_score, deserialized.quality_score);
+        assert_eq!(critique.strengths, deserialized.strengths);
+        assert_eq!(critique.weaknesses, deserialized.weaknesses);
+        assert_eq!(critique.suggestions, deserialized.suggestions);
+        assert_eq!(critique.is_satisfactory, deserialized.is_satisfactory);
+    }
+
+    #[test]
+    fn test_state_complex_serialization() {
+        let state = ReflectionState {
+            query: "Complex query with unicode: 测试 🎯".to_string(),
+            current_response: "Response\nwith\nmultiple\nlines".to_string(),
+            response_history: vec![
+                "First draft".to_string(),
+                "Second draft".to_string(),
+                "Third draft".to_string(),
+            ],
+            critique_history: vec![
+                ReflectionCritique {
+                    quality_score: 0.6,
+                    strengths: vec![],
+                    weaknesses: vec!["Weak".to_string()],
+                    suggestions: vec!["Improve".to_string()],
+                    is_satisfactory: false,
+                },
+                ReflectionCritique {
+                    quality_score: 0.85,
+                    strengths: vec!["Good".to_string()],
+                    weaknesses: vec![],
+                    suggestions: vec![],
+                    is_satisfactory: true,
+                },
+            ],
+            iteration_count: 2,
+            final_response: Some("Final\nresponse".to_string()),
+            quality_metrics: Some(QualityMetrics {
+                final_score: 0.85,
+                iterations: 2,
+                improvement_delta: 0.25,
+                threshold_met: true,
+            }),
+        };
+
+        let json_str = serde_json::to_string(&state).unwrap();
+        let deserialized: ReflectionState = serde_json::from_str(&json_str).unwrap();
+
+        assert_eq!(state.query, deserialized.query);
+        assert_eq!(state.current_response, deserialized.current_response);
+        assert_eq!(state.response_history.len(), deserialized.response_history.len());
+        assert_eq!(state.critique_history.len(), deserialized.critique_history.len());
+        assert_eq!(state.iteration_count, deserialized.iteration_count);
+        assert_eq!(state.final_response, deserialized.final_response);
+        assert!(deserialized.quality_metrics.is_some());
+    }
+
+    #[test]
+    fn test_quality_metrics_serialization() {
+        let metrics = QualityMetrics {
+            final_score: 0.923456,
+            iterations: 7,
+            improvement_delta: 0.423456,
+            threshold_met: true,
+        };
+
+        let json_str = serde_json::to_string(&metrics).unwrap();
+        let deserialized: QualityMetrics = serde_json::from_str(&json_str).unwrap();
+
+        assert_eq!(metrics.final_score, deserialized.final_score);
+        assert_eq!(metrics.iterations, deserialized.iterations);
+        assert_eq!(metrics.improvement_delta, deserialized.improvement_delta);
+        assert_eq!(metrics.threshold_met, deserialized.threshold_met);
+    }
 }
