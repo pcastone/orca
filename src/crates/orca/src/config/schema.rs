@@ -24,7 +24,8 @@ pub struct OrcaConfig {
 }
 
 /// Database configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct DatabaseConfig {
     /// Database file path (relative to ~/.orca or absolute)
     pub path: String,
@@ -39,7 +40,8 @@ impl Default for DatabaseConfig {
 }
 
 /// LLM provider configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct LlmConfig {
     /// LLM provider: "openai", "anthropic", "gemini", "ollama", etc.
     pub provider: String,
@@ -74,7 +76,8 @@ impl Default for LlmConfig {
 }
 
 /// Execution configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct ExecutionConfig {
     /// Maximum concurrent tasks
     pub max_concurrent_tasks: usize,
@@ -179,7 +182,8 @@ impl Default for ExecutionConfig {
 }
 
 /// Logging configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct LoggingConfig {
     /// Log level: "trace", "debug", "info", "warn", "error"
     pub level: String,
@@ -205,16 +209,116 @@ impl Default for LoggingConfig {
     }
 }
 
+impl DatabaseConfig {
+    /// Merge another config into this one, only replacing non-default fields
+    pub fn merge(&mut self, other: DatabaseConfig) {
+        let defaults = DatabaseConfig::default();
+        if other.path != defaults.path {
+            self.path = other.path;
+        }
+    }
+}
+
+impl LlmConfig {
+    /// Merge another config into this one, only replacing non-default fields
+    pub fn merge(&mut self, other: LlmConfig) {
+        let defaults = LlmConfig::default();
+        if other.provider != defaults.provider {
+            self.provider = other.provider;
+        }
+        if other.model != defaults.model {
+            self.model = other.model;
+        }
+        if other.api_key != defaults.api_key {
+            self.api_key = other.api_key;
+        }
+        if other.temperature != defaults.temperature {
+            self.temperature = other.temperature;
+        }
+        if other.max_tokens != defaults.max_tokens {
+            self.max_tokens = other.max_tokens;
+        }
+        if other.api_base != defaults.api_base {
+            self.api_base = other.api_base;
+        }
+    }
+}
+
+impl ExecutionConfig {
+    /// Merge another config into this one, only replacing non-default fields
+    pub fn merge(&mut self, other: ExecutionConfig) {
+        let defaults = ExecutionConfig::default();
+        if other.max_concurrent_tasks != defaults.max_concurrent_tasks {
+            self.max_concurrent_tasks = other.max_concurrent_tasks;
+        }
+        if other.task_timeout != defaults.task_timeout {
+            self.task_timeout = other.task_timeout;
+        }
+        if other.streaming != defaults.streaming {
+            self.streaming = other.streaming;
+        }
+        if other.workspace_root != defaults.workspace_root {
+            self.workspace_root = other.workspace_root;
+        }
+        if other.max_iterations != defaults.max_iterations {
+            self.max_iterations = other.max_iterations;
+        }
+        if other.default_pattern != defaults.default_pattern {
+            self.default_pattern = other.default_pattern;
+        }
+        if other.reflection_quality_threshold != defaults.reflection_quality_threshold {
+            self.reflection_quality_threshold = other.reflection_quality_threshold;
+        }
+        if other.plan_execute_max_steps != defaults.plan_execute_max_steps {
+            self.plan_execute_max_steps = other.plan_execute_max_steps;
+        }
+        if other.retry_enabled != defaults.retry_enabled {
+            self.retry_enabled = other.retry_enabled;
+        }
+        if other.max_retries != defaults.max_retries {
+            self.max_retries = other.max_retries;
+        }
+        if other.initial_retry_delay_secs != defaults.initial_retry_delay_secs {
+            self.initial_retry_delay_secs = other.initial_retry_delay_secs;
+        }
+        if other.max_retry_delay_secs != defaults.max_retry_delay_secs {
+            self.max_retry_delay_secs = other.max_retry_delay_secs;
+        }
+        if other.retry_multiplier != defaults.retry_multiplier {
+            self.retry_multiplier = other.retry_multiplier;
+        }
+    }
+}
+
+impl LoggingConfig {
+    /// Merge another config into this one, only replacing non-default fields
+    pub fn merge(&mut self, other: LoggingConfig) {
+        let defaults = LoggingConfig::default();
+        if other.level != defaults.level {
+            self.level = other.level;
+        }
+        if other.format != defaults.format {
+            self.format = other.format;
+        }
+        if other.colored != defaults.colored {
+            self.colored = other.colored;
+        }
+        if other.timestamps != defaults.timestamps {
+            self.timestamps = other.timestamps;
+        }
+    }
+}
+
 impl OrcaConfig {
     /// Merge another config into this one (other takes precedence)
     ///
     /// The loader handles priority: defaults → user → project
+    /// Field-level merging: only non-default fields from other override this config
     pub fn merge(&mut self, other: OrcaConfig) {
-        // Simple field replacement - serde fills in defaults for missing fields
-        self.database = other.database;
-        self.llm = other.llm;
-        self.execution = other.execution;
-        self.logging = other.logging;
+        self.database.merge(other.database);
+        self.llm.merge(other.llm);
+        self.execution.merge(other.execution);
+        self.logging.merge(other.logging);
     }
 
     /// Resolve environment variables in configuration values
