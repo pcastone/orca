@@ -4,11 +4,13 @@
 //! streaming, configuration, and result parsing.
 
 use async_trait::async_trait;
-use langgraph_core::llm::{ChatModel, ChatRequest, ChatResponse, StreamResponse, StreamChunk};
+use langgraph_core::llm::{ChatModel, ChatRequest, ChatResponse, ChatStreamResponse};
 use langgraph_core::messages::Message;
+use langgraph_core::error::{Result, GraphError};
 use orchestrator::executor::{ExecutorConfig, LlmTaskExecutor, ResponseParser};
 use orchestrator::{Task, TaskExecutor, TaskStatus};
 use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 
 /// Mock LLM for testing
 struct MockChatModel {
@@ -41,13 +43,13 @@ impl MockChatModel {
 
 #[async_trait]
 impl ChatModel for MockChatModel {
-    async fn chat(&self, _request: ChatRequest) -> langgraph_core::llm::Result<ChatResponse> {
+    async fn chat(&self, _request: ChatRequest) -> Result<ChatResponse> {
         let mut count = self.call_count.lock().unwrap();
         *count += 1;
 
         // Simulate failures for first N calls
         if *count <= self.fail_count {
-            return Err("Simulated transient error".into());
+            return Err(GraphError::Validation("Simulated transient error".to_string()));
         }
 
         let response_text = self.response.lock().unwrap().clone();
@@ -56,14 +58,25 @@ impl ChatModel for MockChatModel {
                 langgraph_core::messages::MessageRole::Assistant,
                 response_text,
             ),
+            usage: None,
+            reasoning: None,
+            metadata: HashMap::new(),
         })
     }
 
     async fn stream(
         &self,
         _request: ChatRequest,
-    ) -> langgraph_core::llm::Result<StreamResponse> {
-        Err("Streaming not implemented in mock".into())
+    ) -> Result<ChatStreamResponse> {
+        Err(GraphError::Validation("Streaming not implemented in mock".to_string()))
+    }
+
+    fn clone_box(&self) -> Box<dyn ChatModel> {
+        Box::new(Self {
+            response: self.response.clone(),
+            call_count: self.call_count.clone(),
+            fail_count: self.fail_count,
+        })
     }
 }
 

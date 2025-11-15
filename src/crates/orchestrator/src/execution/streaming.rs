@@ -82,6 +82,7 @@ impl ExecutionEventBuilder {
 }
 
 /// Task execution streaming handler
+#[derive(Clone)]
 pub struct ExecutionStreamHandler {
     /// Channel for sending events
     sender: mpsc::Sender<Result<ExecutionEvent, tonic::Status>>,
