@@ -27,12 +27,23 @@ impl TokenCount {
     }
 }
 
+/// Token counting method
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CountingMethod {
+    /// Character-based approximation (fast, less accurate)
+    Approximation,
+    /// Byte-pair encoding simulation (more accurate)
+    BpeSimulation,
+}
+
 /// Token counter for different LLM models
 pub struct TokenCounter {
     /// Model name for token counting
     model: String,
     /// Average tokens per character (model-specific)
     tokens_per_char: f32,
+    /// Counting method
+    method: CountingMethod,
 }
 
 impl TokenCounter {
@@ -40,11 +51,18 @@ impl TokenCounter {
     pub fn new(model: impl Into<String>) -> Self {
         let model = model.into();
         let tokens_per_char = Self::get_tokens_per_char(&model);
-        
+
         Self {
             model,
             tokens_per_char,
+            method: CountingMethod::Approximation,
         }
+    }
+
+    /// Create with specific counting method
+    pub fn with_method(mut self, method: CountingMethod) -> Self {
+        self.method = method;
+        self
     }
 
     /// Get approximate tokens per character for a model
@@ -68,7 +86,20 @@ impl TokenCounter {
     /// Count tokens in a text string
     pub fn count_text(&self, text: &str) -> TokenCount {
         let chars = text.len();
-        let tokens = (chars as f32 * self.tokens_per_char).ceil() as usize;
+        let tokens = match self.method {
+            CountingMethod::Approximation => {
+                (chars as f32 * self.tokens_per_char).ceil() as usize
+            }
+            CountingMethod::BpeSimulation => {
+                // Simulate BPE: count words, punctuation, and adjust
+                let words = text.split_whitespace().count();
+                let punct = text.chars().filter(|c| c.is_ascii_punctuation()).count();
+                let base_tokens = words + (punct / 2);
+
+                // Apply model-specific multiplier
+                (base_tokens as f32 * 1.3).ceil() as usize
+            }
+        };
         TokenCount::new(tokens, chars)
     }
 

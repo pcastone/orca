@@ -9,6 +9,74 @@ use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// Context usage information
+#[derive(Debug, Clone)]
+pub struct ContextUsage {
+    /// Tokens used
+    pub used: usize,
+    /// Tokens available for messages
+    pub available: usize,
+    /// Total context window size
+    pub total: usize,
+    /// Percentage used (0-100)
+    pub percentage: f64,
+    /// Warning level (None, Low, Medium, High, Critical)
+    pub warning_level: WarningLevel,
+}
+
+impl ContextUsage {
+    /// Create context usage from token counts
+    pub fn new(used: usize, total: usize, response_reserved: usize) -> Self {
+        let available = total.saturating_sub(used).saturating_sub(response_reserved);
+        let percentage = (used as f64 / total as f64) * 100.0;
+
+        let warning_level = if percentage >= 95.0 {
+            WarningLevel::Critical
+        } else if percentage >= 85.0 {
+            WarningLevel::High
+        } else if percentage >= 70.0 {
+            WarningLevel::Medium
+        } else if percentage >= 50.0 {
+            WarningLevel::Low
+        } else {
+            WarningLevel::None
+        };
+
+        Self {
+            used,
+            available,
+            total,
+            percentage,
+            warning_level,
+        }
+    }
+
+    /// Check if approaching limit
+    pub fn is_approaching_limit(&self) -> bool {
+        self.percentage >= 70.0
+    }
+
+    /// Check if critical
+    pub fn is_critical(&self) -> bool {
+        matches!(self.warning_level, WarningLevel::Critical)
+    }
+}
+
+/// Warning level for context usage
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WarningLevel {
+    /// No warning (< 50%)
+    None,
+    /// Low warning (50-70%)
+    Low,
+    /// Medium warning (70-85%)
+    Medium,
+    /// High warning (85-95%)
+    High,
+    /// Critical warning (>= 95%)
+    Critical,
+}
+
 /// Context window limits for different models
 #[derive(Debug, Clone, Copy)]
 pub struct ContextLimits {
@@ -171,6 +239,26 @@ impl ContextManager {
             .saturating_sub(self.limits.response_reserved)
     }
 
+    /// Get detailed context usage information
+    pub async fn get_usage(&self) -> ContextUsage {
+        let current_count = self.get_token_count().await;
+        ContextUsage::new(
+            current_count.tokens,
+            self.limits.max_tokens,
+            self.limits.response_reserved,
+        )
+    }
+
+    /// Check if context is approaching limit
+    pub async fn is_approaching_limit(&self) -> bool {
+        self.get_usage().await.is_approaching_limit()
+    }
+
+    /// Check if context is critical
+    pub async fn is_critical(&self) -> bool {
+        self.get_usage().await.is_critical()
+    }
+
     /// Estimate tokens for a tool response
     pub fn estimate_tool_response_tokens(&self, response: &Value) -> TokenCount {
         self.counter.count_tool_response(response)
@@ -184,6 +272,70 @@ impl ContextManager {
     /// Get model name
     pub fn model(&self) -> &str {
         &self.model
+    }
+
+    /// Summarize a large tool response to fit token budget
+    pub fn summarize_tool_response(&self, response: &Value, max_tokens: usize) -> Value {
+        let current_tokens = self.counter.count_tool_response(response).tokens;
+
+        if current_tokens <= max_tokens {
+            // No summarization needed
+            return response.clone();
+        }
+
+        // Strategy: Keep structure but truncate long strings
+        match response {
+            Value::Object(map) => {
+                let mut summarized = serde_json::Map::new();
+                let tokens_per_field = max_tokens / map.len().max(1);
+
+                for (key, value) in map {
+                    let summarized_value = match value {
+                        Value::String(s) if s.len() > 200 => {
+                            // Truncate long strings
+                            let preview_len = (tokens_per_field * 4).min(200);
+                            Value::String(format!("{}... [truncated {} chars]",
+                                &s.chars().take(preview_len).collect::<String>(),
+                                s.len()))
+                        }
+                        Value::Array(arr) if arr.len() > 10 => {
+                            // Summarize large arrays
+                            Value::String(format!("[Array with {} items - truncated]", arr.len()))
+                        }
+                        other => other.clone(),
+                    };
+                    summarized.insert(key.clone(), summarized_value);
+                }
+                Value::Object(summarized)
+            }
+            Value::Array(arr) if arr.len() > 10 => {
+                // Keep first few items
+                let keep_count = (max_tokens / 10).min(5);
+                let preview: Vec<_> = arr.iter().take(keep_count).cloned().collect();
+                let mut result = preview;
+                result.push(Value::String(format!("... {} more items truncated", arr.len() - keep_count)));
+                Value::Array(result)
+            }
+            Value::String(s) if s.len() > 500 => {
+                let preview_len = (max_tokens * 4).min(500);
+                Value::String(format!("{}... [truncated {} chars]",
+                    &s.chars().take(preview_len).collect::<String>(),
+                    s.len()))
+            }
+            other => other.clone(),
+        }
+    }
+
+    /// Fit messages to context window by trimming if necessary
+    pub async fn fit_to_window(&self, messages: Vec<Message>) -> Vec<Message> {
+        let count = self.counter.count_messages(&messages);
+
+        if count.tokens <= self.limits.available_for_history() {
+            return messages;
+        }
+
+        // Trim using the trimmer
+        self.trimmer.trim_messages(&messages)
     }
 }
 
@@ -263,8 +415,68 @@ mod tests {
     async fn test_context_limits() {
         let limits = ContextLimits::for_model("gpt-4");
         assert_eq!(limits.max_tokens, 8192);
-        
+
         let claude_limits = ContextLimits::for_model("claude-3");
         assert_eq!(claude_limits.max_tokens, 200000);
+    }
+
+    #[tokio::test]
+    async fn test_context_usage() {
+        let manager = ContextManager::new("gpt-4");
+
+        // Add some messages
+        for i in 0..10 {
+            manager.add_message(Message::human(format!("Message {}", i))).await;
+        }
+
+        let usage = manager.get_usage().await;
+        assert!(usage.used > 0);
+        assert!(usage.available > 0);
+        assert_eq!(usage.total, 8192);
+        assert!(usage.percentage < 50.0);
+        assert_eq!(usage.warning_level, WarningLevel::None);
+    }
+
+    #[tokio::test]
+    async fn test_is_approaching_limit() {
+        let manager = ContextManager::new("gpt-4");
+        assert!(!manager.is_approaching_limit().await);
+        assert!(!manager.is_critical().await);
+    }
+
+    #[tokio::test]
+    async fn test_tool_response_summarization() {
+        let manager = ContextManager::new("gpt-4");
+
+        // Create a large tool response
+        let large_response = serde_json::json!({
+            "data": "A".repeat(1000),
+            "items": vec!["item"; 20],
+        });
+
+        let summarized = manager.summarize_tool_response(&large_response, 50);
+
+        // Should be smaller than original
+        let original_str = serde_json::to_string(&large_response).unwrap();
+        let summarized_str = serde_json::to_string(&summarized).unwrap();
+        assert!(summarized_str.len() < original_str.len());
+    }
+
+    #[tokio::test]
+    async fn test_fit_to_window() {
+        // Create manager with small window for testing
+        let mut manager = ContextManager::new("gpt-4");
+        manager.limits.max_tokens = 100;
+        manager.trimmer = ContextTrimmer::new("gpt-4", 50);
+
+        // Create many messages
+        let messages: Vec<_> = (0..20)
+            .map(|i| Message::human(format!("Message {}", i)))
+            .collect();
+
+        let fitted = manager.fit_to_window(messages.clone()).await;
+
+        // Should be fewer messages
+        assert!(fitted.len() < messages.len());
     }
 }
