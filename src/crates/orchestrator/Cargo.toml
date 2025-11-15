@@ -45,6 +45,11 @@ axum = "0.7"
 tower-http = { version = "0.5", features = ["cors", "trace"] }
 rcgen = { workspace = true }
 
+# gRPC and auth
+tonic = "0.11"
+ldap3 = "0.11"
+time = { version = "0.3", features = ["macros"] }
+
 # WebSocket and compression
 dashmap = "5.5"
 parking_lot = "0.12"
