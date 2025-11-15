@@ -76,6 +76,10 @@ pub struct ToolResponse {
     #[serde(default)]
     pub errors: Vec<String>,
 
+    /// Warning messages
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
+
     /// Response timestamp
     #[serde(default = "current_system_time")]
     pub timestamp: SystemTime,
@@ -97,6 +101,7 @@ impl ToolResponse {
             duration_ms,
             data: Some(data),
             errors: Vec::new(),
+            warnings: Vec::new(),
             timestamp: SystemTime::now(),
         }
     }
@@ -116,6 +121,7 @@ impl ToolResponse {
             duration_ms,
             data: None,
             errors,
+            warnings: Vec::new(),
             timestamp: SystemTime::now(),
         }
     }
