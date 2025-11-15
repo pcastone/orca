@@ -474,6 +474,7 @@ mod tests {
     use crate::messages::ToolCall;
     use crate::tools::Tool;
     use async_trait::async_trait;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     struct TestTool;
 
@@ -491,6 +492,66 @@ mod tests {
             Ok(serde_json::json!({
                 "result": format!("Processed: {}", input)
             }))
+        }
+    }
+
+    struct SlowTool {
+        delay_ms: u64,
+    }
+
+    #[async_trait]
+    impl Tool for SlowTool {
+        fn name(&self) -> &str {
+            "slow_tool"
+        }
+
+        fn description(&self) -> &str {
+            "A slow tool for testing parallelism"
+        }
+
+        async fn execute(&self, input: Value) -> Result<Value> {
+            tokio::time::sleep(tokio::time::Duration::from_millis(self.delay_ms)).await;
+            Ok(serde_json::json!({
+                "result": format!("Slow: {}", input),
+                "delay_ms": self.delay_ms
+            }))
+        }
+    }
+
+    struct FailingTool;
+
+    #[async_trait]
+    impl Tool for FailingTool {
+        fn name(&self) -> &str {
+            "failing_tool"
+        }
+
+        fn description(&self) -> &str {
+            "A tool that always fails"
+        }
+
+        async fn execute(&self, _input: Value) -> Result<Value> {
+            Err(PrebuiltError::ToolExecution("Intentional failure".into()))
+        }
+    }
+
+    struct CounterTool {
+        counter: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl Tool for CounterTool {
+        fn name(&self) -> &str {
+            "counter_tool"
+        }
+
+        fn description(&self) -> &str {
+            "A tool that counts executions"
+        }
+
+        async fn execute(&self, _input: Value) -> Result<Value> {
+            let count = self.counter.fetch_add(1, Ordering::SeqCst) + 1;
+            Ok(serde_json::json!({"count": count}))
         }
     }
 
@@ -560,5 +621,673 @@ mod tests {
         assert_eq!(messages.len(), 1);
         // When handle_tool_errors is true, error is returned as JSON with "error" field
         assert!(messages[0].content.contains("error"));
+    }
+
+    // ========== Tool Node Creation Tests ==========
+
+    #[test]
+    fn test_tool_node_new_with_registry() {
+        let mut registry = ToolRegistry::new();
+        registry.register(Box::new(TestTool));
+
+        let tool_node = ToolNode::new(registry);
+
+        assert!(tool_node.handle_tool_errors);
+    }
+
+    #[test]
+    fn test_tool_node_from_tools_multiple() {
+        let tools: Vec<Box<dyn Tool>> = vec![
+            Box::new(TestTool),
+            Box::new(SlowTool { delay_ms: 10 }),
+        ];
+
+        let tool_node = ToolNode::from_tools(tools);
+
+        assert!(tool_node.handle_tool_errors);
+        // Registry should have both tools
+        assert_eq!(Arc::strong_count(&tool_node.registry), 1);
+    }
+
+    #[test]
+    fn test_tool_node_with_error_handling_true() {
+        let tool_node = ToolNode::from_tools(vec![Box::new(TestTool)])
+            .with_error_handling(true);
+
+        assert!(tool_node.handle_tool_errors);
+    }
+
+    #[test]
+    fn test_tool_node_with_error_handling_false() {
+        let tool_node = ToolNode::from_tools(vec![Box::new(TestTool)])
+            .with_error_handling(false);
+
+        assert!(!tool_node.handle_tool_errors);
+    }
+
+    #[test]
+    fn test_tool_node_clone_shares_registry() {
+        let tool_node1 = ToolNode::from_tools(vec![Box::new(TestTool)]);
+        let tool_node2 = tool_node1.clone();
+
+        // Both should share the same Arc
+        assert_eq!(Arc::strong_count(&tool_node1.registry), 2);
+        assert_eq!(Arc::strong_count(&tool_node2.registry), 2);
+    }
+
+    // ========== Message Extraction Tests ==========
+
+    #[tokio::test]
+    async fn test_extract_messages_success() {
+        let tool_node = ToolNode::from_tools(vec![]);
+
+        let state = serde_json::json!({
+            "messages": vec![Message::ai("Test")]
+        });
+
+        let messages = tool_node.extract_messages(&state).unwrap();
+        assert_eq!(messages.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_extract_messages_missing_field() {
+        let tool_node = ToolNode::from_tools(vec![]);
+
+        let state = serde_json::json!({
+            "other_field": "value"
+        });
+
+        let result = tool_node.extract_messages(&state);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("messages"));
+    }
+
+    #[tokio::test]
+    async fn test_extract_messages_invalid_format() {
+        let tool_node = ToolNode::from_tools(vec![]);
+
+        let state = serde_json::json!({
+            "messages": "not an array"
+        });
+
+        let result = tool_node.extract_messages(&state);
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_extract_messages_empty() {
+        let tool_node = ToolNode::from_tools(vec![]);
+
+        let state = serde_json::json!({
+            "messages": []
+        });
+
+        let messages = tool_node.extract_messages(&state).unwrap();
+        assert_eq!(messages.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_extract_messages_multiple() {
+        let tool_node = ToolNode::from_tools(vec![]);
+
+        let state = serde_json::json!({
+            "messages": vec![
+                Message::human("Hello"),
+                Message::ai("Hi"),
+                Message::human("How are you?"),
+            ]
+        });
+
+        let messages = tool_node.extract_messages(&state).unwrap();
+        assert_eq!(messages.len(), 3);
+    }
+
+    // ========== Tool Call Finding Tests ==========
+
+    #[tokio::test]
+    async fn test_find_tool_calls_in_last_ai() {
+        let tool_node = ToolNode::from_tools(vec![]);
+
+        let tool_call = ToolCall::new("call_1", "test", serde_json::json!({}));
+        let messages = vec![
+            Message::human("Test"),
+            Message::ai("Response").with_tool_calls(vec![tool_call.clone()]),
+        ];
+
+        let found_calls = tool_node.find_tool_calls(&messages).unwrap();
+        assert_eq!(found_calls.len(), 1);
+        assert_eq!(found_calls[0].id, "call_1");
+    }
+
+    #[tokio::test]
+    async fn test_find_tool_calls_no_ai_messages() {
+        let tool_node = ToolNode::from_tools(vec![]);
+
+        let messages = vec![
+            Message::human("Hello"),
+            Message::human("World"),
+        ];
+
+        let found_calls = tool_node.find_tool_calls(&messages).unwrap();
+        assert_eq!(found_calls.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_find_tool_calls_ai_without_calls() {
+        let tool_node = ToolNode::from_tools(vec![]);
+
+        let messages = vec![
+            Message::human("Test"),
+            Message::ai("Response without tool calls"),
+        ];
+
+        let found_calls = tool_node.find_tool_calls(&messages).unwrap();
+        assert_eq!(found_calls.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_find_tool_calls_uses_last_ai() {
+        let tool_node = ToolNode::from_tools(vec![]);
+
+        let tool_call1 = ToolCall::new("call_1", "tool1", serde_json::json!({}));
+        let tool_call2 = ToolCall::new("call_2", "tool2", serde_json::json!({}));
+
+        let messages = vec![
+            Message::ai("First").with_tool_calls(vec![tool_call1]),
+            Message::human("Test"),
+            Message::ai("Second").with_tool_calls(vec![tool_call2.clone()]),
+        ];
+
+        let found_calls = tool_node.find_tool_calls(&messages).unwrap();
+        assert_eq!(found_calls.len(), 1);
+        assert_eq!(found_calls[0].id, "call_2"); // Should use last AI message
+    }
+
+    #[tokio::test]
+    async fn test_find_tool_calls_ignores_earlier() {
+        let tool_node = ToolNode::from_tools(vec![]);
+
+        let tool_call = ToolCall::new("call_1", "test", serde_json::json!({}));
+        let messages = vec![
+            Message::ai("First").with_tool_calls(vec![tool_call]),
+            Message::human("Test"),
+            Message::ai("Second without calls"),
+        ];
+
+        let found_calls = tool_node.find_tool_calls(&messages).unwrap();
+        assert_eq!(found_calls.len(), 0); // Last AI has no calls
+    }
+
+    #[tokio::test]
+    async fn test_find_tool_calls_empty_messages() {
+        let tool_node = ToolNode::from_tools(vec![]);
+
+        let messages: Vec<Message> = vec![];
+
+        let found_calls = tool_node.find_tool_calls(&messages).unwrap();
+        assert_eq!(found_calls.len(), 0);
+    }
+
+    // ========== Parallel Execution Tests ==========
+
+    #[tokio::test]
+    async fn test_parallel_execution_multiple_tools() {
+        use std::time::Instant;
+
+        let tools: Vec<Box<dyn Tool>> = vec![
+            Box::new(SlowTool { delay_ms: 100 }),
+            Box::new(TestTool),
+        ];
+
+        let tool_node = ToolNode::from_tools(tools);
+
+        let tool_calls = vec![
+            ToolCall::new("call_1", "slow_tool", serde_json::json!({})),
+            ToolCall::new("call_2", "test_tool", serde_json::json!({})),
+        ];
+
+        let messages = vec![
+            Message::ai("Execute").with_tool_calls(tool_calls),
+        ];
+
+        let state = serde_json::json!({
+            "messages": messages
+        });
+
+        let start = Instant::now();
+        let result = tool_node.execute(state).await.unwrap();
+        let elapsed = start.elapsed();
+
+        let tool_messages: Vec<Message> = serde_json::from_value(result["messages"].clone()).unwrap();
+        assert_eq!(tool_messages.len(), 2);
+
+        // Should execute in parallel, so total time should be close to slowest tool (100ms)
+        // not sum of both (100ms + negligible)
+        assert!(elapsed.as_millis() < 150); // Some buffer for CI
+    }
+
+    #[tokio::test]
+    async fn test_parallel_execution_order_preserved() {
+        let counter = Arc::new(AtomicUsize::new(0));
+
+        let tools: Vec<Box<dyn Tool>> = vec![
+            Box::new(CounterTool { counter: counter.clone() }),
+        ];
+
+        let tool_node = ToolNode::from_tools(tools);
+
+        let tool_calls = vec![
+            ToolCall::new("call_1", "counter_tool", serde_json::json!({})),
+            ToolCall::new("call_2", "counter_tool", serde_json::json!({})),
+            ToolCall::new("call_3", "counter_tool", serde_json::json!({})),
+        ];
+
+        let messages = vec![
+            Message::ai("Count").with_tool_calls(tool_calls),
+        ];
+
+        let state = serde_json::json!({
+            "messages": messages
+        });
+
+        let result = tool_node.execute(state).await.unwrap();
+
+        let tool_messages: Vec<Message> = serde_json::from_value(result["messages"].clone()).unwrap();
+        assert_eq!(tool_messages.len(), 3);
+
+        // All 3 tools should have executed (order may vary due to parallelism)
+        assert_eq!(counter.load(Ordering::SeqCst), 3);
+
+        // Tool call IDs should match in order
+        assert_eq!(tool_messages[0].tool_call_id, Some("call_1".to_string()));
+        assert_eq!(tool_messages[1].tool_call_id, Some("call_2".to_string()));
+        assert_eq!(tool_messages[2].tool_call_id, Some("call_3".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_parallel_execution_mixed_success_failure() {
+        let tools: Vec<Box<dyn Tool>> = vec![
+            Box::new(TestTool),
+            Box::new(FailingTool),
+        ];
+
+        let tool_node = ToolNode::from_tools(tools);
+
+        let tool_calls = vec![
+            ToolCall::new("call_1", "test_tool", serde_json::json!({})),
+            ToolCall::new("call_2", "failing_tool", serde_json::json!({})),
+        ];
+
+        let messages = vec![
+            Message::ai("Execute").with_tool_calls(tool_calls),
+        ];
+
+        let state = serde_json::json!({
+            "messages": messages
+        });
+
+        let result = tool_node.execute(state).await.unwrap();
+
+        let tool_messages: Vec<Message> = serde_json::from_value(result["messages"].clone()).unwrap();
+        assert_eq!(tool_messages.len(), 2);
+
+        // First should succeed, second should have error
+        assert!(tool_messages[0].content.contains("Processed"));
+        assert!(tool_messages[1].content.contains("error"));
+    }
+
+    #[tokio::test]
+    async fn test_parallel_execution_all_fail() {
+        let tools: Vec<Box<dyn Tool>> = vec![
+            Box::new(FailingTool),
+        ];
+
+        let tool_node = ToolNode::from_tools(tools);
+
+        let tool_calls = vec![
+            ToolCall::new("call_1", "failing_tool", serde_json::json!({})),
+            ToolCall::new("call_2", "failing_tool", serde_json::json!({})),
+        ];
+
+        let messages = vec![
+            Message::ai("Execute").with_tool_calls(tool_calls),
+        ];
+
+        let state = serde_json::json!({
+            "messages": messages
+        });
+
+        let result = tool_node.execute(state).await.unwrap();
+
+        let tool_messages: Vec<Message> = serde_json::from_value(result["messages"].clone()).unwrap();
+        assert_eq!(tool_messages.len(), 2);
+
+        // Both should have errors (graceful handling)
+        assert!(tool_messages[0].content.contains("error"));
+        assert!(tool_messages[1].content.contains("error"));
+    }
+
+    #[tokio::test]
+    async fn test_single_tool_execution() {
+        let tool_node = ToolNode::from_tools(vec![Box::new(TestTool)]);
+
+        let tool_call = ToolCall::new("call_1", "test_tool", serde_json::json!({"data": "test"}));
+
+        let messages = vec![
+            Message::ai("Execute").with_tool_calls(vec![tool_call]),
+        ];
+
+        let state = serde_json::json!({
+            "messages": messages
+        });
+
+        let result = tool_node.execute(state).await.unwrap();
+
+        let tool_messages: Vec<Message> = serde_json::from_value(result["messages"].clone()).unwrap();
+        assert_eq!(tool_messages.len(), 1);
+        assert!(tool_messages[0].is_tool());
+    }
+
+    #[tokio::test]
+    async fn test_no_tool_calls_returns_empty() {
+        let tool_node = ToolNode::from_tools(vec![Box::new(TestTool)]);
+
+        let state = serde_json::json!({
+            "messages": vec![Message::ai("No tools")]
+        });
+
+        let result = tool_node.execute(state).await.unwrap();
+
+        let tool_messages: Vec<Message> = serde_json::from_value(result["messages"].clone()).unwrap();
+        assert_eq!(tool_messages.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_large_parallel_execution() {
+        let counter = Arc::new(AtomicUsize::new(0));
+
+        let tools: Vec<Box<dyn Tool>> = vec![
+            Box::new(CounterTool { counter: counter.clone() }),
+        ];
+
+        let tool_node = ToolNode::from_tools(tools);
+
+        // Create 10 parallel tool calls
+        let tool_calls: Vec<ToolCall> = (1..=10)
+            .map(|i| ToolCall::new(format!("call_{}", i), "counter_tool", serde_json::json!({})))
+            .collect();
+
+        let messages = vec![
+            Message::ai("Count").with_tool_calls(tool_calls),
+        ];
+
+        let state = serde_json::json!({
+            "messages": messages
+        });
+
+        let result = tool_node.execute(state).await.unwrap();
+
+        let tool_messages: Vec<Message> = serde_json::from_value(result["messages"].clone()).unwrap();
+        assert_eq!(tool_messages.len(), 10);
+        assert_eq!(counter.load(Ordering::SeqCst), 10);
+    }
+
+    // ========== Error Handling Tests ==========
+
+    #[tokio::test]
+    async fn test_graceful_error_handling_unknown_tool() {
+        let tool_node = ToolNode::from_tools(vec![Box::new(TestTool)])
+            .with_error_handling(true);
+
+        let tool_call = ToolCall::new("call_1", "unknown_tool", serde_json::json!({}));
+
+        let messages = vec![
+            Message::ai("Execute").with_tool_calls(vec![tool_call]),
+        ];
+
+        let state = serde_json::json!({
+            "messages": messages
+        });
+
+        let result = tool_node.execute(state).await.unwrap();
+
+        let tool_messages: Vec<Message> = serde_json::from_value(result["messages"].clone()).unwrap();
+        assert_eq!(tool_messages.len(), 1);
+        assert!(tool_messages[0].content.contains("error"));
+        assert!(tool_messages[0].content.contains("status"));
+    }
+
+    #[tokio::test]
+    async fn test_strict_error_handling_propagates() {
+        let tool_node = ToolNode::from_tools(vec![Box::new(FailingTool)])
+            .with_error_handling(false);
+
+        let tool_call = ToolCall::new("call_1", "failing_tool", serde_json::json!({}));
+
+        let messages = vec![
+            Message::ai("Execute").with_tool_calls(vec![tool_call]),
+        ];
+
+        let state = serde_json::json!({
+            "messages": messages
+        });
+
+        let result = tool_node.execute(state).await.unwrap();
+
+        // With strict handling, error is in content as "Error: ..."
+        let tool_messages: Vec<Message> = serde_json::from_value(result["messages"].clone()).unwrap();
+        assert_eq!(tool_messages.len(), 1);
+        assert!(tool_messages[0].content.starts_with("Error:"));
+    }
+
+    #[tokio::test]
+    async fn test_graceful_error_includes_message() {
+        let tool_node = ToolNode::from_tools(vec![Box::new(FailingTool)])
+            .with_error_handling(true);
+
+        let tool_call = ToolCall::new("call_1", "failing_tool", serde_json::json!({}));
+
+        let messages = vec![
+            Message::ai("Execute").with_tool_calls(vec![tool_call]),
+        ];
+
+        let state = serde_json::json!({
+            "messages": messages
+        });
+
+        let result = tool_node.execute(state).await.unwrap();
+
+        let tool_messages: Vec<Message> = serde_json::from_value(result["messages"].clone()).unwrap();
+        let content: Value = serde_json::from_str(&tool_messages[0].content).unwrap();
+
+        assert_eq!(content["status"], "error");
+        assert!(content["error"].as_str().unwrap().contains("Intentional"));
+    }
+
+    #[tokio::test]
+    async fn test_error_message_format() {
+        let tool_node = ToolNode::from_tools(vec![])
+            .with_error_handling(true);
+
+        let tool_call = ToolCall::new("call_1", "nonexistent", serde_json::json!({}));
+
+        let messages = vec![
+            Message::ai("Execute").with_tool_calls(vec![tool_call]),
+        ];
+
+        let state = serde_json::json!({
+            "messages": messages
+        });
+
+        let result = tool_node.execute(state).await.unwrap();
+
+        let tool_messages: Vec<Message> = serde_json::from_value(result["messages"].clone()).unwrap();
+
+        // Should be valid JSON with error and status fields
+        let error_json: Value = serde_json::from_str(&tool_messages[0].content).unwrap();
+        assert!(error_json.get("error").is_some());
+        assert_eq!(error_json.get("status").and_then(|v| v.as_str()), Some("error"));
+    }
+
+    #[tokio::test]
+    async fn test_multiple_failures_with_graceful_handling() {
+        let tool_node = ToolNode::from_tools(vec![])
+            .with_error_handling(true);
+
+        let tool_calls = vec![
+            ToolCall::new("call_1", "tool1", serde_json::json!({})),
+            ToolCall::new("call_2", "tool2", serde_json::json!({})),
+            ToolCall::new("call_3", "tool3", serde_json::json!({})),
+        ];
+
+        let messages = vec![
+            Message::ai("Execute").with_tool_calls(tool_calls),
+        ];
+
+        let state = serde_json::json!({
+            "messages": messages
+        });
+
+        let result = tool_node.execute(state).await.unwrap();
+
+        let tool_messages: Vec<Message> = serde_json::from_value(result["messages"].clone()).unwrap();
+        assert_eq!(tool_messages.len(), 3);
+
+        // All should have error messages
+        for msg in tool_messages {
+            assert!(msg.content.contains("error"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_tool_execution_with_complex_input() {
+        let tool_node = ToolNode::from_tools(vec![Box::new(TestTool)]);
+
+        let complex_input = serde_json::json!({
+            "nested": {
+                "data": [1, 2, 3],
+                "config": {
+                    "enabled": true,
+                    "value": 42
+                }
+            }
+        });
+
+        let tool_call = ToolCall::new("call_1", "test_tool", complex_input);
+
+        let messages = vec![
+            Message::ai("Execute").with_tool_calls(vec![tool_call]),
+        ];
+
+        let state = serde_json::json!({
+            "messages": messages
+        });
+
+        let result = tool_node.execute(state).await.unwrap();
+
+        let tool_messages: Vec<Message> = serde_json::from_value(result["messages"].clone()).unwrap();
+        assert_eq!(tool_messages.len(), 1);
+        assert!(tool_messages[0].is_tool());
+        assert!(tool_messages[0].content.contains("Processed"));
+    }
+
+    #[tokio::test]
+    async fn test_strict_error_preserves_error_type() {
+        let tool_node = ToolNode::from_tools(vec![Box::new(FailingTool)])
+            .with_error_handling(false);
+
+        let tool_call = ToolCall::new("call_1", "failing_tool", serde_json::json!({}));
+
+        let messages = vec![
+            Message::ai("Execute").with_tool_calls(vec![tool_call]),
+        ];
+
+        let state = serde_json::json!({
+            "messages": messages
+        });
+
+        let result = tool_node.execute(state).await.unwrap();
+
+        let tool_messages: Vec<Message> = serde_json::from_value(result["messages"].clone()).unwrap();
+
+        // Strict mode should have "Error: " prefix
+        assert!(tool_messages[0].content.starts_with("Error:"));
+        assert!(tool_messages[0].content.contains("Intentional failure"));
+    }
+
+    // ========== Tool Message Creation Tests ==========
+
+    #[test]
+    fn test_create_tool_message_success() {
+        let tool_node = ToolNode::from_tools(vec![]);
+
+        let tool_call = ToolCall::new("call_1", "test_tool", serde_json::json!({}));
+        let result = Ok(serde_json::json!({"result": "success"}));
+
+        let message = tool_node.create_tool_message(tool_call, result);
+
+        assert!(message.is_tool());
+        assert_eq!(message.tool_call_id, Some("call_1".to_string()));
+        assert!(message.content.contains("success"));
+    }
+
+    #[test]
+    fn test_create_tool_message_error() {
+        let tool_node = ToolNode::from_tools(vec![]);
+
+        let tool_call = ToolCall::new("call_1", "test_tool", serde_json::json!({}));
+        let result: Result<Value> = Err(PrebuiltError::ToolExecution("Test error".into()));
+
+        let message = tool_node.create_tool_message(tool_call, result);
+
+        assert!(message.is_tool());
+        assert_eq!(message.tool_call_id, Some("call_1".to_string()));
+        assert!(message.content.starts_with("Error:"));
+        assert!(message.content.contains("Test error"));
+    }
+
+    #[test]
+    fn test_create_tool_message_with_name() {
+        let tool_node = ToolNode::from_tools(vec![]);
+
+        let tool_call = ToolCall::new("call_1", "calculator", serde_json::json!({}));
+        let result = Ok(serde_json::json!({"result": 42}));
+
+        let message = tool_node.create_tool_message(tool_call, result);
+
+        assert!(message.is_tool());
+        assert_eq!(message.name, Some("calculator".to_string()));
+    }
+
+    #[test]
+    fn test_create_tool_message_preserves_id() {
+        let tool_node = ToolNode::from_tools(vec![]);
+
+        let tool_call = ToolCall::new("custom_id_12345", "test", serde_json::json!({}));
+        let result = Ok(serde_json::json!({"data": "test"}));
+
+        let message = tool_node.create_tool_message(tool_call, result);
+
+        assert_eq!(message.tool_call_id, Some("custom_id_12345".to_string()));
+    }
+
+    #[test]
+    fn test_create_tool_message_serializes_complex_result() {
+        let tool_node = ToolNode::from_tools(vec![]);
+
+        let tool_call = ToolCall::new("call_1", "test", serde_json::json!({}));
+        let result = Ok(serde_json::json!({
+            "nested": {
+                "array": [1, 2, 3],
+                "object": {"key": "value"}
+            }
+        }));
+
+        let message = tool_node.create_tool_message(tool_call, result);
+
+        // Should be valid JSON string
+        let parsed: Value = serde_json::from_str(&message.content).unwrap();
+        assert!(parsed.get("nested").is_some());
+        assert_eq!(parsed["nested"]["array"].as_array().unwrap().len(), 3);
     }
 }

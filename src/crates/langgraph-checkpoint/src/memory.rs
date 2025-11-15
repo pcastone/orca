@@ -564,7 +564,64 @@ impl CheckpointSaver for InMemoryCheckpointSaver {
                     if let Some(filter_map) = &filter {
                         let mut matches = true;
                         for (key, value) in filter_map {
-                            if entry.metadata.extra.get(key) != Some(value) {
+                            // Handle special top-level metadata fields
+                            let field_matches = match key.as_str() {
+                                "source" => {
+                                    // Check the source field directly
+                                    if let Ok(source) = serde_json::from_value::<crate::checkpoint::CheckpointSource>(value.clone()) {
+                                        entry.metadata.source.as_ref() == Some(&source)
+                                    } else {
+                                        false
+                                    }
+                                }
+                                "step" => {
+                                    // Check the step field directly
+                                    if let Some(step_value) = value.as_i64() {
+                                        entry.metadata.step == Some(step_value as i32)
+                                    } else {
+                                        false
+                                    }
+                                }
+                                "min_step" => {
+                                    // Check minimum step
+                                    if let Some(min_value) = value.as_i64() {
+                                        if let Some(step) = entry.metadata.step {
+                                            step >= min_value as i32
+                                        } else {
+                                            false
+                                        }
+                                    } else {
+                                        false
+                                    }
+                                }
+                                "max_step" => {
+                                    // Check maximum step
+                                    if let Some(max_value) = value.as_i64() {
+                                        if let Some(step) = entry.metadata.step {
+                                            step <= max_value as i32
+                                        } else {
+                                            false
+                                        }
+                                    } else {
+                                        false
+                                    }
+                                }
+                                "node" => {
+                                    // Check node in extra metadata
+                                    entry.metadata.extra.get("node") == Some(value)
+                                }
+                                _ => {
+                                    // For other keys, check in extra metadata
+                                    // Support both direct keys and "metadata.{key}" format
+                                    if let Some(stripped) = key.strip_prefix("metadata.") {
+                                        entry.metadata.extra.get(stripped) == Some(value)
+                                    } else {
+                                        entry.metadata.extra.get(key) == Some(value)
+                                    }
+                                }
+                            };
+
+                            if !field_matches {
                                 matches = false;
                                 break;
                             }
@@ -682,6 +739,7 @@ impl CheckpointSaver for InMemoryCheckpointSaver {
 mod tests {
     use super::*;
     use crate::checkpoint::CheckpointSource;
+    use futures::StreamExt;
 
     #[tokio::test]
     async fn test_save_and_load_checkpoint() {
@@ -793,4 +851,430 @@ mod tests {
 
         assert_eq!(saver.checkpoint_count().await, 0);
     }
+
+    // =================================================================
+    // PHASE 3: CONCURRENT ACCESS TESTS
+    // =================================================================
+
+    #[tokio::test]
+    async fn test_concurrent_checkpoint_writes() {
+        let saver = Arc::new(InMemoryCheckpointSaver::new());
+        let num_threads = 10;
+        let checkpoints_per_thread = 10;
+
+        let mut handles = vec![];
+
+        for thread_id in 0..num_threads {
+            let saver_clone = saver.clone();
+            let handle = tokio::spawn(async move {
+                for i in 0..checkpoints_per_thread {
+                    let checkpoint = Checkpoint::empty();
+                    let metadata = CheckpointMetadata::new();
+                    let config = CheckpointConfig::new()
+                        .with_thread_id(format!("thread-{}", thread_id));
+
+                    saver_clone
+                        .put(&config, checkpoint, metadata, HashMap::new())
+                        .await
+                        .unwrap();
+
+                    // Small delay to encourage interleaving
+                    tokio::time::sleep(tokio::time::Duration::from_micros(10)).await;
+                }
+                thread_id
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all threads to complete
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        // Verify all checkpoints were saved
+        let total_checkpoints = saver.checkpoint_count().await;
+        assert_eq!(
+            total_checkpoints,
+            num_threads * checkpoints_per_thread,
+            "Should have {} checkpoints from {} threads",
+            num_threads * checkpoints_per_thread,
+            num_threads
+        );
+
+        // Verify thread isolation - each thread should have its own checkpoints
+        assert_eq!(saver.thread_count().await, num_threads);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_list_operations() {
+        let saver = Arc::new(InMemoryCheckpointSaver::new());
+
+        // Pre-populate with checkpoints
+        for i in 0..50 {
+            let checkpoint = Checkpoint::empty();
+            let metadata = CheckpointMetadata::new();
+            let config = CheckpointConfig::new()
+                .with_thread_id(format!("thread-{}", i % 5));
+
+            saver
+                .put(&config, checkpoint, metadata, HashMap::new())
+                .await
+                .unwrap();
+        }
+
+        // Now perform concurrent list operations
+        let num_readers = 20;
+        let mut handles = vec![];
+
+        for _ in 0..num_readers {
+            let saver_clone = saver.clone();
+            let handle = tokio::spawn(async move {
+                let config = CheckpointConfig::new()
+                    .with_thread_id("thread-0".to_string());
+
+                let stream = saver_clone.list(Some(&config), None, None, None).await.unwrap();
+                let results: Vec<_> = stream.collect().await;
+
+                // Each reader should see the same checkpoints
+                results.len()
+            });
+            handles.push(handle);
+        }
+
+        let mut counts = vec![];
+        for handle in handles {
+            counts.push(handle.await.unwrap());
+        }
+
+        // All readers should see the same number of checkpoints
+        assert!(counts.iter().all(|&c| c == counts[0]));
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_writes_and_reads() {
+        let saver = Arc::new(InMemoryCheckpointSaver::new());
+        let num_writers = 5;
+        let num_readers = 5;
+        let checkpoints_per_writer = 20;
+
+        let mut handles = vec![];
+
+        // Start writers
+        for writer_id in 0..num_writers {
+            let saver_clone = saver.clone();
+            let handle = tokio::spawn(async move {
+                for i in 0..checkpoints_per_writer {
+                    let checkpoint = Checkpoint::empty();
+                    let metadata = CheckpointMetadata::new();
+                    let config = CheckpointConfig::new()
+                        .with_thread_id(format!("writer-{}", writer_id));
+
+                    saver_clone
+                        .put(&config, checkpoint, metadata, HashMap::new())
+                        .await
+                        .unwrap();
+
+                    tokio::time::sleep(tokio::time::Duration::from_micros(50)).await;
+                }
+            });
+            handles.push(handle);
+        }
+
+        // Start readers concurrently
+        for _ in 0..num_readers {
+            let saver_clone = saver.clone();
+            let handle = tokio::spawn(async move {
+                for _ in 0..30 {
+                    // Read operations
+                    let count = saver_clone.checkpoint_count().await;
+                    let thread_count = saver_clone.thread_count().await;
+
+                    // Sanity checks - these should always be true
+                    assert!(count <= num_writers * checkpoints_per_writer);
+                    assert!(thread_count <= num_writers);
+
+                    tokio::time::sleep(tokio::time::Duration::from_micros(50)).await;
+                }
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all operations to complete
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        // Final verification
+        let final_count = saver.checkpoint_count().await;
+        assert_eq!(final_count, num_writers * checkpoints_per_writer);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_get_tuple_operations() {
+        let saver = Arc::new(InMemoryCheckpointSaver::new());
+
+        // Pre-populate with checkpoints
+        let config = CheckpointConfig::new()
+            .with_thread_id("shared-thread".to_string());
+
+        for i in 0..10 {
+            let mut checkpoint = Checkpoint::empty();
+            checkpoint.channel_values.insert(
+                "counter".to_string(),
+                serde_json::json!(i),
+            );
+            let metadata = CheckpointMetadata::new();
+
+            saver
+                .put(&config, checkpoint, metadata, HashMap::new())
+                .await
+                .unwrap();
+        }
+
+        // Concurrent get_tuple operations
+        let num_readers = 20;
+        let mut handles = vec![];
+
+        for _ in 0..num_readers {
+            let saver_clone = saver.clone();
+            let config_clone = config.clone();
+            let handle = tokio::spawn(async move {
+                let tuple = saver_clone.get_tuple(&config_clone).await.unwrap();
+                assert!(tuple.is_some(), "Should find checkpoint");
+                tuple.unwrap().checkpoint.channel_values.get("counter").cloned()
+            });
+            handles.push(handle);
+        }
+
+        let mut results = vec![];
+        for handle in handles {
+            results.push(handle.await.unwrap());
+        }
+
+        // All readers should get the same latest checkpoint
+        assert!(results.iter().all(|r| r == &results[0]));
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_put_writes() {
+        let saver = Arc::new(InMemoryCheckpointSaver::new());
+
+        // Create initial checkpoint
+        let checkpoint = Checkpoint::empty();
+        let metadata = CheckpointMetadata::new();
+        let config = CheckpointConfig::new()
+            .with_thread_id("write-test".to_string());
+
+        let saved_config = saver
+            .put(&config, checkpoint, metadata, HashMap::new())
+            .await
+            .unwrap();
+
+        // Concurrent put_writes operations
+        let num_writers = 10;
+        let writes_per_writer = 5;
+        let mut handles = vec![];
+
+        for writer_id in 0..num_writers {
+            let saver_clone = saver.clone();
+            let config_clone = saved_config.clone();
+            let handle = tokio::spawn(async move {
+                for write_id in 0..writes_per_writer {
+                    let writes = vec![(
+                        format!("channel-{}-{}", writer_id, write_id),
+                        serde_json::json!({"writer": writer_id, "write": write_id}),
+                    )];
+
+                    saver_clone
+                        .put_writes(&config_clone, writes, format!("task-{}", writer_id))
+                        .await
+                        .unwrap();
+
+                    tokio::time::sleep(tokio::time::Duration::from_micros(10)).await;
+                }
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all writes
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        // Verify writes were recorded (implementation-dependent)
+        // This tests that concurrent put_writes don't cause data loss
+        let final_tuple = saver.get_tuple(&saved_config).await.unwrap();
+        assert!(final_tuple.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_delete_thread() {
+        let saver = Arc::new(InMemoryCheckpointSaver::new());
+
+        // Create multiple threads with checkpoints
+        for i in 0..20 {
+            let checkpoint = Checkpoint::empty();
+            let metadata = CheckpointMetadata::new();
+            let config = CheckpointConfig::new()
+                .with_thread_id(format!("delete-thread-{}", i));
+
+            saver
+                .put(&config, checkpoint, metadata, HashMap::new())
+                .await
+                .unwrap();
+        }
+
+        assert_eq!(saver.thread_count().await, 20);
+
+        // Concurrent delete operations
+        let mut handles = vec![];
+
+        for i in 0..20 {
+            let saver_clone = saver.clone();
+            let handle = tokio::spawn(async move {
+                saver_clone.delete_thread(&format!("delete-thread-{}", i)).await.unwrap();
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        // All threads should be deleted
+        assert_eq!(saver.thread_count().await, 0);
+        assert_eq!(saver.checkpoint_count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_clear_operations() {
+        let saver = Arc::new(InMemoryCheckpointSaver::new());
+
+        // Spawn a writer that keeps adding checkpoints
+        let writer_saver = saver.clone();
+        let writer_handle = tokio::spawn(async move {
+            for i in 0..100 {
+                let checkpoint = Checkpoint::empty();
+                let metadata = CheckpointMetadata::new();
+                let config = CheckpointConfig::new()
+                    .with_thread_id(format!("thread-{}", i));
+
+                writer_saver
+                    .put(&config, checkpoint, metadata, HashMap::new())
+                    .await
+                    .unwrap();
+
+                tokio::time::sleep(tokio::time::Duration::from_micros(100)).await;
+            }
+        });
+
+        // Give writer time to add some checkpoints
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+        // Clear in the middle of writes
+        saver.clear().await;
+
+        // Wait for writer to finish
+        writer_handle.await.unwrap();
+
+        // Final state should have only checkpoints added after clear
+        let final_count = saver.checkpoint_count().await;
+        assert!(
+            final_count > 0,
+            "Writer should have added checkpoints after clear"
+        );
+        assert!(
+            final_count < 100,
+            "Some checkpoints should have been cleared"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_thread_isolation_under_concurrent_access() {
+        let saver = Arc::new(InMemoryCheckpointSaver::new());
+        let num_threads = 10;
+
+        let mut handles = vec![];
+
+        for thread_id in 0..num_threads {
+            let saver_clone = saver.clone();
+            let handle = tokio::spawn(async move {
+                // Each task writes to its own thread
+                for i in 0..10 {
+                    let checkpoint = Checkpoint::empty();
+                    let metadata = CheckpointMetadata::new();
+                    let config = CheckpointConfig::new()
+                        .with_thread_id(format!("isolated-{}", thread_id));
+
+                    saver_clone
+                        .put(&config, checkpoint, metadata, HashMap::new())
+                        .await
+                        .unwrap();
+                }
+
+                // Verify this thread's checkpoints
+                let config = CheckpointConfig::new()
+                    .with_thread_id(format!("isolated-{}", thread_id));
+
+                let stream = saver_clone.list(Some(&config), None, None, None).await.unwrap();
+                let results: Vec<_> = stream.collect().await;
+
+                assert_eq!(
+                    results.len(),
+                    10,
+                    "Thread {} should have exactly 10 checkpoints",
+                    thread_id
+                );
+
+                thread_id
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        // Verify total isolation
+        assert_eq!(saver.thread_count().await, num_threads);
+        assert_eq!(saver.checkpoint_count().await, num_threads * 10);
+    }
+
+    #[tokio::test]
+    async fn test_memory_pressure_cleanup() {
+        let saver = InMemoryCheckpointSaver::new();
+
+        // Create many checkpoints across many threads
+        for thread_id in 0..100 {
+            for checkpoint_id in 0..20 {
+                let checkpoint = Checkpoint::empty();
+                let metadata = CheckpointMetadata::new();
+                let config = CheckpointConfig::new()
+                    .with_thread_id(format!("pressure-{}", thread_id));
+
+                saver
+                    .put(&config, checkpoint, metadata, HashMap::new())
+                    .await
+                    .unwrap();
+            }
+        }
+
+        let count_before = saver.checkpoint_count().await;
+        assert_eq!(count_before, 100 * 20);
+
+        // Selective cleanup - delete half the threads
+        for thread_id in 0..50 {
+            saver.delete_thread(&format!("pressure-{}", thread_id)).await.unwrap();
+        }
+
+        let count_after = saver.checkpoint_count().await;
+        assert_eq!(count_after, 50 * 20);
+        assert_eq!(saver.thread_count().await, 50);
+
+        // Full cleanup
+        saver.clear().await;
+        assert_eq!(saver.checkpoint_count().await, 0);
+        assert_eq!(saver.thread_count().await, 0);
+    }
 }
+

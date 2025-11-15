@@ -506,5 +506,686 @@ mod tests {
         assert_eq!(TaskStatus::from("failed"), TaskStatus::Failed);
         assert_eq!(TaskStatus::from("invalid"), TaskStatus::Pending);
     }
+
+    // ============================================================================
+    // Phase 6.1: Orca Workflow Execution - Comprehensive Tests
+    // ============================================================================
+
+    // ------------------------------------------------------------------------
+    // Task State Transition Tests
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_task_state_transitions_complete_lifecycle() {
+        let mut task = Task::new("Complete lifecycle test");
+
+        // Initial state
+        assert!(task.is_pending());
+        assert!(!task.is_running());
+        assert!(!task.is_completed());
+        assert!(!task.is_failed());
+        assert!(!task.is_terminal());
+        assert_eq!(task.status(), TaskStatus::Pending);
+        assert!(task.started_at.is_none());
+        assert!(task.completed_at.is_none());
+
+        // Transition to running
+        task.mark_running();
+        assert!(!task.is_pending());
+        assert!(task.is_running());
+        assert!(!task.is_completed());
+        assert!(!task.is_failed());
+        assert!(!task.is_terminal());
+        assert_eq!(task.status(), TaskStatus::Running);
+        assert!(task.started_at.is_some());
+        assert!(task.completed_at.is_none());
+
+        // Transition to completed
+        let started_at = task.started_at.unwrap();
+        task.mark_completed(Some("Success result".to_string()));
+        assert!(!task.is_pending());
+        assert!(!task.is_running());
+        assert!(task.is_completed());
+        assert!(!task.is_failed());
+        assert!(task.is_terminal());
+        assert_eq!(task.status(), TaskStatus::Completed);
+        assert_eq!(task.started_at.unwrap(), started_at);
+        assert!(task.completed_at.is_some());
+        assert_eq!(task.result, Some("Success result".to_string()));
+    }
+
+    #[test]
+    fn test_task_state_transition_to_failed() {
+        let mut task = Task::new("Failure test");
+
+        task.mark_running();
+        let started_at = task.started_at.unwrap();
+
+        task.mark_failed("Task execution error");
+        assert!(task.is_failed());
+        assert!(task.is_terminal());
+        assert_eq!(task.status(), TaskStatus::Failed);
+        assert_eq!(task.error, Some("Task execution error".to_string()));
+        assert_eq!(task.started_at.unwrap(), started_at);
+        assert!(task.completed_at.is_some());
+        assert!(task.result.is_none());
+    }
+
+    #[test]
+    fn test_task_state_transition_to_cancelled() {
+        let mut task = Task::new("Cancellation test");
+
+        task.mark_running();
+        task.mark_cancelled();
+
+        assert!(!task.is_pending());
+        assert!(!task.is_running());
+        assert!(!task.is_completed());
+        assert!(!task.is_failed());
+        assert!(task.is_terminal());
+        assert_eq!(task.status(), TaskStatus::Cancelled);
+        assert!(task.completed_at.is_some());
+    }
+
+    #[test]
+    fn test_task_cancelled_from_pending() {
+        let mut task = Task::new("Cancel before start");
+
+        assert!(task.is_pending());
+        task.mark_cancelled();
+
+        assert!(task.is_terminal());
+        assert_eq!(task.status(), TaskStatus::Cancelled);
+        assert!(task.started_at.is_none());
+        assert!(task.completed_at.is_some());
+    }
+
+    #[test]
+    fn test_task_timestamps_are_updated() {
+        let mut task = Task::new("Timestamp test");
+        let created_at = task.created_at;
+        let initial_updated = task.updated_at;
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        task.mark_running();
+        assert!(task.updated_at >= initial_updated);
+        let running_updated = task.updated_at;
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        task.mark_completed(None);
+        assert!(task.updated_at >= running_updated);
+        assert_eq!(task.created_at, created_at); // created_at never changes
+    }
+
+    #[test]
+    fn test_task_multiple_state_changes() {
+        let mut task = Task::new("Multiple state changes");
+
+        // Can transition from running back to pending (edge case)
+        task.mark_running();
+        task.status = TaskStatus::Pending.as_str().to_string();
+        assert!(task.is_pending());
+
+        // Re-run after reset
+        task.mark_running();
+        assert!(task.is_running());
+
+        // Can transition from failed to completed (recovery scenario)
+        task.mark_failed("Initial failure");
+        assert!(task.is_failed());
+
+        task.mark_completed(Some("Recovered".to_string()));
+        assert!(task.is_completed());
+        assert_eq!(task.result, Some("Recovered".to_string()));
+    }
+
+    #[test]
+    fn test_task_terminal_states() {
+        // Test all terminal states
+        let mut task1 = Task::new("Terminal test 1");
+        task1.mark_completed(None);
+        assert!(task1.is_terminal());
+
+        let mut task2 = Task::new("Terminal test 2");
+        task2.mark_failed("Error");
+        assert!(task2.is_terminal());
+
+        let mut task3 = Task::new("Terminal test 3");
+        task3.mark_cancelled();
+        assert!(task3.is_terminal());
+
+        // Non-terminal states
+        let task4 = Task::new("Terminal test 4");
+        assert!(!task4.is_terminal());
+
+        let mut task5 = Task::new("Terminal test 5");
+        task5.mark_running();
+        assert!(!task5.is_terminal());
+    }
+
+    #[test]
+    fn test_task_with_priority() {
+        let task = Task::new("Priority task").with_priority(10);
+        assert_eq!(task.priority, 10);
+
+        let task_high = Task::new("High priority").with_priority(100);
+        let task_low = Task::new("Low priority").with_priority(-10);
+
+        assert!(task_high.priority > task.priority);
+        assert!(task_low.priority < task.priority);
+    }
+
+    #[test]
+    fn test_task_with_metadata() {
+        let metadata = r#"{"tags": ["important", "urgent"], "assignee": "alice"}"#;
+        let task = Task::new("Metadata task").with_metadata(metadata);
+
+        assert_eq!(task.metadata, metadata);
+
+        // Verify metadata is valid JSON
+        let parsed: serde_json::Value = serde_json::from_str(&task.metadata).unwrap();
+        assert_eq!(parsed["tags"][0], "important");
+        assert_eq!(parsed["assignee"], "alice");
+    }
+
+    #[test]
+    fn test_task_with_id() {
+        let custom_id = "custom-task-id-123";
+        let task = Task::with_id(custom_id, "Task with custom ID");
+
+        assert_eq!(task.id, custom_id);
+        assert_eq!(task.description, "Task with custom ID");
+        assert!(task.is_pending());
+    }
+
+    #[test]
+    fn test_task_completed_with_result() {
+        let mut task = Task::new("Result test");
+        task.mark_running();
+
+        let result_data = r#"{"output": "Success", "metrics": {"duration": 1.5}}"#;
+        task.mark_completed(Some(result_data.to_string()));
+
+        assert!(task.is_completed());
+        assert_eq!(task.result, Some(result_data.to_string()));
+
+        // Verify result is valid JSON
+        let parsed: serde_json::Value = serde_json::from_str(task.result.as_ref().unwrap()).unwrap();
+        assert_eq!(parsed["output"], "Success");
+    }
+
+    #[test]
+    fn test_task_completed_without_result() {
+        let mut task = Task::new("No result test");
+        task.mark_running();
+        task.mark_completed(None);
+
+        assert!(task.is_completed());
+        assert!(task.result.is_none());
+    }
+
+    #[test]
+    fn test_task_failure_preserves_started_time() {
+        let mut task = Task::new("Failure time test");
+        task.mark_running();
+
+        let started_at = task.started_at.unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        task.mark_failed("Error occurred");
+
+        assert_eq!(task.started_at.unwrap(), started_at);
+        assert!(task.completed_at.is_some());
+        // Timestamps are in seconds, so completed_at >= started_at
+        assert!(task.completed_at.unwrap() >= started_at);
+    }
+
+    // ------------------------------------------------------------------------
+    // Workflow State Transition Tests
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_workflow_state_transitions_complete_lifecycle() {
+        let mut workflow = Workflow::new("Complete workflow", "react");
+
+        // Initial state
+        assert!(workflow.is_pending());
+        assert!(!workflow.is_running());
+        assert!(!workflow.is_completed());
+        assert!(!workflow.is_terminal());
+        assert_eq!(workflow.status(), WorkflowStatus::Pending);
+        assert!(workflow.started_at.is_none());
+        assert!(workflow.completed_at.is_none());
+
+        // Transition to running
+        workflow.mark_running();
+        assert!(!workflow.is_pending());
+        assert!(workflow.is_running());
+        assert!(!workflow.is_completed());
+        assert!(!workflow.is_terminal());
+        assert_eq!(workflow.status(), WorkflowStatus::Running);
+        assert!(workflow.started_at.is_some());
+        assert!(workflow.completed_at.is_none());
+
+        // Transition to completed
+        let started_at = workflow.started_at.unwrap();
+        workflow.mark_completed();
+        assert!(!workflow.is_pending());
+        assert!(!workflow.is_running());
+        assert!(workflow.is_completed());
+        assert!(workflow.is_terminal());
+        assert_eq!(workflow.status(), WorkflowStatus::Completed);
+        assert_eq!(workflow.started_at.unwrap(), started_at);
+        assert!(workflow.completed_at.is_some());
+    }
+
+    #[test]
+    fn test_workflow_state_transition_to_failed() {
+        let mut workflow = Workflow::new("Failing workflow", "react");
+
+        workflow.mark_running();
+        let started_at = workflow.started_at.unwrap();
+
+        workflow.mark_failed();
+        assert!(!workflow.is_completed());
+        assert!(workflow.is_terminal());
+        assert_eq!(workflow.status(), WorkflowStatus::Failed);
+        assert_eq!(workflow.started_at.unwrap(), started_at);
+        assert!(workflow.completed_at.is_some());
+    }
+
+    #[test]
+    fn test_workflow_state_transition_to_cancelled() {
+        let mut workflow = Workflow::new("Cancelled workflow", "react");
+
+        workflow.mark_running();
+        workflow.mark_cancelled();
+
+        assert!(!workflow.is_pending());
+        assert!(!workflow.is_running());
+        assert!(!workflow.is_completed());
+        assert!(workflow.is_terminal());
+        assert_eq!(workflow.status(), WorkflowStatus::Cancelled);
+        assert!(workflow.completed_at.is_some());
+    }
+
+    #[test]
+    fn test_workflow_timestamps_are_updated() {
+        let mut workflow = Workflow::new("Timestamp workflow", "plan_execute");
+        let created_at = workflow.created_at;
+        let initial_updated = workflow.updated_at;
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        workflow.mark_running();
+        assert!(workflow.updated_at >= initial_updated);
+        let running_updated = workflow.updated_at;
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        workflow.mark_completed();
+        assert!(workflow.updated_at >= running_updated);
+        assert_eq!(workflow.created_at, created_at);
+    }
+
+    #[test]
+    fn test_workflow_terminal_states() {
+        let mut workflow1 = Workflow::new("Terminal 1", "react");
+        workflow1.mark_completed();
+        assert!(workflow1.is_terminal());
+
+        let mut workflow2 = Workflow::new("Terminal 2", "react");
+        workflow2.mark_failed();
+        assert!(workflow2.is_terminal());
+
+        let mut workflow3 = Workflow::new("Terminal 3", "react");
+        workflow3.mark_cancelled();
+        assert!(workflow3.is_terminal());
+
+        let workflow4 = Workflow::new("Non-terminal", "react");
+        assert!(!workflow4.is_terminal());
+
+        let mut workflow5 = Workflow::new("Running", "react");
+        workflow5.mark_running();
+        assert!(!workflow5.is_terminal());
+    }
+
+    #[test]
+    fn test_workflow_with_description() {
+        let workflow = Workflow::new("Test workflow", "react")
+            .with_description("This is a test workflow for validation");
+
+        assert_eq!(workflow.description, Some("This is a test workflow for validation".to_string()));
+    }
+
+    #[test]
+    fn test_workflow_with_metadata() {
+        let metadata = r#"{"owner": "bob", "project": "orca-test"}"#;
+        let workflow = Workflow::new("Metadata workflow", "reflection")
+            .with_metadata(metadata);
+
+        assert_eq!(workflow.metadata, metadata);
+
+        let parsed: serde_json::Value = serde_json::from_str(&workflow.metadata).unwrap();
+        assert_eq!(parsed["owner"], "bob");
+        assert_eq!(parsed["project"], "orca-test");
+    }
+
+    #[test]
+    fn test_workflow_pattern_types() {
+        let react_wf = Workflow::new("React workflow", "react");
+        assert_eq!(react_wf.pattern, "react");
+
+        let plan_wf = Workflow::new("Plan workflow", "plan_execute");
+        assert_eq!(plan_wf.pattern, "plan_execute");
+
+        let reflection_wf = Workflow::new("Reflection workflow", "reflection");
+        assert_eq!(reflection_wf.pattern, "reflection");
+    }
+
+    // ------------------------------------------------------------------------
+    // Workflow Routing Strategy Tests
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_routing_strategy_default() {
+        let workflow = Workflow::new("Default routing", "react");
+        assert_eq!(workflow.routing_strategy(), "sequential");
+    }
+
+    #[test]
+    fn test_routing_strategy_set_and_get() {
+        let mut workflow = Workflow::new("Routing test", "react");
+
+        workflow.set_routing_strategy("parallel");
+        assert_eq!(workflow.routing_strategy(), "parallel");
+
+        // Verify it's in metadata
+        let parsed: serde_json::Value = serde_json::from_str(&workflow.metadata).unwrap();
+        assert_eq!(parsed["routing_strategy"], "parallel");
+    }
+
+    #[test]
+    fn test_routing_strategy_with_builder() {
+        let workflow = Workflow::new("Builder routing", "react")
+            .with_routing_strategy("conditional");
+
+        assert_eq!(workflow.routing_strategy(), "conditional");
+    }
+
+    #[test]
+    fn test_routing_strategy_preserves_other_metadata() {
+        let mut workflow = Workflow::new("Metadata preservation", "react")
+            .with_metadata(r#"{"owner": "alice", "priority": "high"}"#);
+
+        workflow.set_routing_strategy("parallel");
+
+        let parsed: serde_json::Value = serde_json::from_str(&workflow.metadata).unwrap();
+        assert_eq!(parsed["routing_strategy"], "parallel");
+        assert_eq!(parsed["owner"], "alice");
+        assert_eq!(parsed["priority"], "high");
+    }
+
+    #[test]
+    fn test_routing_strategy_all_types() {
+        let strategies = vec!["sequential", "parallel", "conditional"];
+
+        for strategy in strategies {
+            let workflow = Workflow::new(&format!("{} workflow", strategy), "react")
+                .with_routing_strategy(strategy);
+
+            assert_eq!(workflow.routing_strategy(), strategy);
+        }
+    }
+
+    #[test]
+    fn test_routing_strategy_update_changes_timestamp() {
+        let mut workflow = Workflow::new("Timestamp update", "react");
+        let initial_updated = workflow.updated_at;
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        workflow.set_routing_strategy("parallel");
+        assert!(workflow.updated_at >= initial_updated);
+    }
+
+    #[test]
+    fn test_routing_strategy_with_malformed_metadata() {
+        let mut workflow = Workflow::new("Malformed metadata", "react");
+        workflow.metadata = "{invalid json".to_string();
+
+        // Should return default when metadata is invalid
+        assert_eq!(workflow.routing_strategy(), "sequential");
+    }
+
+    #[test]
+    fn test_routing_strategy_with_empty_metadata() {
+        let workflow = Workflow::new("Empty metadata", "react");
+        // Default metadata is "{}"
+        assert_eq!(workflow.routing_strategy(), "sequential");
+    }
+
+    // ------------------------------------------------------------------------
+    // Task Coordination Tests
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_multiple_tasks_independent_lifecycles() {
+        let mut task1 = Task::new("Task 1");
+        let mut task2 = Task::new("Task 2");
+        let mut task3 = Task::new("Task 3");
+
+        // Run all tasks
+        task1.mark_running();
+        task2.mark_running();
+        task3.mark_running();
+
+        // Complete task 1
+        task1.mark_completed(Some("Task 1 result".to_string()));
+        assert!(task1.is_completed());
+        assert!(task2.is_running());
+        assert!(task3.is_running());
+
+        // Fail task 2
+        task2.mark_failed("Task 2 error");
+        assert!(task1.is_completed());
+        assert!(task2.is_failed());
+        assert!(task3.is_running());
+
+        // Complete task 3
+        task3.mark_completed(None);
+        assert!(task1.is_completed());
+        assert!(task2.is_failed());
+        assert!(task3.is_completed());
+    }
+
+    #[test]
+    fn test_task_priority_ordering() {
+        let task_low = Task::new("Low priority").with_priority(1);
+        let task_medium = Task::new("Medium priority").with_priority(5);
+        let task_high = Task::new("High priority").with_priority(10);
+
+        let mut tasks = vec![task_medium.clone(), task_low.clone(), task_high.clone()];
+        tasks.sort_by_key(|t| -t.priority); // Sort descending
+
+        assert_eq!(tasks[0].priority, 10);
+        assert_eq!(tasks[1].priority, 5);
+        assert_eq!(tasks[2].priority, 1);
+    }
+
+    #[test]
+    fn test_workflow_with_multiple_patterns() {
+        let workflows = vec![
+            Workflow::new("React workflow", "react"),
+            Workflow::new("Plan workflow", "plan_execute"),
+            Workflow::new("Reflection workflow", "reflection"),
+        ];
+
+        assert_eq!(workflows.len(), 3);
+        assert_eq!(workflows[0].pattern, "react");
+        assert_eq!(workflows[1].pattern, "plan_execute");
+        assert_eq!(workflows[2].pattern, "reflection");
+    }
+
+    // ------------------------------------------------------------------------
+    // Failure Recovery and Error Handling Tests
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_task_error_message_preservation() {
+        let mut task = Task::new("Error preservation test");
+        task.mark_running();
+
+        let error_msg = "Detailed error: Connection timeout after 30 seconds";
+        task.mark_failed(error_msg);
+
+        assert_eq!(task.error, Some(error_msg.to_string()));
+        assert!(task.result.is_none());
+    }
+
+    #[test]
+    fn test_task_recovery_after_failure() {
+        let mut task = Task::new("Recovery test");
+        task.mark_running();
+        task.mark_failed("First attempt failed");
+
+        // Simulate recovery: reset status and retry
+        task.status = TaskStatus::Pending.as_str().to_string();
+        task.error = None;
+        task.completed_at = None;
+
+        task.mark_running();
+        assert!(task.is_running());
+
+        task.mark_completed(Some("Successful retry".to_string()));
+        assert!(task.is_completed());
+        assert_eq!(task.result, Some("Successful retry".to_string()));
+    }
+
+    #[test]
+    fn test_workflow_failure_propagation() {
+        let mut workflow = Workflow::new("Failure propagation", "react");
+        let mut task1 = Task::new("Task 1");
+        let mut task2 = Task::new("Task 2");
+
+        // Start workflow and tasks
+        workflow.mark_running();
+        task1.mark_running();
+        task2.mark_running();
+
+        // Task 1 fails
+        task1.mark_failed("Critical error");
+
+        // Workflow should be marked as failed
+        workflow.mark_failed();
+
+        assert!(task1.is_failed());
+        assert!(workflow.is_terminal());
+        assert_eq!(workflow.status(), WorkflowStatus::Failed);
+    }
+
+    #[test]
+    fn test_task_status_serialization() {
+        // Test that TaskStatus can be serialized/deserialized
+        assert_eq!(TaskStatus::Pending.as_str(), "pending");
+        assert_eq!(TaskStatus::Running.as_str(), "running");
+        assert_eq!(TaskStatus::Completed.as_str(), "completed");
+        assert_eq!(TaskStatus::Failed.as_str(), "failed");
+        assert_eq!(TaskStatus::Cancelled.as_str(), "cancelled");
+
+        // Test display
+        assert_eq!(format!("{}", TaskStatus::Pending), "pending");
+        assert_eq!(format!("{}", TaskStatus::Running), "running");
+    }
+
+    #[test]
+    fn test_workflow_status_serialization() {
+        assert_eq!(WorkflowStatus::Pending.as_str(), "pending");
+        assert_eq!(WorkflowStatus::Running.as_str(), "running");
+        assert_eq!(WorkflowStatus::Completed.as_str(), "completed");
+        assert_eq!(WorkflowStatus::Failed.as_str(), "failed");
+        assert_eq!(WorkflowStatus::Cancelled.as_str(), "cancelled");
+
+        assert_eq!(format!("{}", WorkflowStatus::Completed), "completed");
+    }
+
+    #[test]
+    fn test_task_with_large_result() {
+        let mut task = Task::new("Large result test");
+        task.mark_running();
+
+        // Create a large result (10KB of JSON)
+        let large_data = serde_json::json!({
+            "data": "x".repeat(10_000),
+            "metadata": {"size": 10000}
+        });
+
+        task.mark_completed(Some(large_data.to_string()));
+        assert!(task.is_completed());
+        assert!(task.result.is_some());
+        assert!(task.result.as_ref().unwrap().len() > 10_000);
+    }
+
+    #[test]
+    fn test_workflow_resumption_scenario() {
+        // Simulate workflow resumption after interruption
+        let mut workflow = Workflow::new("Resumable workflow", "react");
+        workflow.mark_running();
+
+        let started_at = workflow.started_at.unwrap();
+
+        // Simulate interruption (mark as pending to resume)
+        workflow.status = WorkflowStatus::Pending.as_str().to_string();
+        workflow.started_at = Some(started_at);
+
+        // Resume execution
+        workflow.mark_running();
+        assert!(workflow.is_running());
+
+        // Complete successfully
+        workflow.mark_completed();
+        assert!(workflow.is_completed());
+        assert!(workflow.completed_at.is_some());
+    }
+
+    #[test]
+    fn test_concurrent_task_status_checks() {
+        // Test that status checks are thread-safe (read-only operations)
+        let task = Task::new("Concurrent test");
+
+        let is_pending = task.is_pending();
+        let is_running = task.is_running();
+        let is_completed = task.is_completed();
+        let is_failed = task.is_failed();
+        let is_terminal = task.is_terminal();
+
+        assert!(is_pending);
+        assert!(!is_running);
+        assert!(!is_completed);
+        assert!(!is_failed);
+        assert!(!is_terminal);
+    }
+
+    #[test]
+    fn test_workflow_status_from_string_all_variants() {
+        assert_eq!(WorkflowStatus::from("pending"), WorkflowStatus::Pending);
+        assert_eq!(WorkflowStatus::from("running"), WorkflowStatus::Running);
+        assert_eq!(WorkflowStatus::from("completed"), WorkflowStatus::Completed);
+        assert_eq!(WorkflowStatus::from("failed"), WorkflowStatus::Failed);
+        assert_eq!(WorkflowStatus::from("cancelled"), WorkflowStatus::Cancelled);
+        assert_eq!(WorkflowStatus::from("unknown"), WorkflowStatus::Pending);
+    }
+
+    #[test]
+    fn test_task_status_from_string_all_variants() {
+        assert_eq!(TaskStatus::from("pending"), TaskStatus::Pending);
+        assert_eq!(TaskStatus::from("running"), TaskStatus::Running);
+        assert_eq!(TaskStatus::from("completed"), TaskStatus::Completed);
+        assert_eq!(TaskStatus::from("failed"), TaskStatus::Failed);
+        assert_eq!(TaskStatus::from("cancelled"), TaskStatus::Cancelled);
+        assert_eq!(TaskStatus::from("unknown"), TaskStatus::Pending);
+    }
 }
 

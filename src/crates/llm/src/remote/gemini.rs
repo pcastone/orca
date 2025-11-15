@@ -296,6 +296,11 @@ struct GeminiUsageMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+
+    // ============================================================
+    // Existing Tests
+    // ============================================================
 
     #[test]
     fn test_client_creation() {
@@ -329,6 +334,320 @@ mod tests {
         assert!(gemini_msgs[0].parts[0].text.starts_with("[System]"));
         assert_eq!(gemini_msgs[1].role, "user");
         assert_eq!(gemini_msgs[1].parts[0].text, "Hello");
+    }
+
+    // ============================================================
+    // Message Conversion Tests
+    // ============================================================
+
+    #[test]
+    fn test_message_conversion_all_roles() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://generativelanguage.googleapis.com/v1beta",
+            "gemini-pro",
+        );
+        let client = GeminiClient::new(config);
+
+        let messages = vec![
+            Message::human("Hello"),
+            Message::assistant("Hi there!"),
+        ];
+
+        let gemini_msgs = client.convert_messages(&messages);
+
+        assert_eq!(gemini_msgs.len(), 2);
+        assert_eq!(gemini_msgs[0].role, "user");
+        assert_eq!(gemini_msgs[0].parts[0].text, "Hello");
+        assert_eq!(gemini_msgs[1].role, "model"); // Gemini uses "model" for assistant
+        assert_eq!(gemini_msgs[1].parts[0].text, "Hi there!");
+    }
+
+    #[test]
+    fn test_message_conversion_system_first() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://generativelanguage.googleapis.com/v1beta",
+            "gemini-pro",
+        );
+        let client = GeminiClient::new(config);
+
+        let messages = vec![
+            Message::system("You are a helpful assistant"),
+            Message::human("What's the weather?"),
+        ];
+
+        let gemini_msgs = client.convert_messages(&messages);
+
+        // System message should be prepended as first user message with [System] prefix
+        assert_eq!(gemini_msgs.len(), 2);
+        assert_eq!(gemini_msgs[0].role, "user");
+        assert_eq!(gemini_msgs[0].parts[0].text, "[System] You are a helpful assistant");
+        assert_eq!(gemini_msgs[1].role, "user");
+        assert_eq!(gemini_msgs[1].parts[0].text, "What's the weather?");
+    }
+
+    #[test]
+    fn test_message_conversion_tool_result() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://generativelanguage.googleapis.com/v1beta",
+            "gemini-pro",
+        );
+        let client = GeminiClient::new(config);
+
+        let mut tool_msg = Message::human("weather data");
+        tool_msg.role = MessageRole::Tool;
+
+        let messages = vec![tool_msg];
+
+        let gemini_msgs = client.convert_messages(&messages);
+
+        // Tool results are converted to user messages with [Tool Result] prefix
+        assert_eq!(gemini_msgs.len(), 1);
+        assert_eq!(gemini_msgs[0].role, "user");
+        assert_eq!(gemini_msgs[0].parts[0].text, "[Tool Result] weather data");
+    }
+
+    #[test]
+    fn test_message_conversion_custom_role() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://generativelanguage.googleapis.com/v1beta",
+            "gemini-pro",
+        );
+        let client = GeminiClient::new(config);
+
+        let mut custom_msg = Message::human("custom content");
+        custom_msg.role = MessageRole::Custom("moderator".to_string());
+
+        let messages = vec![custom_msg];
+
+        let gemini_msgs = client.convert_messages(&messages);
+
+        assert_eq!(gemini_msgs.len(), 1);
+        assert_eq!(gemini_msgs[0].role, "moderator");
+        assert_eq!(gemini_msgs[0].parts[0].text, "custom content");
+    }
+
+    #[test]
+    fn test_message_conversion_no_system() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://generativelanguage.googleapis.com/v1beta",
+            "gemini-pro",
+        );
+        let client = GeminiClient::new(config);
+
+        let messages = vec![
+            Message::human("Hello"),
+            Message::assistant("Hi!"),
+        ];
+
+        let gemini_msgs = client.convert_messages(&messages);
+
+        // Without system message, no [System] prefix should be added
+        assert_eq!(gemini_msgs.len(), 2);
+        assert_eq!(gemini_msgs[0].role, "user");
+        assert_eq!(gemini_msgs[0].parts[0].text, "Hello");
+        assert_eq!(gemini_msgs[1].role, "model");
+    }
+
+    // ============================================================
+    // Response Conversion Tests
+    // ============================================================
+
+    #[test]
+    fn test_response_conversion_basic() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://generativelanguage.googleapis.com/v1beta",
+            "gemini-pro",
+        );
+        let client = GeminiClient::new(config);
+
+        let gemini_response = GeminiResponse {
+            candidates: vec![GeminiCandidate {
+                content: GeminiContent {
+                    parts: vec![GeminiPart {
+                        text: "Hello there!".to_string(),
+                    }],
+                    role: "model".to_string(),
+                },
+                finish_reason: Some("STOP".to_string()),
+            }],
+            usage_metadata: Some(GeminiUsageMetadata {
+                prompt_token_count: 8,
+                candidates_token_count: 15,
+                total_token_count: 23,
+            }),
+        };
+
+        let response = client.convert_response(gemini_response);
+
+        assert_eq!(response.message.text(), Some("Hello there!"));
+        assert_eq!(response.message.role, MessageRole::Assistant);
+        assert_eq!(response.usage.as_ref().unwrap().input_tokens, 8);
+        assert_eq!(response.usage.as_ref().unwrap().output_tokens, 15);
+        assert!(response.metadata.contains_key("model"));
+        assert!(response.metadata.contains_key("finish_reason"));
+    }
+
+    #[test]
+    fn test_response_conversion_multiple_parts() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://generativelanguage.googleapis.com/v1beta",
+            "gemini-pro",
+        );
+        let client = GeminiClient::new(config);
+
+        let gemini_response = GeminiResponse {
+            candidates: vec![GeminiCandidate {
+                content: GeminiContent {
+                    parts: vec![
+                        GeminiPart {
+                            text: "First part. ".to_string(),
+                        },
+                        GeminiPart {
+                            text: "Second part.".to_string(),
+                        },
+                    ],
+                    role: "model".to_string(),
+                },
+                finish_reason: Some("STOP".to_string()),
+            }],
+            usage_metadata: None,
+        };
+
+        let response = client.convert_response(gemini_response);
+
+        // Multiple parts should be concatenated
+        assert_eq!(response.message.text(), Some("First part. Second part."));
+        assert!(response.usage.is_none());
+    }
+
+    #[test]
+    fn test_response_conversion_with_finish_reason() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://generativelanguage.googleapis.com/v1beta",
+            "gemini-pro",
+        );
+        let client = GeminiClient::new(config);
+
+        let gemini_response = GeminiResponse {
+            candidates: vec![GeminiCandidate {
+                content: GeminiContent {
+                    parts: vec![GeminiPart {
+                        text: "Response".to_string(),
+                    }],
+                    role: "model".to_string(),
+                },
+                finish_reason: Some("MAX_TOKENS".to_string()),
+            }],
+            usage_metadata: Some(GeminiUsageMetadata {
+                prompt_token_count: 5,
+                candidates_token_count: 100,
+                total_token_count: 105,
+            }),
+        };
+
+        let response = client.convert_response(gemini_response);
+
+        let finish_reason = response.metadata.get("finish_reason").unwrap();
+        assert_eq!(finish_reason, &serde_json::Value::String("MAX_TOKENS".to_string()));
+    }
+
+    // ============================================================
+    // Configuration Tests
+    // ============================================================
+
+    #[test]
+    fn test_config_with_custom_timeout() {
+        let mut config = RemoteLlmConfig::new(
+            "test-key",
+            "https://generativelanguage.googleapis.com/v1beta",
+            "gemini-pro",
+        );
+        config.timeout = Duration::from_secs(90);
+
+        let client = GeminiClient::new(config.clone());
+        assert_eq!(client.config.timeout, Duration::from_secs(90));
+    }
+
+    #[test]
+    fn test_config_with_vision_model() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://generativelanguage.googleapis.com/v1beta",
+            "gemini-pro-vision",
+        );
+        let client = GeminiClient::new(config.clone());
+        assert_eq!(client.config.model, "gemini-pro-vision");
+    }
+
+    // ============================================================
+    // Future Implementation Tests (Marked #[ignore])
+    // ============================================================
+
+    /// Test: Streaming support
+    ///
+    /// Verifies that Gemini streaming returns token-by-token responses.
+    ///
+    /// NOTE: Currently ignored - streaming not yet implemented for Gemini.
+    /// See line 225-228 in chat implementation.
+    #[tokio::test]
+    #[ignore]
+    async fn test_streaming_basic() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://generativelanguage.googleapis.com/v1beta",
+            "gemini-pro",
+        );
+        let client = GeminiClient::new(config);
+
+        let request = ChatRequest::new(vec![Message::human("Tell me a story")]);
+
+        // TODO: Currently returns error "Streaming not yet implemented"
+        // Once implemented, should work like:
+        // let stream = client.stream(request).await.unwrap();
+        // while let Some(result) = stream.receiver.recv().await {
+        //     match result {
+        //         Ok(event) => { /* process streaming event */ },
+        //         Err(_) => break,
+        //     }
+        // }
+
+        // For now, just verify it returns an error
+        let result = client.stream(request).await;
+        assert!(result.is_err());
+    }
+
+    /// Test: Multi-modal / Vision support
+    ///
+    /// Verifies that Gemini can process image inputs with gemini-pro-vision.
+    ///
+    /// NOTE: Currently ignored - multi-modal not yet implemented.
+    #[tokio::test]
+    #[ignore]
+    async fn test_multimodal_vision() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://generativelanguage.googleapis.com/v1beta",
+            "gemini-pro-vision",
+        );
+        let client = GeminiClient::new(config);
+
+        // TODO: Create message with image content
+        // let mut msg = Message::human("What's in this image?");
+        // msg.content = MessageContent::Image(...);
+
+        let request = ChatRequest::new(vec![Message::human("image description")]);
+
+        // Once implemented, should handle image content
+        let _response = client.chat(request).await;
+        // assert!(response.is_ok());
     }
 }
 

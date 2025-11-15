@@ -336,7 +336,7 @@ mod tests {
 
     async fn setup_test_db() -> Arc<Database> {
         let pool = SqlitePoolOptions::new()
-            .max_connections(5)
+            .max_connections(10) // Increased for concurrent tests
             .connect("sqlite::memory:")
             .await
             .unwrap();
@@ -597,5 +597,544 @@ mod tests {
         // Attempt to resume nonexistent workflow should fail
         let result = repo.resume_workflow("nonexistent-id").await;
         assert!(result.is_err());
+    }
+
+    // ============================================================================
+    // Phase 5.2: Repository Concurrent Access - WorkflowRepository Tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_concurrent_workflow_save_operations() {
+        let db = setup_test_db().await;
+        let repo = Arc::new(WorkflowRepository::new(db));
+
+        // Spawn 20 concurrent save operations
+        let mut handles = vec![];
+
+        for i in 0..20 {
+            let repo_clone = repo.clone();
+            let handle = tokio::task::spawn(async move {
+                let workflow = Workflow::new(&format!("Concurrent workflow {}", i), "react");
+                repo_clone.save(&workflow).await.unwrap();
+                workflow.id
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all saves to complete
+        let mut workflow_ids = vec![];
+        for handle in handles {
+            let id = handle.await.unwrap();
+            workflow_ids.push(id);
+        }
+
+        // Verify all workflows were saved
+        let all_workflows = repo.list().await.unwrap();
+        assert_eq!(all_workflows.len(), 20);
+
+        // Verify each workflow exists
+        for id in workflow_ids {
+            assert!(repo.exists(&id).await.unwrap());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_workflow_update_operations() {
+        let db = setup_test_db().await;
+        let repo = Arc::new(WorkflowRepository::new(db));
+
+        // Create initial workflow
+        let workflow = Workflow::new("Concurrent update test", "react");
+        repo.save(&workflow).await.unwrap();
+
+        // Spawn 10 concurrent updates
+        let mut handles = vec![];
+
+        for i in 0..10 {
+            let repo_clone = repo.clone();
+            let workflow_id = workflow.id.clone();
+            let handle = tokio::task::spawn(async move {
+                let mut wf = repo_clone.find_by_id(&workflow_id).await.unwrap();
+                wf.metadata = format!("{{\"iteration\": {}}}", i);
+                repo_clone.update(&wf).await.unwrap();
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all updates to complete
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        // Verify workflow still exists
+        let loaded = repo.find_by_id(&workflow.id).await.unwrap();
+        assert_eq!(loaded.id, workflow.id);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_workflow_read_operations() {
+        let db = setup_test_db().await;
+        let repo = Arc::new(WorkflowRepository::new(db));
+
+        // Create 10 workflows
+        for i in 0..10 {
+            let workflow = Workflow::new(&format!("Workflow {}", i), "react");
+            repo.save(&workflow).await.unwrap();
+        }
+
+        // Spawn 50 concurrent read operations
+        let mut handles = vec![];
+
+        for _ in 0..50 {
+            let repo_clone = repo.clone();
+            let handle = tokio::task::spawn(async move {
+                let workflows = repo_clone.list().await.unwrap();
+                assert_eq!(workflows.len(), 10);
+            });
+            handles.push(handle);
+        }
+
+        // All reads should succeed
+        for handle in handles {
+            handle.await.unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_workflow_task_operations() {
+        let db = setup_test_db().await;
+        let workflow_repo = Arc::new(WorkflowRepository::new(db.clone()));
+        let task_repo = Arc::new(TaskRepository::new(db));
+
+        // Create workflow
+        let workflow = Workflow::new("Concurrent task ops", "react");
+        workflow_repo.save(&workflow).await.unwrap();
+
+        // Create tasks
+        let mut task_ids = vec![];
+        for i in 0..20 {
+            let task = Task::new(&format!("Task {}", i));
+            task_repo.save(&task).await.unwrap();
+            task_ids.push(task.id);
+        }
+
+        // Spawn concurrent add_task operations
+        let mut handles = vec![];
+
+        for (i, task_id) in task_ids.iter().enumerate() {
+            let workflow_repo_clone = workflow_repo.clone();
+            let workflow_id = workflow.id.clone();
+            let task_id_clone = task_id.clone();
+            let handle = tokio::task::spawn(async move {
+                workflow_repo_clone
+                    .add_task(&workflow_id, &task_id_clone, i as i32)
+                    .await
+                    .unwrap();
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all adds to complete
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        // Verify all tasks were added
+        let count = workflow_repo.get_task_count(&workflow.id).await.unwrap();
+        assert_eq!(count, 20);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_mixed_workflow_operations() {
+        let db = setup_test_db().await;
+        let repo = Arc::new(WorkflowRepository::new(db));
+
+        // Spawn mixed operations
+        let mut handles = vec![];
+
+        // 10 save operations
+        for i in 0..10 {
+            let repo_clone = repo.clone();
+            let handle = tokio::task::spawn(async move {
+                let workflow = Workflow::new(&format!("Save workflow {}", i), "react");
+                repo_clone.save(&workflow).await.unwrap();
+            });
+            handles.push(handle);
+        }
+
+        // 10 read operations
+        for _ in 0..10 {
+            let repo_clone = repo.clone();
+            let handle = tokio::task::spawn(async move {
+                let _ = repo_clone.list().await.unwrap();
+            });
+            handles.push(handle);
+        }
+
+        // 5 count operations
+        for _ in 0..5 {
+            let repo_clone = repo.clone();
+            let handle = tokio::task::spawn(async move {
+                let _ = repo_clone.count_by_status("pending").await.unwrap();
+            });
+            handles.push(handle);
+        }
+
+        // All operations should succeed
+        for handle in handles {
+            handle.await.unwrap();
+        }
+    }
+
+    // ============================================================================
+    // Phase 5.2: Foreign Key Constraint Tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_cascade_delete_workflow_removes_tasks() {
+        let db = setup_test_db().await;
+        let workflow_repo = WorkflowRepository::new(db.clone());
+        let task_repo = TaskRepository::new(db);
+
+        // Create workflow
+        let workflow = Workflow::new("Test workflow", "react");
+        workflow_repo.save(&workflow).await.unwrap();
+
+        // Create and add tasks
+        let task1 = Task::new("Task 1");
+        let task2 = Task::new("Task 2");
+        task_repo.save(&task1).await.unwrap();
+        task_repo.save(&task2).await.unwrap();
+
+        workflow_repo.add_task(&workflow.id, &task1.id, 0).await.unwrap();
+        workflow_repo.add_task(&workflow.id, &task2.id, 1).await.unwrap();
+
+        // Verify tasks added
+        let count = workflow_repo.get_task_count(&workflow.id).await.unwrap();
+        assert_eq!(count, 2);
+
+        // Delete workflow - should CASCADE delete workflow_tasks entries
+        workflow_repo.delete(&workflow.id).await.unwrap();
+
+        // Workflow should be gone
+        assert!(!workflow_repo.exists(&workflow.id).await.unwrap());
+
+        // Tasks should still exist (only workflow_tasks entries are deleted)
+        assert!(task_repo.exists(&task1.id).await.unwrap());
+        assert!(task_repo.exists(&task2.id).await.unwrap());
+
+        // workflow_tasks entries should be gone (verified by re-creating workflow)
+        let workflow2 = Workflow {
+            id: workflow.id.clone(), // Re-use same ID
+            name: "Recreated".to_string(),
+            description: None,
+            status: "pending".to_string(),
+            pattern: "react".to_string(),
+            created_at: chrono::Utc::now().timestamp(),
+            updated_at: chrono::Utc::now().timestamp(),
+            started_at: None,
+            completed_at: None,
+            metadata: "{}".to_string(),
+        };
+        workflow_repo.save(&workflow2).await.unwrap();
+
+        // Should have 0 tasks (old entries were CASCADE deleted)
+        let count = workflow_repo.get_task_count(&workflow2.id).await.unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_cascade_delete_task_removes_workflow_tasks() {
+        let db = setup_test_db().await;
+        let workflow_repo = WorkflowRepository::new(db.clone());
+        let task_repo = TaskRepository::new(db);
+
+        // Create workflow
+        let workflow = Workflow::new("Test workflow", "react");
+        workflow_repo.save(&workflow).await.unwrap();
+
+        // Create and add tasks
+        let task1 = Task::new("Task 1");
+        let task2 = Task::new("Task 2");
+        task_repo.save(&task1).await.unwrap();
+        task_repo.save(&task2).await.unwrap();
+
+        workflow_repo.add_task(&workflow.id, &task1.id, 0).await.unwrap();
+        workflow_repo.add_task(&workflow.id, &task2.id, 1).await.unwrap();
+
+        // Verify 2 tasks added
+        let count = workflow_repo.get_task_count(&workflow.id).await.unwrap();
+        assert_eq!(count, 2);
+
+        // Delete task1 - should CASCADE delete workflow_tasks entry
+        task_repo.delete(&task1.id).await.unwrap();
+
+        // workflow_tasks should now have only 1 entry
+        let count = workflow_repo.get_task_count(&workflow.id).await.unwrap();
+        assert_eq!(count, 1);
+
+        // Verify remaining task is task2
+        let task_ids = workflow_repo.get_task_ids(&workflow.id).await.unwrap();
+        assert_eq!(task_ids.len(), 1);
+        assert_eq!(task_ids[0], task2.id);
+    }
+
+    #[tokio::test]
+    async fn test_add_task_to_nonexistent_workflow_fails() {
+        let db = setup_test_db().await;
+        let workflow_repo = WorkflowRepository::new(db.clone());
+        let task_repo = TaskRepository::new(db);
+
+        // Create task but not workflow
+        let task = Task::new("Test task");
+        task_repo.save(&task).await.unwrap();
+
+        // Try to add task to nonexistent workflow
+        let result = workflow_repo
+            .add_task("nonexistent-workflow-id", &task.id, 0)
+            .await;
+
+        // Should fail due to foreign key constraint
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_add_nonexistent_task_to_workflow_fails() {
+        let db = setup_test_db().await;
+        let workflow_repo = WorkflowRepository::new(db);
+
+        // Create workflow but not task
+        let workflow = Workflow::new("Test workflow", "react");
+        workflow_repo.save(&workflow).await.unwrap();
+
+        // Try to add nonexistent task to workflow
+        let result = workflow_repo
+            .add_task(&workflow.id, "nonexistent-task-id", 0)
+            .await;
+
+        // Should fail due to foreign key constraint
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_duplicate_workflow_task_entry_fails() {
+        let db = setup_test_db().await;
+        let workflow_repo = WorkflowRepository::new(db.clone());
+        let task_repo = TaskRepository::new(db);
+
+        // Create workflow and task
+        let workflow = Workflow::new("Test workflow", "react");
+        let task = Task::new("Test task");
+        workflow_repo.save(&workflow).await.unwrap();
+        task_repo.save(&task).await.unwrap();
+
+        // Add task to workflow
+        workflow_repo.add_task(&workflow.id, &task.id, 0).await.unwrap();
+
+        // Try to add same task again - should fail due to PRIMARY KEY constraint
+        let result = workflow_repo.add_task(&workflow.id, &task.id, 1).await;
+        assert!(result.is_err());
+    }
+
+    // ============================================================================
+    // Phase 5.2: Query Methods with Edge Cases
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_workflow_with_special_characters() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let workflow = Workflow::new("Workflow: @#$%^&*()[]{}|\\;':\",.<>?/", "react");
+        repo.save(&workflow).await.unwrap();
+
+        let loaded = repo.find_by_id(&workflow.id).await.unwrap();
+        assert_eq!(loaded.name, workflow.name);
+    }
+
+    #[tokio::test]
+    async fn test_workflow_with_unicode() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let workflow = Workflow::new("工作流程 🔥 Рабочий процесс", "react");
+        repo.save(&workflow).await.unwrap();
+
+        let loaded = repo.find_by_id(&workflow.id).await.unwrap();
+        assert_eq!(loaded.name, workflow.name);
+    }
+
+    #[tokio::test]
+    async fn test_workflow_with_very_long_name() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let long_name = "W".repeat(10000);
+        let workflow = Workflow::new(&long_name, "react");
+        repo.save(&workflow).await.unwrap();
+
+        let loaded = repo.find_by_id(&workflow.id).await.unwrap();
+        assert_eq!(loaded.name.len(), 10000);
+    }
+
+    #[tokio::test]
+    async fn test_list_by_status_empty_result() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let workflows = repo.list_by_status("nonexistent_status").await.unwrap();
+        assert_eq!(workflows.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_list_workflows_empty() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let workflows = repo.list().await.unwrap();
+        assert_eq!(workflows.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_task_ids_empty_workflow() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let workflow = Workflow::new("Empty workflow", "react");
+        repo.save(&workflow).await.unwrap();
+
+        let task_ids = repo.get_task_ids(&workflow.id).await.unwrap();
+        assert_eq!(task_ids.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_task_count_nonexistent_workflow() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        // Query nonexistent workflow should return 0
+        let count = repo.get_task_count("nonexistent-id").await.unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_workflow_task_sequence_ordering() {
+        let db = setup_test_db().await;
+        let workflow_repo = WorkflowRepository::new(db.clone());
+        let task_repo = TaskRepository::new(db);
+
+        // Create workflow
+        let workflow = Workflow::new("Test workflow", "react");
+        workflow_repo.save(&workflow).await.unwrap();
+
+        // Create tasks and add in non-sequential order
+        let task1 = Task::new("Task 1");
+        let task2 = Task::new("Task 2");
+        let task3 = Task::new("Task 3");
+
+        task_repo.save(&task1).await.unwrap();
+        task_repo.save(&task2).await.unwrap();
+        task_repo.save(&task3).await.unwrap();
+
+        // Add with sequence: 2, 0, 1
+        workflow_repo.add_task(&workflow.id, &task3.id, 2).await.unwrap();
+        workflow_repo.add_task(&workflow.id, &task1.id, 0).await.unwrap();
+        workflow_repo.add_task(&workflow.id, &task2.id, 1).await.unwrap();
+
+        // Get task IDs - should be ordered by sequence
+        let task_ids = workflow_repo.get_task_ids(&workflow.id).await.unwrap();
+        assert_eq!(task_ids.len(), 3);
+        assert_eq!(task_ids[0], task1.id);
+        assert_eq!(task_ids[1], task2.id);
+        assert_eq!(task_ids[2], task3.id);
+    }
+
+    #[tokio::test]
+    async fn test_workflow_with_null_optional_fields() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let workflow = Workflow::new("Test workflow", "react");
+        // description, started_at, completed_at should be None/NULL
+        repo.save(&workflow).await.unwrap();
+
+        let loaded = repo.find_by_id(&workflow.id).await.unwrap();
+        assert!(loaded.description.is_none());
+        assert!(loaded.started_at.is_none());
+        assert!(loaded.completed_at.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_workflow_metadata_json() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let mut workflow = Workflow::new("Test workflow", "react");
+        workflow.metadata = r#"{"config":{"retries":3},"tags":["important"]}"#.to_string();
+        repo.save(&workflow).await.unwrap();
+
+        let loaded = repo.find_by_id(&workflow.id).await.unwrap();
+        assert!(loaded.metadata.contains("config"));
+        assert!(loaded.metadata.contains("retries"));
+    }
+
+    #[tokio::test]
+    async fn test_large_batch_workflow_operations() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        // Save 100 workflows
+        for i in 0..100 {
+            let workflow = Workflow::new(&format!("Batch workflow {}", i), "react");
+            repo.save(&workflow).await.unwrap();
+        }
+
+        // Verify count
+        let workflows = repo.list().await.unwrap();
+        assert_eq!(workflows.len(), 100);
+
+        // Count by status
+        let count = repo.count_by_status("pending").await.unwrap();
+        assert_eq!(count, 100);
+    }
+
+    #[tokio::test]
+    async fn test_remove_task_from_empty_workflow() {
+        let db = setup_test_db().await;
+        let workflow_repo = WorkflowRepository::new(db.clone());
+        let task_repo = TaskRepository::new(db);
+
+        // Create workflow and task
+        let workflow = Workflow::new("Test workflow", "react");
+        let task = Task::new("Test task");
+        workflow_repo.save(&workflow).await.unwrap();
+        task_repo.save(&task).await.unwrap();
+
+        // Try to remove task that was never added - should succeed (affect 0 rows)
+        let result = workflow_repo.remove_task(&workflow.id, &task.id).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_update_nonexistent_workflow() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        let workflow = Workflow::new("Nonexistent", "react");
+        // Don't save, just try to update
+        let result = repo.update(&workflow).await;
+
+        // Should succeed but affect 0 rows (not an error in this implementation)
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_delete_nonexistent_workflow() {
+        let db = setup_test_db().await;
+        let repo = WorkflowRepository::new(db);
+
+        // Should succeed but affect 0 rows
+        let result = repo.delete("nonexistent-id").await;
+        assert!(result.is_ok());
     }
 }

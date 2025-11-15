@@ -383,4 +383,301 @@ mod tests {
 
         assert_eq!(channel2.get().unwrap(), serde_json::json!(42));
     }
+
+    // =================================================================
+    // PHASE 3.2: CHANNEL OPERATIONS TESTS
+    // =================================================================
+
+    #[test]
+    fn test_channel_update_empty_values() {
+        let mut channel = LastValueChannel::new();
+        let updated = channel.update(vec![]).unwrap();
+        assert!(!updated, "Empty update should return false");
+        assert!(!channel.is_available());
+    }
+
+    #[test]
+    fn test_channel_serialization_edge_cases() {
+        // Test with complex nested structures
+        let complex_value = serde_json::json!({
+            "nested": {
+                "array": [1, 2, 3],
+                "object": {"key": "value"},
+                "null": null,
+                "bool": true,
+                "number": 42.5
+            }
+        });
+
+        let mut channel = LastValueChannel::new();
+        channel.update(vec![complex_value.clone()]).unwrap();
+
+        let checkpoint = channel.checkpoint().unwrap();
+        let mut restored = LastValueChannel::new();
+        restored.from_checkpoint(checkpoint).unwrap();
+
+        assert_eq!(restored.get().unwrap(), complex_value);
+    }
+
+    #[test]
+    fn test_channel_serialization_large_data() {
+        // Test with large string
+        let large_string = "x".repeat(10000);
+        let large_value = serde_json::json!(large_string);
+
+        let mut channel = LastValueChannel::new();
+        channel.update(vec![large_value.clone()]).unwrap();
+
+        let checkpoint = channel.checkpoint().unwrap();
+        let mut restored = LastValueChannel::new();
+        restored.from_checkpoint(checkpoint).unwrap();
+
+        assert_eq!(restored.get().unwrap(), large_value);
+    }
+
+    #[test]
+    fn test_channel_serialization_unicode() {
+        // Test with unicode characters
+        let unicode_value = serde_json::json!({
+            "emoji": "🚀💯🎉",
+            "chinese": "你好世界",
+            "arabic": "مرحبا بالعالم",
+            "special": "©®™€"
+        });
+
+        let mut channel = LastValueChannel::new();
+        channel.update(vec![unicode_value.clone()]).unwrap();
+
+        let checkpoint = channel.checkpoint().unwrap();
+        let mut restored = LastValueChannel::new();
+        restored.from_checkpoint(checkpoint).unwrap();
+
+        assert_eq!(restored.get().unwrap(), unicode_value);
+    }
+
+    #[test]
+    fn test_topic_channel_serialization() {
+        let mut channel = TopicChannel::new();
+        channel.update(vec![
+            serde_json::json!(1),
+            serde_json::json!(2),
+            serde_json::json!(3)
+        ]).unwrap();
+
+        let checkpoint = channel.checkpoint().unwrap();
+        let mut restored = TopicChannel::new();
+        restored.from_checkpoint(checkpoint).unwrap();
+
+        assert_eq!(restored.get_all().len(), 3);
+        assert_eq!(restored.get().unwrap(), serde_json::json!([1, 2, 3]));
+    }
+
+    #[test]
+    fn test_binary_operator_checkpoint_sum() {
+        let mut channel = BinaryOperatorChannel::sum();
+        channel.update(vec![
+            serde_json::json!(10.0),
+            serde_json::json!(20.0)
+        ]).unwrap();
+
+        let checkpoint = channel.checkpoint().unwrap();
+        let mut restored = BinaryOperatorChannel::sum();
+        restored.from_checkpoint(checkpoint).unwrap();
+
+        assert_eq!(restored.get().unwrap(), serde_json::json!(30.0));
+    }
+
+    #[test]
+    fn test_binary_operator_checkpoint_append() {
+        let mut channel = BinaryOperatorChannel::append();
+        channel.update(vec![
+            serde_json::json!(vec!["a", "b"]),
+            serde_json::json!(vec!["c"])
+        ]).unwrap();
+
+        let checkpoint = channel.checkpoint().unwrap();
+        let mut restored = BinaryOperatorChannel::append();
+        restored.from_checkpoint(checkpoint).unwrap();
+
+        let expected = serde_json::json!(["a", "b", "c"]);
+        assert_eq!(restored.get().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_channel_update_idempotency() {
+        let mut channel = LastValueChannel::new();
+        let value = serde_json::json!(42);
+
+        // First update
+        let updated1 = channel.update(vec![value.clone()]).unwrap();
+        assert!(updated1);
+
+        let checkpoint1 = channel.checkpoint().unwrap();
+
+        // Second update with same value
+        let updated2 = channel.update(vec![value.clone()]).unwrap();
+        assert!(updated2);
+
+        let checkpoint2 = channel.checkpoint().unwrap();
+
+        // Checkpoints should be equal
+        assert_eq!(checkpoint1, checkpoint2);
+    }
+
+    #[test]
+    fn test_topic_channel_ordering_preserved() {
+        let mut channel = TopicChannel::new();
+
+        // Add values in specific order
+        channel.update(vec![serde_json::json!(1)]).unwrap();
+        channel.update(vec![serde_json::json!(2)]).unwrap();
+        channel.update(vec![serde_json::json!(3)]).unwrap();
+
+        let values = channel.get_all();
+        assert_eq!(values.len(), 3);
+
+        // Order should be preserved
+        assert_eq!(values[0], serde_json::json!(1));
+        assert_eq!(values[1], serde_json::json!(2));
+        assert_eq!(values[2], serde_json::json!(3));
+    }
+
+    #[test]
+    fn test_binary_operator_sum_with_negative_numbers() {
+        let mut channel = BinaryOperatorChannel::sum();
+
+        channel.update(vec![
+            serde_json::json!(10.0),
+            serde_json::json!(-5.0),
+            serde_json::json!(3.5)
+        ]).unwrap();
+
+        assert_eq!(channel.get().unwrap(), serde_json::json!(8.5));
+    }
+
+    #[test]
+    fn test_binary_operator_sum_with_zero() {
+        let mut channel = BinaryOperatorChannel::sum();
+
+        channel.update(vec![
+            serde_json::json!(0.0),
+            serde_json::json!(0.0)
+        ]).unwrap();
+
+        assert_eq!(channel.get().unwrap(), serde_json::json!(0.0));
+    }
+
+    #[test]
+    fn test_binary_operator_append_empty_arrays() {
+        let mut channel = BinaryOperatorChannel::append();
+
+        channel.update(vec![
+            serde_json::json!([]),
+            serde_json::json!(vec!["a"]),
+            serde_json::json!([])
+        ]).unwrap();
+
+        assert_eq!(channel.get().unwrap(), serde_json::json!(["a"]));
+    }
+
+    #[test]
+    fn test_binary_operator_append_mixed_types() {
+        let mut channel = BinaryOperatorChannel::append();
+
+        channel.update(vec![
+            serde_json::json!([1, "two", true]),
+            serde_json::json!([serde_json::Value::Null, 3.14])
+        ]).unwrap();
+
+        assert_eq!(
+            channel.get().unwrap(),
+            serde_json::json!([1, "two", true, null, 3.14])
+        );
+    }
+
+    #[test]
+    fn test_channel_clone_box() {
+        let mut original = LastValueChannel::new();
+        original.update(vec![serde_json::json!(42)]).unwrap();
+
+        let cloned = original.clone_box();
+        assert_eq!(cloned.get().unwrap(), serde_json::json!(42));
+
+        // Original and clone should be independent
+        let original_value = original.get().unwrap();
+        let cloned_value = cloned.get().unwrap();
+        assert_eq!(original_value, cloned_value);
+    }
+
+    #[test]
+    fn test_topic_channel_multiple_batches() {
+        let mut channel = TopicChannel::new();
+
+        // Batch 1
+        channel.update(vec![
+            serde_json::json!(1),
+            serde_json::json!(2)
+        ]).unwrap();
+
+        assert_eq!(channel.get_all().len(), 2);
+
+        // Batch 2
+        channel.update(vec![
+            serde_json::json!(3),
+            serde_json::json!(4),
+            serde_json::json!(5)
+        ]).unwrap();
+
+        assert_eq!(channel.get_all().len(), 5);
+
+        // Verify all values present
+        let all_values = channel.get().unwrap();
+        assert_eq!(all_values, serde_json::json!([1, 2, 3, 4, 5]));
+    }
+
+    #[test]
+    fn test_checkpoint_restore_preserves_type() {
+        // Test with boolean
+        let mut bool_channel = LastValueChannel::new();
+        bool_channel.update(vec![serde_json::json!(true)]).unwrap();
+        let checkpoint = bool_channel.checkpoint().unwrap();
+
+        let mut restored = LastValueChannel::new();
+        restored.from_checkpoint(checkpoint).unwrap();
+        assert_eq!(restored.get().unwrap(), serde_json::json!(true));
+        assert!(restored.get().unwrap().is_boolean());
+
+        // Test with null
+        let mut null_channel = LastValueChannel::new();
+        null_channel.update(vec![serde_json::json!(null)]).unwrap();
+        let checkpoint = null_channel.checkpoint().unwrap();
+
+        let mut restored = LastValueChannel::new();
+        restored.from_checkpoint(checkpoint).unwrap();
+        assert!(restored.get().unwrap().is_null());
+    }
+
+    #[test]
+    fn test_channel_error_on_empty_get() {
+        let channel = LastValueChannel::new();
+        let result = channel.get();
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(matches!(error, CheckpointError::Invalid(_)));
+    }
+
+    #[test]
+    fn test_binary_operator_sum_large_numbers() {
+        let mut channel = BinaryOperatorChannel::sum();
+
+        channel.update(vec![
+            serde_json::json!(1e10),
+            serde_json::json!(2e10),
+            serde_json::json!(3e10)
+        ]).unwrap();
+
+        assert_eq!(channel.get().unwrap(), serde_json::json!(6e10));
+    }
 }
+

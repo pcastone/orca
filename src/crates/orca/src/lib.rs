@@ -67,6 +67,10 @@ pub mod executor;
 // Error types and utilities
 mod error;
 
+// Testing infrastructure (only available in test builds)
+#[cfg(test)]
+pub mod testing;
+
 // Re-export key types for convenience
 pub use tools::DirectToolBridge;
 pub use workflow::{Task, TaskStatus, Workflow, WorkflowStatus};

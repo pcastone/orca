@@ -430,7 +430,7 @@ Comprehensive unit testing plan covering all 10 crates with ~500+ identified tes
 ## Notes
 
 - Each checkbox represents a focused testing task
-- Tasks are ordered by priority: Critical ’ High ’ Medium ’ Low
+- Tasks are ordered by priority: Critical â†’ High â†’ Medium â†’ Low
 - Security-related tests (Phases 1, 2) should be completed first
 - Each phase can be worked on incrementally
 - Tests should follow existing patterns in each crate
