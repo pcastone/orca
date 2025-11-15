@@ -564,7 +564,64 @@ impl CheckpointSaver for InMemoryCheckpointSaver {
                     if let Some(filter_map) = &filter {
                         let mut matches = true;
                         for (key, value) in filter_map {
-                            if entry.metadata.extra.get(key) != Some(value) {
+                            // Handle special top-level metadata fields
+                            let field_matches = match key.as_str() {
+                                "source" => {
+                                    // Check the source field directly
+                                    if let Ok(source) = serde_json::from_value::<crate::checkpoint::CheckpointSource>(value.clone()) {
+                                        entry.metadata.source.as_ref() == Some(&source)
+                                    } else {
+                                        false
+                                    }
+                                }
+                                "step" => {
+                                    // Check the step field directly
+                                    if let Some(step_value) = value.as_i64() {
+                                        entry.metadata.step == Some(step_value as i32)
+                                    } else {
+                                        false
+                                    }
+                                }
+                                "min_step" => {
+                                    // Check minimum step
+                                    if let Some(min_value) = value.as_i64() {
+                                        if let Some(step) = entry.metadata.step {
+                                            step >= min_value as i32
+                                        } else {
+                                            false
+                                        }
+                                    } else {
+                                        false
+                                    }
+                                }
+                                "max_step" => {
+                                    // Check maximum step
+                                    if let Some(max_value) = value.as_i64() {
+                                        if let Some(step) = entry.metadata.step {
+                                            step <= max_value as i32
+                                        } else {
+                                            false
+                                        }
+                                    } else {
+                                        false
+                                    }
+                                }
+                                "node" => {
+                                    // Check node in extra metadata
+                                    entry.metadata.extra.get("node") == Some(value)
+                                }
+                                _ => {
+                                    // For other keys, check in extra metadata
+                                    // Support both direct keys and "metadata.{key}" format
+                                    if let Some(stripped) = key.strip_prefix("metadata.") {
+                                        entry.metadata.extra.get(stripped) == Some(value)
+                                    } else {
+                                        entry.metadata.extra.get(key) == Some(value)
+                                    }
+                                }
+                            };
+
+                            if !field_matches {
                                 matches = false;
                                 break;
                             }
