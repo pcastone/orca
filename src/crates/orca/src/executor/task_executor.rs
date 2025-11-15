@@ -1192,6 +1192,593 @@ mod tests {
     // running LLM service (Ollama, OpenAI, etc.). These unit tests verify
     // the pattern selection, configuration, and execution flow structure.
 
+    // ============================================================================
+    // Phase 6.2: Orca Task Executor - Comprehensive Tests
+    // ============================================================================
+
+    // ------------------------------------------------------------------------
+    // Resource Cleanup Tests
+    // ------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_executor_bridge_reference_management() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let config = create_test_config();
+        let bridge_weak = Arc::downgrade(&bridge);
+
+        {
+            let executor = TaskExecutor::new(bridge.clone(), config).unwrap();
+            // Verify bridge is held by executor
+            assert_eq!(Arc::strong_count(&bridge), 2); // Original + executor
+            assert!(bridge_weak.upgrade().is_some());
+            drop(executor);
+        }
+
+        // After executor is dropped, only original reference remains
+        assert_eq!(Arc::strong_count(&bridge), 1);
+        assert!(bridge_weak.upgrade().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_executor_multiple_instances_share_bridge() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "shared-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let config1 = create_test_config();
+        let config2 = create_test_config();
+
+        let executor1 = TaskExecutor::new(bridge.clone(), config1).unwrap();
+        let executor2 = TaskExecutor::new(bridge.clone(), config2).unwrap();
+
+        // Both executors share the same bridge
+        assert!(Arc::ptr_eq(executor1.bridge(), executor2.bridge()));
+        assert_eq!(Arc::strong_count(&bridge), 3); // Original + 2 executors
+    }
+
+    #[test]
+    fn test_executor_config_ownership() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let mut config = create_test_config();
+        config.execution.max_iterations = 20;
+
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+
+        // Executor owns its config, original config can't be accessed
+        assert_eq!(executor.config().execution.max_iterations, 20);
+    }
+
+    #[test]
+    fn test_executor_config_independence() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let mut config1 = create_test_config();
+        config1.execution.task_timeout = 100;
+        let executor1 = TaskExecutor::new(bridge.clone(), config1).unwrap();
+
+        let mut config2 = create_test_config();
+        config2.execution.task_timeout = 200;
+        let executor2 = TaskExecutor::new(bridge, config2).unwrap();
+
+        // Each executor has independent config
+        assert_eq!(executor1.config().execution.task_timeout, 100);
+        assert_eq!(executor2.config().execution.task_timeout, 200);
+    }
+
+    // ------------------------------------------------------------------------
+    // Timeout Enforcement Edge Cases
+    // ------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_timeout_with_zero_duration() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let mut config = create_test_config();
+        config.execution.task_timeout = 0; // Zero timeout
+
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+        assert_eq!(executor.config().execution.task_timeout, 0);
+
+        // Note: Actual execution would timeout immediately
+        // This tests configuration handling
+    }
+
+    #[test]
+    fn test_timeout_configuration_boundaries() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        // Test minimum timeout
+        let mut config = create_test_config();
+        config.execution.task_timeout = 1;
+        let executor = TaskExecutor::new(bridge.clone(), config).unwrap();
+        assert_eq!(executor.config().execution.task_timeout, 1);
+
+        // Test maximum timeout
+        let mut config = create_test_config();
+        config.execution.task_timeout = u64::MAX;
+        let executor = TaskExecutor::new(bridge.clone(), config).unwrap();
+        assert_eq!(executor.config().execution.task_timeout, u64::MAX);
+
+        // Test typical values
+        for timeout in [5, 30, 60, 300, 600, 3600] {
+            let mut config = create_test_config();
+            config.execution.task_timeout = timeout;
+            let executor = TaskExecutor::new(bridge.clone(), config).unwrap();
+            assert_eq!(executor.config().execution.task_timeout, timeout);
+        }
+    }
+
+    #[test]
+    fn test_timeout_error_contains_task_info() {
+        let error = OrcaError::Timeout {
+            task_id: "task-abc-123".to_string(),
+            duration_secs: 600,
+        };
+
+        let error_msg = format!("{}", error);
+
+        // Verify error message contains task ID
+        assert!(error_msg.contains("task-abc-123"));
+
+        // Verify error message contains duration
+        assert!(error_msg.contains("600"));
+
+        // Verify error message indicates timeout
+        let error_lower = error_msg.to_lowercase();
+        assert!(error_lower.contains("timeout") || error_lower.contains("timed out"));
+    }
+
+    #[test]
+    fn test_timeout_error_different_durations() {
+        let durations = vec![1, 5, 30, 60, 300, 600, 3600];
+
+        for duration in durations {
+            let error = OrcaError::Timeout {
+                task_id: format!("task-{}", duration),
+                duration_secs: duration,
+            };
+
+            let error_msg = format!("{}", error);
+            assert!(error_msg.contains(&duration.to_string()));
+            assert!(error_msg.contains(&format!("task-{}", duration)));
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Retry Logic Integration Tests
+    // ------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_retry_config_creation() {
+        use crate::executor::retry::RetryConfig;
+
+        // Test default config
+        let config = RetryConfig::default();
+        assert_eq!(config.max_retries, 3);
+        assert_eq!(config.initial_delay_secs, 1);
+        assert_eq!(config.max_delay_secs, 60);
+        assert_eq!(config.multiplier, 2.0);
+
+        // Test custom config
+        let custom_config = RetryConfig::new(5, 2, 120, 3.0);
+        assert_eq!(custom_config.max_retries, 5);
+        assert_eq!(custom_config.initial_delay_secs, 2);
+        assert_eq!(custom_config.max_delay_secs, 120);
+        assert_eq!(custom_config.multiplier, 3.0);
+    }
+
+    #[tokio::test]
+    async fn test_retry_delay_calculation() {
+        use crate::executor::retry::RetryConfig;
+
+        let config = RetryConfig::new(5, 1, 100, 2.0);
+
+        // Exponential backoff: 1, 2, 4, 8, 16, 32, ...
+        assert_eq!(config.calculate_delay(0).as_secs(), 1);
+        assert_eq!(config.calculate_delay(1).as_secs(), 2);
+        assert_eq!(config.calculate_delay(2).as_secs(), 4);
+        assert_eq!(config.calculate_delay(3).as_secs(), 8);
+        assert_eq!(config.calculate_delay(4).as_secs(), 16);
+        assert_eq!(config.calculate_delay(5).as_secs(), 32);
+        assert_eq!(config.calculate_delay(6).as_secs(), 64);
+
+        // Should cap at max_delay_secs (100)
+        assert_eq!(config.calculate_delay(7).as_secs(), 100);
+        assert_eq!(config.calculate_delay(10).as_secs(), 100);
+    }
+
+    #[tokio::test]
+    async fn test_retry_with_different_multipliers() {
+        use crate::executor::retry::RetryConfig;
+
+        // Multiplier 1.5
+        let config = RetryConfig::new(3, 10, 1000, 1.5);
+        assert_eq!(config.calculate_delay(0).as_secs(), 10);
+        assert_eq!(config.calculate_delay(1).as_secs(), 15);  // 10 * 1.5
+        assert_eq!(config.calculate_delay(2).as_secs(), 22);  // 10 * 1.5^2 = 22.5
+
+        // Multiplier 3.0
+        let config = RetryConfig::new(3, 2, 1000, 3.0);
+        assert_eq!(config.calculate_delay(0).as_secs(), 2);
+        assert_eq!(config.calculate_delay(1).as_secs(), 6);   // 2 * 3
+        assert_eq!(config.calculate_delay(2).as_secs(), 18);  // 2 * 9
+    }
+
+    #[tokio::test]
+    async fn test_retry_with_operation_success_on_first_try() {
+        use crate::executor::retry::{RetryConfig, with_retry};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let config = RetryConfig::new(3, 0, 60, 2.0);
+        let attempt_count = Arc::new(AtomicUsize::new(0));
+        let attempt_count_clone = attempt_count.clone();
+
+        let result = with_retry(&config, "test-task", || {
+            let count = attempt_count_clone.clone();
+            async move {
+                count.fetch_add(1, Ordering::SeqCst);
+                Ok::<String, String>("Success".to_string())
+            }
+        })
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "Success");
+        assert_eq!(attempt_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_retry_with_operation_success_after_failures() {
+        use crate::executor::retry::{RetryConfig, with_retry};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let config = RetryConfig::new(5, 0, 60, 2.0); // 0 delay for fast test
+        let attempt_count = Arc::new(AtomicUsize::new(0));
+        let attempt_count_clone = attempt_count.clone();
+
+        let result = with_retry(&config, "test-task", || {
+            let count = attempt_count_clone.clone();
+            async move {
+                let current = count.fetch_add(1, Ordering::SeqCst) + 1;
+                if current < 4 {
+                    Err(format!("Failure attempt {}", current))
+                } else {
+                    Ok::<String, String>("Success after retries".to_string())
+                }
+            }
+        })
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "Success after retries");
+        assert_eq!(attempt_count.load(Ordering::SeqCst), 4);
+    }
+
+    #[tokio::test]
+    async fn test_retry_exhausts_all_attempts() {
+        use crate::executor::retry::{RetryConfig, with_retry};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let config = RetryConfig::new(3, 0, 60, 2.0);
+        let attempt_count = Arc::new(AtomicUsize::new(0));
+        let attempt_count_clone = attempt_count.clone();
+
+        let result = with_retry(&config, "test-task", || {
+            let count = attempt_count_clone.clone();
+            async move {
+                count.fetch_add(1, Ordering::SeqCst);
+                Err::<String, String>("Permanent failure".to_string())
+            }
+        })
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Permanent failure");
+        // Initial attempt + 3 retries = 4 total attempts
+        assert_eq!(attempt_count.load(Ordering::SeqCst), 4);
+    }
+
+    #[tokio::test]
+    async fn test_retry_with_zero_retries() {
+        use crate::executor::retry::{RetryConfig, with_retry};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let config = RetryConfig::new(0, 1, 60, 2.0);
+        let attempt_count = Arc::new(AtomicUsize::new(0));
+        let attempt_count_clone = attempt_count.clone();
+
+        let result = with_retry(&config, "test-task", || {
+            let count = attempt_count_clone.clone();
+            async move {
+                count.fetch_add(1, Ordering::SeqCst);
+                Err::<String, String>("Failed".to_string())
+            }
+        })
+        .await;
+
+        assert!(result.is_err());
+        // Only initial attempt, no retries
+        assert_eq!(attempt_count.load(Ordering::SeqCst), 1);
+    }
+
+    // ------------------------------------------------------------------------
+    // Error Handling Paths
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_orca_error_types() {
+        // Test timeout error
+        let timeout_err = OrcaError::Timeout {
+            task_id: "task-1".to_string(),
+            duration_secs: 300,
+        };
+        assert!(format!("{}", timeout_err).contains("task-1"));
+
+        // Test execution error
+        let exec_err = OrcaError::Execution("LLM call failed".to_string());
+        assert!(format!("{}", exec_err).contains("LLM call failed"));
+
+        // Test database error
+        let db_err = OrcaError::Database("Connection lost".to_string());
+        assert!(format!("{}", db_err).contains("Connection lost"));
+    }
+
+    #[test]
+    fn test_pattern_from_invalid_task_metadata() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let config = create_test_config();
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+
+        // Malformed JSON
+        let task = Task::new("Test")
+            .with_metadata(r#"{"pattern": "react""#); // Missing closing brace
+
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::React); // Should default to React
+
+        // Invalid pattern value
+        let task = Task::new("Test")
+            .with_metadata(r#"{"pattern": "invalid_pattern_name"}"#);
+
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::React); // Should default to React
+
+        // Empty string pattern
+        let task = Task::new("Test")
+            .with_metadata(r#"{"pattern": ""}"#);
+
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::React); // Should default to React
+
+        // Null pattern
+        let task = Task::new("Test")
+            .with_metadata(r#"{"pattern": null}"#);
+
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::React); // Should default to React
+    }
+
+    #[test]
+    fn test_execution_result_error_states() {
+        // Test failure result with various error types
+        let errors = vec![
+            "Timeout error",
+            "LLM API error",
+            "Network connection failed",
+            "Invalid tool call",
+            "Rate limit exceeded",
+        ];
+
+        for error_msg in errors {
+            let result = ExecutionResult::failure(
+                error_msg.to_string(),
+                json!({}),
+                vec![],
+            );
+
+            assert!(!result.success);
+            assert!(result.result.is_none());
+            assert_eq!(result.error, Some(error_msg.to_string()));
+        }
+    }
+
+    #[test]
+    fn test_execution_result_with_partial_state() {
+        // Test result preserves partial state on error
+        let partial_state = json!({
+            "messages": [
+                {"type": "human", "content": "Input"},
+                {"type": "ai", "content": "Partial response before error"}
+            ],
+            "iteration": 2,
+            "error_at_step": "tool_execution"
+        });
+
+        let messages = vec![
+            json!({"type": "human", "content": "Input"}),
+            json!({"type": "ai", "content": "Partial response before error"}),
+        ];
+
+        let result = ExecutionResult::failure(
+            "Tool execution failed".to_string(),
+            partial_state.clone(),
+            messages.clone(),
+        );
+
+        assert!(!result.success);
+        assert_eq!(result.error, Some("Tool execution failed".to_string()));
+        assert_eq!(result.final_state, partial_state);
+        assert_eq!(result.messages, messages);
+        assert_eq!(result.messages.len(), 2);
+    }
+
+    #[test]
+    fn test_max_iterations_boundary_values() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        // Test minimum (1 iteration)
+        let mut config = create_test_config();
+        config.execution.max_iterations = 1;
+        let executor = TaskExecutor::new(bridge.clone(), config).unwrap();
+        assert_eq!(executor.config().execution.max_iterations, 1);
+
+        // Test typical values
+        for iterations in [1, 5, 10, 20, 50, 100] {
+            let mut config = create_test_config();
+            config.execution.max_iterations = iterations;
+            let executor = TaskExecutor::new(bridge.clone(), config).unwrap();
+            assert_eq!(executor.config().execution.max_iterations, iterations);
+        }
+
+        // Test maximum
+        let mut config = create_test_config();
+        config.execution.max_iterations = usize::MAX;
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+        assert_eq!(executor.config().execution.max_iterations, usize::MAX);
+    }
+
+    #[test]
+    fn test_llm_config_variations() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        // Different LLM providers
+        let providers = vec!["ollama", "openai", "anthropic", "gemini"];
+
+        for provider in providers {
+            let mut config = create_test_config();
+            config.llm.provider = provider.to_string();
+            let executor = TaskExecutor::new(bridge.clone(), config);
+            // Some providers might fail without proper API keys, but construction should work
+            // or return an error (not panic)
+            let _ = executor;
+        }
+    }
+
+    #[test]
+    fn test_task_metadata_pattern_extraction_edge_cases() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let config = create_test_config();
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+
+        // Nested JSON
+        let task = Task::new("Test")
+            .with_metadata(r#"{"config": {"pattern": "react"}}"#);
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::React); // Won't find nested pattern, defaults to React
+
+        // Array instead of object
+        let task = Task::new("Test")
+            .with_metadata(r#"["react", "plan_execute"]"#);
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::React); // Not an object, defaults to React
+
+        // Number pattern value
+        let task = Task::new("Test")
+            .with_metadata(r#"{"pattern": 123}"#);
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::React); // Not a string, defaults to React
+
+        // Boolean pattern value
+        let task = Task::new("Test")
+            .with_metadata(r#"{"pattern": true}"#);
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::React); // Not a string, defaults to React
+    }
+
+    #[test]
+    fn test_config_independent_modification() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let mut config = create_test_config();
+        config.execution.max_iterations = 10;
+        config.execution.streaming = true;
+
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+
+        // Verify executor has the configured values
+        assert_eq!(executor.config().execution.max_iterations, 10);
+        assert_eq!(executor.config().execution.streaming, true);
+    }
+
     // ORCA-023: Streaming Integration Tests
 
     #[test]
