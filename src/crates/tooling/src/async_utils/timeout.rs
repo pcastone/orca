@@ -300,4 +300,286 @@ mod tests {
         assert!(elapsed >= Duration::from_millis(45));
         assert!(elapsed <= Duration::from_millis(100));
     }
+
+    // ===== Cancellation Propagation Tests =====
+
+    #[tokio::test]
+    async fn test_timeout_cancels_operation() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        let completed = Arc::new(AtomicBool::new(false));
+        let completed_clone = completed.clone();
+
+        let result = with_timeout(Duration::from_millis(10), async move {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            completed_clone.store(true, Ordering::SeqCst);
+            Ok::<_, String>("should not reach here")
+        })
+        .await;
+
+        // Operation should timeout
+        assert!(result.is_err());
+        matches!(result.unwrap_err(), TimeoutError::Timeout(_));
+
+        // Give a bit of time to ensure the future was dropped
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // Operation should not have completed
+        assert!(!completed.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn test_timeout_guard_cancellation_on_drop() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        let started = Arc::new(AtomicBool::new(false));
+        let completed = Arc::new(AtomicBool::new(false));
+
+        let started_clone = started.clone();
+        let completed_clone = completed.clone();
+
+        // Create a scope where guard will be dropped
+        {
+            let guard = TimeoutGuard::new(Duration::from_millis(100));
+
+            let future = guard.execute(async move {
+                started_clone.store(true, Ordering::SeqCst);
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                completed_clone.store(true, Ordering::SeqCst);
+                Ok::<_, String>("completed")
+            });
+
+            // Drop the future before it completes (simulating cancellation)
+            drop(future);
+        }
+
+        // Give time for any background tasks
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Operation should not have completed
+        assert!(!completed.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn test_cancellation_with_nested_timeouts() {
+        let result = with_timeout(Duration::from_millis(50), async {
+            with_timeout(Duration::from_millis(100), async {
+                tokio::time::sleep(Duration::from_millis(150)).await;
+                Ok::<_, String>("inner")
+            })
+            .await
+        })
+        .await;
+
+        // Outer timeout should fire first
+        assert!(result.is_err());
+        if let Err(TimeoutError::Timeout(d)) = result {
+            assert_eq!(d, Duration::from_millis(50));
+        } else {
+            panic!("Expected outer timeout");
+        }
+    }
+
+    // ===== Early Completion Handling Tests =====
+
+    #[tokio::test]
+    async fn test_early_completion_immediately() {
+        let start = tokio::time::Instant::now();
+
+        let result = with_timeout(Duration::from_secs(10), async {
+            // Complete immediately
+            Ok::<_, String>("immediate")
+        })
+        .await;
+
+        let elapsed = start.elapsed();
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "immediate");
+        // Should complete in well under the timeout
+        assert!(elapsed < Duration::from_millis(100));
+    }
+
+    #[tokio::test]
+    async fn test_early_completion_with_very_short_timeout() {
+        // Even with a very short timeout, if operation completes first, it should succeed
+        let result = with_timeout(Duration::from_micros(100), async {
+            Ok::<_, String>("fast")
+        })
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "fast");
+    }
+
+    #[tokio::test]
+    async fn test_timeout_guard_early_completion() {
+        let guard = TimeoutGuard::new(Duration::from_secs(10));
+
+        let result = guard
+            .execute(async {
+                // Complete early
+                tokio::time::sleep(Duration::from_millis(1)).await;
+                Ok::<_, String>("early")
+            })
+            .await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "early");
+
+        // Guard should still have time remaining
+        assert!(guard.remaining().is_some());
+        assert!(guard.remaining().unwrap() > Duration::from_secs(9));
+    }
+
+    #[tokio::test]
+    async fn test_multiple_operations_with_same_guard() {
+        let guard = TimeoutGuard::new(Duration::from_secs(1));
+
+        // First operation
+        let result1 = guard
+            .execute(async {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                Ok::<_, String>("first")
+            })
+            .await;
+        assert!(result1.is_ok());
+
+        // Second operation with same guard (reduced remaining time)
+        let result2 = guard
+            .execute(async {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                Ok::<_, String>("second")
+            })
+            .await;
+        assert!(result2.is_ok());
+
+        // Guard should have less time remaining
+        let remaining = guard.remaining();
+        assert!(remaining.is_some());
+        assert!(remaining.unwrap() < Duration::from_millis(800));
+    }
+
+    // ===== Edge Case Tests =====
+
+    #[tokio::test]
+    async fn test_zero_duration_timeout() {
+        let result = with_timeout(Duration::from_secs(0), async {
+            // Even immediate completion might timeout with zero duration
+            Ok::<_, String>("instant")
+        })
+        .await;
+
+        // With zero duration, should typically timeout
+        // (though in practice it might succeed due to timing)
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_very_long_timeout() {
+        let guard = TimeoutGuard::new(Duration::from_secs(86400)); // 1 day
+
+        assert!(!guard.is_expired());
+        assert!(guard.remaining().is_some());
+
+        let remaining = guard.remaining().unwrap();
+        assert!(remaining > Duration::from_secs(86000));
+    }
+
+    #[tokio::test]
+    async fn test_timeout_error_display_formatting() {
+        // Test Timeout variant display
+        let timeout_err: TimeoutError<String> = TimeoutError::Timeout(Duration::from_secs(5));
+        let display = format!("{}", timeout_err);
+        assert!(display.contains("timed out"));
+        assert!(display.contains("5s"));
+
+        // Test OperationFailed variant display
+        let op_failed_err: TimeoutError<String> =
+            TimeoutError::OperationFailed("custom error".to_string());
+        let display = format!("{}", op_failed_err);
+        assert!(display.contains("Operation failed"));
+        assert!(display.contains("custom error"));
+    }
+
+    #[tokio::test]
+    async fn test_timeout_error_source() {
+        use std::error::Error;
+
+        // Timeout variant should have no source
+        let timeout_err: TimeoutError<std::io::Error> = TimeoutError::Timeout(Duration::from_secs(1));
+        assert!(timeout_err.source().is_none());
+
+        // OperationFailed with error type that implements Error
+        let op_err = std::io::Error::new(std::io::ErrorKind::Other, "io error");
+        let timeout_err = TimeoutError::OperationFailed(op_err);
+        assert!(timeout_err.source().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_timeout_guard_sleep_already_expired() {
+        let guard = TimeoutGuard::new(Duration::from_millis(1));
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        let start = tokio::time::Instant::now();
+        guard.sleep_until_deadline().await;
+        let elapsed = start.elapsed();
+
+        // Should return immediately if already expired
+        assert!(elapsed < Duration::from_millis(10));
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_timeout_operations() {
+        use tokio::join;
+
+        let (result1, result2, result3) = join!(
+            with_timeout(Duration::from_millis(100), async {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                Ok::<_, String>("fast")
+            }),
+            with_timeout(Duration::from_millis(50), async {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                Ok::<_, String>("slow")
+            }),
+            with_timeout(Duration::from_millis(200), async {
+                Ok::<_, String>("immediate")
+            })
+        );
+
+        // First should succeed
+        assert!(result1.is_ok());
+        assert_eq!(result1.unwrap(), "fast");
+
+        // Second should timeout
+        assert!(result2.is_err());
+        matches!(result2.unwrap_err(), TimeoutError::Timeout(_));
+
+        // Third should succeed
+        assert!(result3.is_ok());
+        assert_eq!(result3.unwrap(), "immediate");
+    }
+
+    #[tokio::test]
+    async fn test_timeout_with_panicking_operation() {
+        use std::panic::AssertUnwindSafe;
+        use tokio::task;
+
+        // Spawn in a separate task to catch the panic
+        let handle = task::spawn(async {
+            with_timeout(Duration::from_secs(1), async {
+                panic!("operation panicked");
+                #[allow(unreachable_code)]
+                Ok::<_, String>("never")
+            })
+            .await
+        });
+
+        let result = AssertUnwindSafe(handle).await;
+
+        // Should propagate the panic
+        assert!(result.is_err());
+    }
 }

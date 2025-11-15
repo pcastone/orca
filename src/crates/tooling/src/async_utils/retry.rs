@@ -561,4 +561,311 @@ mod tests {
         assert_eq!(result.unwrap_err(), "persistent error");
         assert_eq!(call_count.load(Ordering::SeqCst), 3);
     }
+
+    // ===== Additional Jitter Calculation Edge Case Tests =====
+
+    #[test]
+    fn test_jitter_with_very_small_interval() {
+        let policy = RetryPolicy::new(5)
+            .with_initial_interval(0.001) // 1ms
+            .with_backoff_factor(2.0)
+            .with_jitter(true);
+
+        let delay = policy.calculate_delay(0).as_secs_f64();
+
+        // Should be between 0.5ms and 1.5ms
+        assert!(delay >= 0.0005);
+        assert!(delay <= 0.0015);
+    }
+
+    #[test]
+    fn test_jitter_with_very_large_interval() {
+        let policy = RetryPolicy::new(10)
+            .with_initial_interval(100.0)
+            .with_backoff_factor(2.0)
+            .with_max_interval(200.0)
+            .with_jitter(true);
+
+        // Attempt 4: 100 * 2^4 = 1600, capped at 200
+        let delay = policy.calculate_delay(4).as_secs_f64();
+
+        // Should be between 100 (200 * 0.5) and 300 (200 * 1.5)
+        assert!(delay >= 100.0);
+        assert!(delay <= 300.0);
+    }
+
+    #[test]
+    fn test_jitter_disabled_produces_consistent_delays() {
+        let policy = RetryPolicy::new(5)
+            .with_initial_interval(2.0)
+            .with_backoff_factor(2.0)
+            .with_jitter(false);
+
+        // Run multiple times and verify delays are identical
+        let delays: Vec<f64> = (0..10)
+            .map(|_| policy.calculate_delay(2).as_secs_f64())
+            .collect();
+
+        // All delays should be exactly the same when jitter is disabled
+        let first_delay = delays[0];
+        for delay in delays {
+            assert_eq!(delay, first_delay);
+        }
+
+        // Should be exactly 2.0 * 2^2 = 8.0
+        assert_eq!(first_delay, 8.0);
+    }
+
+    #[test]
+    fn test_jitter_range_boundaries_multiple_samples() {
+        let policy = RetryPolicy::new(10)
+            .with_initial_interval(10.0)
+            .with_backoff_factor(2.0)
+            .with_max_interval(200.0) // Set high max to avoid capping
+            .with_jitter(true);
+
+        // Test multiple attempts to ensure jitter stays within bounds
+        for attempt in 0..5 {
+            let base_delay = 10.0 * 2.0_f64.powi(attempt);
+            let capped_delay = base_delay.min(200.0);
+
+            // Sample 20 times to verify range
+            for _ in 0..20 {
+                let delay = policy.calculate_delay(attempt as usize).as_secs_f64();
+                assert!(delay >= capped_delay * 0.5,
+                    "Delay {} should be >= {} (capped_delay * 0.5) for attempt {}",
+                    delay, capped_delay * 0.5, attempt);
+                assert!(delay <= capped_delay * 1.5,
+                    "Delay {} should be <= {} (capped_delay * 1.5) for attempt {}",
+                    delay, capped_delay * 1.5, attempt);
+            }
+        }
+    }
+
+    #[test]
+    fn test_jitter_calculation_with_zero_initial_interval() {
+        let policy = RetryPolicy::new(3)
+            .with_initial_interval(0.0)
+            .with_jitter(true);
+
+        let delay = policy.calculate_delay(0).as_secs_f64();
+
+        // With 0 initial interval, delay should be 0 even with jitter
+        assert_eq!(delay, 0.0);
+    }
+
+    #[test]
+    fn test_calculate_delay_beyond_max_attempts() {
+        let policy = RetryPolicy::new(3)
+            .with_initial_interval(1.0)
+            .with_backoff_factor(2.0);
+
+        // Attempts beyond max should return 0
+        assert_eq!(policy.calculate_delay(3).as_secs(), 0);
+        assert_eq!(policy.calculate_delay(4).as_secs(), 0);
+        assert_eq!(policy.calculate_delay(100).as_secs(), 0);
+    }
+
+    #[test]
+    fn test_jitter_with_max_interval_cap() {
+        let policy = RetryPolicy::new(10)
+            .with_initial_interval(5.0)
+            .with_backoff_factor(3.0)
+            .with_max_interval(20.0)
+            .with_jitter(true);
+
+        // Attempt 3: 5.0 * 3^3 = 135, capped at 20
+        // With jitter: should be between 10 (20 * 0.5) and 30 (20 * 1.5)
+        let delay = policy.calculate_delay(3).as_secs_f64();
+        assert!(delay >= 10.0);
+        assert!(delay <= 30.0);
+    }
+
+    // ===== Additional Retry Predicate Logic Edge Case Tests =====
+
+    #[test]
+    fn test_is_retryable_error_case_insensitive() {
+        // Test various case combinations
+        assert!(is_retryable_error("CONNECTION TIMEOUT"));
+        assert!(is_retryable_error("Connection Timeout"));
+        assert!(is_retryable_error("connection timeout"));
+        assert!(is_retryable_error("CoNnEcTiOn TiMeOuT"));
+    }
+
+    #[test]
+    fn test_is_retryable_error_partial_matches() {
+        // Should match partial occurrences
+        assert!(is_retryable_error("The connection to the server timed out"));
+        assert!(is_retryable_error("Error 503: Service Unavailable for maintenance"));
+        assert!(is_retryable_error("Rate limit exceeded, please try again"));
+    }
+
+    #[test]
+    fn test_is_retryable_error_edge_cases() {
+        // Empty string
+        assert!(!is_retryable_error(""));
+
+        // Just whitespace
+        assert!(!is_retryable_error("   "));
+
+        // Status codes without keywords
+        assert!(is_retryable_error("500"));
+        assert!(is_retryable_error("502"));
+        assert!(is_retryable_error("503"));
+        assert!(is_retryable_error("504"));
+
+        // Non-retryable codes
+        assert!(!is_retryable_error("200 OK"));
+        assert!(!is_retryable_error("201 Created"));
+        assert!(!is_retryable_error("404"));
+    }
+
+    #[test]
+    fn test_is_retryable_error_compound_messages() {
+        // Messages with multiple keywords
+        assert!(is_retryable_error("Connection timeout after 30s, service unavailable"));
+        assert!(is_retryable_error("503 Service Unavailable: Connection timeout"));
+
+        // Mixed retryable and non-retryable (should be retryable if any match)
+        assert!(is_retryable_error("404 Not Found, but service temporarily unavailable"));
+    }
+
+    #[test]
+    fn test_extract_retry_after_edge_cases() {
+        // No numbers
+        assert_eq!(extract_retry_after("Retry after soon"), None);
+
+        // Numbers but no retry keyword
+        assert_eq!(extract_retry_after("Wait 30 seconds"), None);
+
+        // Multiple numbers (should take first)
+        assert_eq!(
+            extract_retry_after("Retry after 30 or 60 seconds"),
+            Some(Duration::from_secs(30))
+        );
+
+        // Very large numbers
+        assert_eq!(
+            extract_retry_after("Retry after 86400 seconds"),
+            Some(Duration::from_secs(86400))
+        );
+
+        // Zero seconds
+        assert_eq!(
+            extract_retry_after("Retry after 0 seconds"),
+            Some(Duration::from_secs(0))
+        );
+    }
+
+    #[test]
+    fn test_extract_retry_after_various_formats() {
+        // Different separators
+        assert_eq!(
+            extract_retry_after("Retry-After: 45"),
+            Some(Duration::from_secs(45))
+        );
+        assert_eq!(
+            extract_retry_after("RetryAfter=90"),
+            Some(Duration::from_secs(90))
+        );
+
+        // With units mentioned
+        assert_eq!(
+            extract_retry_after("retry after 15 sec"),
+            Some(Duration::from_secs(15))
+        );
+        assert_eq!(
+            extract_retry_after("retry after 120 secs"),
+            Some(Duration::from_secs(120))
+        );
+    }
+
+    #[test]
+    fn test_extract_retry_after_reset_in_format() {
+        // "reset in" format variations
+        assert_eq!(
+            extract_retry_after("Rate limit reset in 300s"),
+            Some(Duration::from_secs(300))
+        );
+        assert_eq!(
+            extract_retry_after("Quota reset in 3600 seconds"),
+            Some(Duration::from_secs(3600))
+        );
+        assert_eq!(
+            extract_retry_after("limit reset in 60"),
+            Some(Duration::from_secs(60))
+        );
+    }
+
+    #[test]
+    fn test_should_retry_boundary_conditions() {
+        let policy = RetryPolicy::new(5);
+
+        // Boundary: exactly at max_attempts
+        assert!(!policy.should_retry(5));
+
+        // One before max
+        assert!(policy.should_retry(4));
+
+        // Well beyond max
+        assert!(!policy.should_retry(100));
+    }
+
+    #[test]
+    fn test_retry_state_multiple_operations() {
+        let mut state = RetryState::new();
+
+        // Simulate multiple retry cycles
+        for i in 1..=3 {
+            state.record_attempt(Some(format!("Error {}", i)));
+            assert_eq!(state.attempts, i);
+            assert_eq!(state.last_error, Some(format!("Error {}", i)));
+        }
+
+        state.reset();
+
+        // Should be ready for new retry cycle
+        state.record_attempt(Some("New error".to_string()));
+        assert_eq!(state.attempts, 1);
+        assert_eq!(state.last_error, Some("New error".to_string()));
+    }
+
+    #[test]
+    fn test_retry_state_with_none_error() {
+        let mut state = RetryState::new();
+
+        // Recording attempt with no error
+        state.record_attempt(None);
+        assert_eq!(state.attempts, 1);
+        assert!(state.last_error.is_none());
+
+        // Recording attempt with error after none
+        state.record_attempt(Some("Error occurred".to_string()));
+        assert_eq!(state.attempts, 2);
+        assert_eq!(state.last_error, Some("Error occurred".to_string()));
+    }
+
+    #[test]
+    fn test_backoff_factor_edge_cases() {
+        // Backoff factor of 1.0 (no exponential growth)
+        let policy = RetryPolicy::new(5)
+            .with_initial_interval(2.0)
+            .with_backoff_factor(1.0)
+            .with_jitter(false);
+
+        for attempt in 0..5 {
+            assert_eq!(policy.calculate_delay(attempt).as_secs_f64(), 2.0);
+        }
+
+        // Backoff factor > 2.0 (faster growth)
+        let policy = RetryPolicy::new(5)
+            .with_initial_interval(1.0)
+            .with_backoff_factor(3.0)
+            .with_jitter(false);
+
+        assert_eq!(policy.calculate_delay(0).as_secs_f64(), 1.0);   // 1.0 * 3^0
+        assert_eq!(policy.calculate_delay(1).as_secs_f64(), 3.0);   // 1.0 * 3^1
+        assert_eq!(policy.calculate_delay(2).as_secs_f64(), 9.0);   // 1.0 * 3^2
+        assert_eq!(policy.calculate_delay(3).as_secs_f64(), 27.0);  // 1.0 * 3^3
+    }
 }
