@@ -1,6 +1,45 @@
 # Unit Testing Implementation Progress
 
-## Latest Update (Session 3 - Part 4)
+## Latest Update (Session 3 - Part 5)
+
+**Date**: November 15, 2025
+
+### Phase 3.3: Recovery Scenarios Tests (Partially Complete)
+
+**Added 11 comprehensive recovery scenario tests (4 passing, 7 ignored)**
+- **Purpose**: Validate checkpoint recovery, interrupts, error handling, thread isolation
+- **Coverage**: Checkpoint versioning, concurrent thread isolation, fresh thread execution
+- **Result**: ⚠️ **4 tests passing, 7 tests marked #[ignore]** (awaiting API implementation)
+
+**Passing Tests (4)**:
+1. `test_checkpoint_versioning_tracks_changes` - Channel versions correctly track modifications
+2. `test_concurrent_checkpoint_thread_isolation` - 5 concurrent threads maintain perfect isolation
+3. `test_resume_nonexistent_thread_starts_fresh` - New threads start fresh (no error)
+4. Plus 9 existing CompiledGraph tests continue passing
+
+**Tests Marked #[ignore] (7)** - Specifications for future implementation:
+1. `test_resume_from_checkpoint_after_interrupt` - Requires `resume()` API at CompiledGraph level
+2. `test_error_recovery_with_retry` - Requires automatic retry mechanism
+3. `test_multiple_interrupt_points` - Requires step-by-step resume capability
+4. `test_checkpoint_state_snapshot_consistency` - Depends on StateGraph channel configuration
+5. `test_interrupt_after_node_execution` - Requires `resume()` after interrupt_after
+6. `test_resume_from_specific_checkpoint_id` - Requires time-travel checkpoint API
+7. `test_checkpoint_created_on_error` - Implementation-dependent checkpoint behavior
+
+**Key Findings**:
+- ✅ Interrupt/resume **exists** at PregelLoop level (see `pregel/loop_impl.rs::test_interrupt_before_and_resume`)
+- ❌ **Not yet exposed** at CompiledGraph API level
+- 📝 Tests serve as **specifications** for desired high-level recovery behavior
+- 🔧 Future work: Expose `resume()`, `resume_with_state()`, time-travel APIs at CompiledGraph level
+
+**Files Modified**:
+- `src/crates/langgraph-core/src/compiled/tests.rs` (+593 lines, 11 new tests)
+
+**Phase 3.3 Status**: ⚠️ Partially Complete (4/11 passing, 7 awaiting API)
+
+---
+
+## Session 3 - Part 4
 
 **Date**: November 15, 2025
 
