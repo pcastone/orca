@@ -1,0 +1,261 @@
+# Workspace Configuration Template
+# This file defines security policies and tool permissions for a workspace
+# Place in project root as .orca/workspace.yaml
+
+workspace:
+  # Workspace root directory
+  # All file operations are sandboxed to this directory
+  root: "/path/to/project"  # Change to your project root
+
+  # Tool Policies
+  # Define which tools are allowed and how they can be used
+  tools:
+    # Allowed Actions
+    # Only these actions can be executed in this workspace
+    allowed_actions:
+      - read_file
+      - write_file
+      - edit_file
+      - list_files
+      - grep
+      - run_test
+      - run_build
+      - git_status
+      - git_diff
+      - git_add
+      - git_commit
+      - git_checkout
+      - shell_exec
+      - search_code
+      - analyze_error
+
+    # Denied Actions (optional)
+    # Explicitly deny certain actions even if globally allowed
+    # denied_actions:
+    #   - file_delete
+    #   - git_push
+
+    # Shell Command Allowlist
+    # Only commands matching these regex patterns are allowed
+    shell_allowlist:
+      - "^cargo\\s"  # Cargo commands
+      - "^rustc\\s"  # Rust compiler
+      - "^npm\\s"  # NPM
+      - "^git\\s"  # Git
+      - "^rg\\s"  # Ripgrep
+      - "^grep\\s"  # Grep
+      - "^find\\s"  # Find
+
+    # Shell Command Denylist (optional)
+    # Block dangerous commands even if they match allowlist
+    shell_denylist:
+      - "rm\\s+-rf\\s+/"  # Prevent recursive deletion of root
+      - "dd\\s+if="  # Prevent disk operations
+      - "mkfs"  # Prevent filesystem formatting
+      - "fdisk"  # Prevent partition operations
+
+    # Network Restrictions
+    network:
+      enabled: true  # Allow network access
+      allowed_domains:
+        - "crates.io"
+        - "docs.rs"
+        - "github.com"
+
+      # Blocked domains (optional)
+      # blocked_domains:
+      #   - "malicious-site.com"
+
+  # Validation Settings
+  # Rules for validating task plans and executions
+  validation:
+    # Task Plan Validation
+    max_task_depth: 10  # Maximum number of tasks in a plan
+    strict_task_sequence: true  # Enforce proper task dependencies
+
+    # Actions requiring specific fields
+    require_targets_for:
+      - read_file  # Must specify file path
+      - write_file  # Must specify file path
+      - edit_file  # Must specify file path
+
+    # Actions requiring parameters
+    require_params_for:
+      - git_commit  # Must specify commit message
+      - shell_exec  # Must specify command
+
+  # Path Restrictions
+  # Security rules for file operations
+  paths:
+    # Sandbox all operations to workspace root
+    sandbox_to_workspace: true
+
+    # Allow parent directory access (..)
+    allow_parent_dir: false
+
+    # Allowed paths outside workspace (optional)
+    # allow_external_paths:
+    #   - "/tmp"
+    #   - "$HOME/.cargo"
+
+    # Blocked paths within workspace (optional)
+    # blocked_paths:
+    #   - ".git/config"  # Don't modify git config
+    #   - "*.key"  # Don't touch key files
+    #   - "*.env"  # Don't modify env files
+
+  # File Operation Policies
+  file_operations:
+    # Maximum file size for read/write operations
+    max_file_size: 10485760  # 10MB
+
+    # File types that can be read/written
+    allowed_extensions:
+      - "rs"  # Rust source
+      - "toml"  # Configuration
+      - "yaml"
+      - "yml"
+      - "json"
+      - "md"  # Markdown
+      - "txt"
+      - "sh"  # Shell scripts
+      - "py"  # Python
+      - "js"
+      - "ts"
+
+    # File types that are blocked
+    # blocked_extensions:
+    #   - "exe"
+    #   - "dll"
+    #   - "so"
+
+    # Backup behavior
+    backup_on_edit: false  # Create .bak files before editing
+    backup_on_delete: false  # Move to trash instead of delete
+
+  # Git Policies
+  git:
+    # Allow git operations
+    enabled: true
+
+    # Allowed git operations
+    allowed_operations:
+      - status
+      - diff
+      - add
+      - commit
+      - checkout
+      - branch
+
+    # Denied git operations (optional)
+    # denied_operations:
+    #   - push
+    #   - force
+    #   - rebase
+
+    # Commit message validation
+    commit_validation:
+      min_length: 10  # Minimum commit message length
+      require_type: false  # Require conventional commit format
+      # allowed_types:
+      #   - feat
+      #   - fix
+      #   - docs
+      #   - refactor
+      #   - test
+      #   - chore
+
+    # Protected branches
+    # protected_branches:
+    #   - main
+    #   - master
+    #   - production
+
+  # Build and Test Policies
+  build:
+    # Default build command
+    command: "cargo build"
+
+    # Build timeout (milliseconds)
+    timeout_ms: 300000  # 5 minutes
+
+    # Fail task if build fails
+    fail_on_error: false
+
+  test:
+    # Default test command
+    command: "cargo test"
+
+    # Test timeout (milliseconds)
+    timeout_ms: 600000  # 10 minutes
+
+    # Fail task if tests fail
+    fail_on_error: true
+
+  # Monitoring and Logging
+  monitoring:
+    # Log all tool executions
+    log_executions: true
+
+    # Log file
+    log_file: ".orca/execution.log"
+
+    # Metrics collection
+    collect_metrics: true
+
+    # Metrics file
+    metrics_file: ".orca/metrics.json"
+
+  # Cost Management (for remote LLM providers)
+  cost:
+    # Enable cost tracking
+    enabled: true
+
+    # Maximum cost per task (USD)
+    max_cost_per_task: 0.50
+
+    # Maximum cost per workflow (USD)
+    max_cost_per_workflow: 5.00
+
+    # Cost alert threshold (USD)
+    alert_threshold: 1.00
+
+# Project-Specific Settings
+# Customize for different project types
+
+# rust_project:
+#   workspace:
+#     build:
+#       command: "cargo build --release"
+#     test:
+#       command: "cargo test --all-features"
+#     tools:
+#       shell_allowlist:
+#         - "^cargo\\s"
+#         - "^rustc\\s"
+#         - "^rustfmt\\s"
+#         - "^clippy\\s"
+
+# python_project:
+#   workspace:
+#     build:
+#       command: "python -m build"
+#     test:
+#       command: "pytest"
+#     tools:
+#       shell_allowlist:
+#         - "^python3?\\s"
+#         - "^pip3?\\s"
+#         - "^pytest\\s"
+
+# javascript_project:
+#   workspace:
+#     build:
+#       command: "npm run build"
+#     test:
+#       command: "npm test"
+#     tools:
+#       shell_allowlist:
+#         - "^npm\\s"
+#         - "^yarn\\s"
+#         - "^node\\s"

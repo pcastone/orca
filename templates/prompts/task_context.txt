@@ -1,0 +1,46 @@
+# Task {id}: {action}
+
+**Goal:** {reason}
+**Target:** {target}
+**Expected Outcome:** {expected_outcome}
+
+## Previous Task Results
+
+{context_from_previous_tasks}
+
+## Task Details
+
+Action Type: {action}
+Dependencies: {depends_on}
+Parameters: {params}
+
+## Your Task
+
+Output the tool call(s) needed to accomplish this task. Remember:
+- Use exact paths (not patterns)
+- Be specific with arguments
+- Output ONLY JSON
+- No explanatory text before or after
+
+## Available Context
+
+Workspace: {workspace_path}
+Current Files Modified: {modified_files}
+Previous Errors: {previous_errors}
+
+## Tool Call Format
+
+Single tool:
+```json
+{"tool": "tool_name", "args": {...}}
+```
+
+Multiple tools:
+```json
+[
+  {"tool": "tool1", "args": {...}},
+  {"tool": "tool2", "args": {...}}
+]
+```
+
+Execute the task now.
