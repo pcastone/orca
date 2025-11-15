@@ -231,8 +231,7 @@ mod tests {
             duration_ms: 42,
             data: Some(json!({"content": "Hello, world!"})),
             errors: vec![],
-            warnings: vec![],
-            timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64,
+            timestamp: SystemTime::now(),
         }
     }
 
@@ -244,8 +243,7 @@ mod tests {
             duration_ms: 10,
             data: None,
             errors: vec!["File not found".to_string()],
-            warnings: vec![],
-            timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64,
+            timestamp: SystemTime::now(),
         }
     }
 
