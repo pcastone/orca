@@ -1,10 +1,45 @@
 # Unit Testing Implementation Progress
 
-## Latest Update (Session 2)
+## Latest Update (Session 3)
 
-**Date**: November 14, 2025
+**Date**: November 15, 2025
 
 ### Completed in This Session ✅
+
+1. **Direct Bridge Security Tests** - Added 18 comprehensive tests
+   - 4 tests for permission enforcement integration (Deny/Allow/RequiresApproval)
+   - 4 tests for tool registry security (registered tools, unknown tool rejection)
+   - 2 tests for error propagation
+   - 3 tests for execution context isolation
+   - 2 tests for execution logging
+   - **Status**: Ready but not compiled (waiting for tooling crate runtime module)
+
+2. **Workspace Security Edge Case Tests** - Added 19 advanced security tests
+   - URL encoded path traversal detection
+   - Mixed Windows/Unix separator handling
+   - Null byte in path safety
+   - Empty path validation
+   - Very long path handling (DoS prevention)
+   - Blocked path exact/prefix matching
+   - Custom blocked paths
+   - Case sensitivity in paths
+   - Symlink security (parent dir, target outside workspace)
+   - Tilde expansion prevention
+   - Canonicalization edge cases
+   - Write path parent writability check
+   - **Status**: All 33 tests passing (15 original + 18 new)
+
+**Files Modified**:
+- `src/crates/orca/src/tools/direct_bridge.rs` (+374 lines)
+- `src/crates/aco/src/workspace/security.rs` (+357 lines)
+
+**Phase 1 Progress**: 59 security tests added total (22 permission enforcer + 18 direct bridge + 19 workspace security)
+
+---
+
+## Previous Session Updates
+
+### Session 2 (November 14, 2025) ✅
 1. **Permission Enforcer Security Tests** - Added 22 comprehensive tests
    - 8 tests for path traversal prevention
    - 4 tests for whitelist validation
