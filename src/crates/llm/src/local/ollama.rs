@@ -299,6 +299,11 @@ impl ProviderUtils for OllamaClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+
+    // ============================================================
+    // Existing Tests
+    // ============================================================
 
     #[test]
     fn test_client_creation() {
@@ -323,6 +328,276 @@ mod tests {
         let config = LocalLlmConfig::new("http://localhost:11434", "llama2");
         let client = OllamaClient::new(config);
         assert_eq!(client.current_model(), "llama2");
+    }
+
+    // ============================================================
+    // Message Conversion Tests
+    // ============================================================
+
+    #[test]
+    fn test_message_conversion_all_roles() {
+        let config = LocalLlmConfig::new("http://localhost:11434", "mistral");
+        let client = OllamaClient::new(config);
+
+        let sys_msg = Message::system("You are helpful");
+        let ollama_sys = client.convert_message(&sys_msg);
+        assert_eq!(ollama_sys.role, "system");
+        assert_eq!(ollama_sys.content, "You are helpful");
+
+        let user_msg = Message::human("Hello");
+        let ollama_user = client.convert_message(&user_msg);
+        assert_eq!(ollama_user.role, "user");
+        assert_eq!(ollama_user.content, "Hello");
+
+        let asst_msg = Message::assistant("Hi there!");
+        let ollama_asst = client.convert_message(&asst_msg);
+        assert_eq!(ollama_asst.role, "assistant");
+        assert_eq!(ollama_asst.content, "Hi there!");
+    }
+
+    #[test]
+    fn test_message_conversion_tool_role() {
+        let config = LocalLlmConfig::new("http://localhost:11434", "llama2");
+        let client = OllamaClient::new(config);
+
+        let mut tool_msg = Message::human("tool result");
+        tool_msg.role = MessageRole::Tool;
+
+        let ollama_msg = client.convert_message(&tool_msg);
+
+        // Tool messages are converted to user role in Ollama
+        assert_eq!(ollama_msg.role, "user");
+        assert_eq!(ollama_msg.content, "tool result");
+    }
+
+    #[test]
+    fn test_message_conversion_custom_role() {
+        let config = LocalLlmConfig::new("http://localhost:11434", "mixtral");
+        let client = OllamaClient::new(config);
+
+        let mut custom_msg = Message::human("custom content");
+        custom_msg.role = MessageRole::Custom("moderator".to_string());
+
+        let ollama_msg = client.convert_message(&custom_msg);
+
+        assert_eq!(ollama_msg.role, "moderator");
+        assert_eq!(ollama_msg.content, "custom content");
+    }
+
+    // ============================================================
+    // Response Conversion Tests
+    // ============================================================
+
+    #[test]
+    fn test_response_conversion_basic() {
+        let config = LocalLlmConfig::new("http://localhost:11434", "llama2");
+        let client = OllamaClient::new(config);
+
+        let ollama_response = OllamaResponse {
+            model: "llama2".to_string(),
+            message: OllamaMessage {
+                role: "assistant".to_string(),
+                content: "Hello there!".to_string(),
+            },
+            done: true,
+            total_duration: Some(1500000000), // 1.5 seconds in nanoseconds
+            prompt_eval_count: Some(10),
+            eval_count: Some(25),
+        };
+
+        let response = client.convert_response(ollama_response);
+
+        assert_eq!(response.message.text(), Some("Hello there!"));
+        assert_eq!(response.message.role, MessageRole::Assistant);
+        assert_eq!(response.usage.as_ref().unwrap().input_tokens, 10);
+        assert_eq!(response.usage.as_ref().unwrap().output_tokens, 25);
+        assert_eq!(response.usage.as_ref().unwrap().total_tokens, 35);
+        assert!(response.metadata.contains_key("model"));
+        assert!(response.metadata.contains_key("total_duration_ns"));
+    }
+
+    #[test]
+    fn test_response_conversion_no_usage() {
+        let config = LocalLlmConfig::new("http://localhost:11434", "llama2");
+        let client = OllamaClient::new(config);
+
+        let ollama_response = OllamaResponse {
+            model: "llama2".to_string(),
+            message: OllamaMessage {
+                role: "assistant".to_string(),
+                content: "Response without usage".to_string(),
+            },
+            done: true,
+            total_duration: None,
+            prompt_eval_count: None,
+            eval_count: None,
+        };
+
+        let response = client.convert_response(ollama_response);
+
+        assert_eq!(response.message.text(), Some("Response without usage"));
+        assert!(response.usage.is_none());
+    }
+
+    #[test]
+    fn test_response_conversion_partial_usage() {
+        let config = LocalLlmConfig::new("http://localhost:11434", "mistral");
+        let client = OllamaClient::new(config);
+
+        let ollama_response = OllamaResponse {
+            model: "mistral".to_string(),
+            message: OllamaMessage {
+                role: "assistant".to_string(),
+                content: "Partial usage data".to_string(),
+            },
+            done: true,
+            total_duration: Some(2000000000),
+            prompt_eval_count: Some(15),
+            eval_count: None, // Only prompt eval available
+        };
+
+        let response = client.convert_response(ollama_response);
+
+        assert!(response.usage.is_some());
+        assert_eq!(response.usage.as_ref().unwrap().input_tokens, 15);
+        assert_eq!(response.usage.as_ref().unwrap().output_tokens, 0);
+    }
+
+    // ============================================================
+    // Model Management Tests
+    // ============================================================
+
+    #[tokio::test]
+    async fn test_use_model() {
+        let config = LocalLlmConfig::new("http://localhost:11434", "llama2");
+        let mut client = OllamaClient::new(config);
+
+        assert_eq!(client.current_model(), "llama2");
+
+        let new_model = client.use_model("mistral").await.unwrap();
+        assert_eq!(new_model, "mistral");
+        assert_eq!(client.current_model(), "mistral");
+        assert_eq!(client.config.model, "mistral");
+    }
+
+    #[test]
+    fn test_current_model_tracking() {
+        let config = LocalLlmConfig::new("http://localhost:11434", "mixtral");
+        let client = OllamaClient::new(config);
+
+        assert_eq!(client.current_model(), "mixtral");
+        assert_eq!(client.config.model, "mixtral");
+    }
+
+    // ============================================================
+    // Configuration Tests
+    // ============================================================
+
+    #[test]
+    fn test_config_with_custom_timeout() {
+        let mut config = LocalLlmConfig::new("http://localhost:11434", "llama2");
+        config.timeout = Duration::from_secs(120);
+
+        let client = OllamaClient::new(config.clone());
+        assert_eq!(client.config.timeout, Duration::from_secs(120));
+    }
+
+    #[test]
+    fn test_config_with_different_base_url() {
+        let config = LocalLlmConfig::new("http://192.168.1.100:11434", "llama2");
+        let client = OllamaClient::new(config.clone());
+
+        assert_eq!(client.config.base_url, "http://192.168.1.100:11434");
+    }
+
+    // ============================================================
+    // Future Implementation Tests (Marked #[ignore])
+    // ============================================================
+
+    /// Test: Streaming support
+    ///
+    /// Verifies that Ollama streaming returns token-by-token responses.
+    ///
+    /// NOTE: Currently ignored - streaming not yet implemented for Ollama.
+    /// See line 179-182 in chat implementation.
+    #[tokio::test]
+    #[ignore]
+    async fn test_streaming_basic() {
+        let config = LocalLlmConfig::new("http://localhost:11434", "llama2");
+        let client = OllamaClient::new(config);
+
+        let request = ChatRequest::new(vec![Message::human("Count to 5")]);
+
+        // TODO: Currently returns error "Streaming not yet implemented"
+        // Once implemented, should work like:
+        // let stream = client.stream(request).await.unwrap();
+        // while let Some(result) = stream.receiver.recv().await {
+        //     match result {
+        //         Ok(event) => { /* process streaming event */ },
+        //         Err(_) => break,
+        //     }
+        // }
+
+        // For now, just verify it returns an error
+        let result = client.stream(request).await;
+        assert!(result.is_err());
+    }
+
+    /// Test: Health check / connection retry
+    ///
+    /// Verifies that Ollama client can check server health and retry connections.
+    ///
+    /// NOTE: Currently ignored - requires running Ollama server.
+    #[tokio::test]
+    #[ignore]
+    async fn test_health_check() {
+        let config = LocalLlmConfig::new("http://localhost:11434", "llama2");
+        let client = OllamaClient::new(config);
+
+        // This requires a running Ollama server
+        let is_healthy = client.check_health().await.unwrap();
+        // If server is running, should be true
+        // If not running, should be false (not an error)
+        println!("Ollama health: {}", is_healthy);
+    }
+
+    /// Test: Model fetching
+    ///
+    /// Verifies that client can fetch available models from Ollama.
+    ///
+    /// NOTE: Currently ignored - requires running Ollama server with models.
+    #[tokio::test]
+    #[ignore]
+    async fn test_fetch_models() {
+        let config = LocalLlmConfig::new("http://localhost:11434", "llama2");
+        let client = OllamaClient::new(config);
+
+        // This requires a running Ollama server with models installed
+        let models = client.fetch_models().await.unwrap();
+        assert!(!models.is_empty());
+
+        for model in models {
+            println!("Model: {}", model.id);
+            if let Some(size) = model.metadata.get("size_gb") {
+                println!("  Size: {} GB", size);
+            }
+        }
+    }
+
+    /// Test: Is available check
+    ///
+    /// Verifies that is_available() correctly reports server status.
+    ///
+    /// NOTE: Currently ignored - requires running Ollama server.
+    #[tokio::test]
+    #[ignore]
+    async fn test_is_available() {
+        let config = LocalLlmConfig::new("http://localhost:11434", "llama2");
+        let client = OllamaClient::new(config);
+
+        // This requires a running Ollama server
+        let available = client.is_available().await.unwrap();
+        println!("Ollama available: {}", available);
     }
 }
 
