@@ -7,6 +7,7 @@ use crate::Result;
 use serde_json::Value;
 use std::path::PathBuf;
 use tooling::runtime::ToolRequest;
+use uuid::Uuid;
 
 /// Tool Mapper for converting intents to ToolRequests
 pub struct ToolMapper {
@@ -65,8 +66,9 @@ impl ToolMapper {
         // Resolve paths in arguments if needed
         let args = self.resolve_paths_in_args(&call.tool, call.args)?;
 
-        // Create ToolRequest
-        let request = ToolRequest::new(&call.tool, args, session_id);
+        // Create ToolRequest with generated request ID
+        let request_id = Uuid::new_v4().to_string();
+        let request = ToolRequest::new(&call.tool, args, request_id, session_id);
 
         Ok(request)
     }

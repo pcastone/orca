@@ -279,6 +279,7 @@ mod tests {
         let request = ToolRequest::new(
             "file_read",
             json!({"path": "src/main.rs"}),
+            "req-1",
             "session-123",
         );
 
@@ -288,7 +289,7 @@ mod tests {
     #[test]
     fn test_validate_missing_required_arg() {
         let validator = ToolValidator::new();
-        let request = ToolRequest::new("file_read", json!({}), "session-123");
+        let request = ToolRequest::new("file_read", json!({}), "req-2", "session-123");
 
         assert!(validator.validate(&request).is_err());
     }
@@ -299,6 +300,7 @@ mod tests {
         let request = ToolRequest::new(
             "unknown_tool",
             json!({"arg": "value"}),
+            "req-3",
             "session-123",
         );
 
@@ -312,6 +314,7 @@ mod tests {
         let request = ToolRequest::new(
             "file_read",
             json!({"path": "/etc/passwd"}),
+            "req-4",
             "session-123",
         );
 

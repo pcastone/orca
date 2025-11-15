@@ -224,27 +224,21 @@ mod tests {
     use tooling::runtime::ToolResponse;
 
     fn create_success_response() -> ToolResponse {
-        ToolResponse {
-            ok: true,
-            tool: "file_read".to_string(),
-            request_id: "req-123".to_string(),
-            duration_ms: 42,
-            data: Some(json!({"content": "Hello, world!"})),
-            errors: vec![],
-            timestamp: SystemTime::now(),
-        }
+        ToolResponse::success(
+            "file_read",
+            "req-123",
+            42,
+            json!({"content": "Hello, world!"}),
+        )
     }
 
     fn create_error_response() -> ToolResponse {
-        ToolResponse {
-            ok: false,
-            tool: "file_read".to_string(),
-            request_id: "req-123".to_string(),
-            duration_ms: 10,
-            data: None,
-            errors: vec!["File not found".to_string()],
-            timestamp: SystemTime::now(),
-        }
+        ToolResponse::error(
+            "file_read",
+            "req-123",
+            10,
+            vec!["File not found".to_string()],
+        )
     }
 
     #[test]

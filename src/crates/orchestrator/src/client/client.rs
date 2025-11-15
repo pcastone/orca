@@ -338,12 +338,12 @@ mod tests {
         // Ensure not connected initially
         assert!(client.connection.lock().await.is_none());
 
-        let request = ToolRequest {
-            request_id: "req-1".to_string(),
-            tool_name: "test_tool".to_string(),
-            arguments: json!({}),
-            timeout_ms: None,
-        };
+        let request = ToolRequest::new(
+            "test_tool",
+            json!({}),
+            "req-1",
+            "test-session",
+        );
 
         // execute_tool should auto-connect if not connected
         // In real test with mock server, this would succeed
@@ -381,13 +381,12 @@ mod tests {
     async fn test_handle_tool_response_message() {
         let mut client = AcoClient::new("ws://localhost:8080", "test-session");
 
-        let response = ToolResponse {
-            request_id: "req-1".to_string(),
-            success: true,
-            output: Some(json!({"result": "success"})),
-            error: None,
-            execution_time_ms: Some(100),
-        };
+        let response = ToolResponse::success(
+            "test_tool",
+            "req-1",
+            100,
+            json!({"result": "success"}),
+        );
 
         let ws_message = WsMessage::ToolResponse(response.clone());
         let message_json = serde_json::to_string(&ws_message).unwrap();
@@ -409,8 +408,8 @@ mod tests {
 
         let ack = crate::client::messages::SessionAck {
             session_id: "test-session".to_string(),
-            accepted: true,
-            server_version: Some("1.0.0".to_string()),
+            capabilities: vec![],
+            version: "1.0.0".to_string(),
         };
 
         let ws_message = WsMessage::SessionAck(ack);
@@ -431,7 +430,7 @@ mod tests {
         let error_msg = crate::client::messages::ErrorMessage {
             code: "AUTH_FAILED".to_string(),
             message: "Authentication failed".to_string(),
-            details: None,
+            request_id: None,
         };
 
         let ws_message = WsMessage::Error(error_msg);
@@ -479,12 +478,12 @@ mod tests {
     #[ignore] // Requires test infrastructure
     async fn test_message_serialization_deserialization() {
         // Test that messages can be round-tripped through JSON
-        let request = ToolRequest {
-            request_id: "req-123".to_string(),
-            tool_name: "file_read".to_string(),
-            arguments: json!({"path": "/test/file.txt"}),
-            timeout_ms: Some(5000),
-        };
+        let request = ToolRequest::new(
+            "file_read",
+            json!({"path": "/test/file.txt"}),
+            "req-123",
+            "test-session",
+        );
 
         let ws_message = WsMessage::ToolRequest(request.clone());
         let json = serde_json::to_string(&ws_message).unwrap();
@@ -565,12 +564,12 @@ mod tests {
         let mut client = AcoClient::new("ws://localhost:8080", "test-session");
 
         // Would need mock server that accepts connection but doesn't respond
-        let request = ToolRequest {
-            request_id: "req-timeout".to_string(),
-            tool_name: "slow_tool".to_string(),
-            arguments: json!({}),
-            timeout_ms: None,
-        };
+        let request = ToolRequest::new(
+            "slow_tool",
+            json!({}),
+            "req-timeout",
+            "test-session",
+        );
 
         let result = client.execute_tool(request).await;
 

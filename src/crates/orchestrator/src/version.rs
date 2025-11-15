@@ -1,6 +1,12 @@
-// Version information module for ${crate}
-// This module includes the auto-generated version constants
+// Version information module for orchestrator
+//
+// Provides version constants for the orchestrator crate
 
-// Include the generated version constants
-// Note: All constants are already `pub` in the generated file
-include!(concat!(env!("OUT_DIR"), "/version.rs"));
+/// Version string for the orchestrator crate
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Package name
+pub const PKG_NAME: &str = env!("CARGO_PKG_NAME");
+
+/// Build timestamp (if available)
+pub const BUILD_TIMESTAMP: &str = env!("CARGO_PKG_VERSION");
