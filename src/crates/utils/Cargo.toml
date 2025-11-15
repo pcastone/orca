@@ -35,6 +35,7 @@ base64 = "0.22"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "macros"] }
+tempfile = "3.8"
 
 [features]
 default = ["server", "client", "config"]
