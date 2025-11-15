@@ -281,6 +281,11 @@ struct OpenAiCompletionTokensDetails {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+
+    // ============================================================
+    // Existing Tests
+    // ============================================================
 
     #[test]
     fn test_client_creation() {
@@ -306,6 +311,339 @@ mod tests {
 
         assert_eq!(openai_msg.role, "user");
         assert_eq!(openai_msg.content, Some("Hello".to_string()));
+    }
+
+    // ============================================================
+    // Phase 4.1: OpenAI Provider Tests
+    // ============================================================
+
+    #[test]
+    fn test_message_conversion_all_roles() {
+        let config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "gpt-4");
+        let client = OpenAiClient::new(config);
+
+        // Test System message
+        let sys_msg = Message::system("You are helpful");
+        let openai_sys = client.convert_message(&sys_msg);
+        assert_eq!(openai_sys.role, "system");
+        assert_eq!(openai_sys.content, Some("You are helpful".to_string()));
+
+        // Test Human/User message
+        let user_msg = Message::human("Hello");
+        let openai_user = client.convert_message(&user_msg);
+        assert_eq!(openai_user.role, "user");
+        assert_eq!(openai_user.content, Some("Hello".to_string()));
+
+        // Test Assistant message
+        let asst_msg = Message::assistant("Hi there!");
+        let openai_asst = client.convert_message(&asst_msg);
+        assert_eq!(openai_asst.role, "assistant");
+        assert_eq!(openai_asst.content, Some("Hi there!".to_string()));
+    }
+
+    #[test]
+    fn test_message_conversion_with_name() {
+        let config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "gpt-4");
+        let client = OpenAiClient::new(config);
+
+        let mut msg = Message::human("Hello");
+        msg.name = Some("user-123".to_string());
+
+        let openai_msg = client.convert_message(&msg);
+        assert_eq!(openai_msg.role, "user");
+        assert_eq!(openai_msg.name, Some("user-123".to_string()));
+    }
+
+    #[test]
+    fn test_config_with_organization() {
+        let mut config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "gpt-4");
+        config.organization = Some("org-123".to_string());
+
+        let client = OpenAiClient::new(config.clone());
+        assert_eq!(client.config.organization, Some("org-123".to_string()));
+    }
+
+    #[test]
+    fn test_config_with_custom_timeout() {
+        let config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "gpt-4")
+            .with_timeout(Duration::from_secs(10));
+
+        let client = OpenAiClient::new(config);
+        assert_eq!(client.config.timeout, Duration::from_secs(10));
+    }
+
+    #[test]
+    fn test_o1_model_detection() {
+        let config_o1 = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "o1-preview");
+        let client_o1 = OpenAiClient::new(config_o1);
+        assert!(client_o1.config.model.starts_with("o1"));
+
+        let config_o1_mini = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "o1-mini");
+        let client_o1_mini = OpenAiClient::new(config_o1_mini);
+        assert!(client_o1_mini.config.model.starts_with("o1"));
+
+        let config_gpt4 = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "gpt-4");
+        let client_gpt4 = OpenAiClient::new(config_gpt4);
+        assert!(!client_gpt4.config.model.starts_with("o1"));
+    }
+
+    #[test]
+    fn test_response_conversion_basic() {
+        let config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "gpt-4");
+        let client = OpenAiClient::new(config);
+
+        let request = ChatRequest::new(vec![Message::human("Hello")]);
+
+        let openai_response = OpenAiResponse {
+            id: "chatcmpl-123".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "gpt-4".to_string(),
+            choices: vec![OpenAiChoice {
+                index: 0,
+                message: OpenAiMessage {
+                    role: "assistant".to_string(),
+                    content: Some("Hi there!".to_string()),
+                    name: None,
+                    tool_call_id: None,
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: Some(OpenAiUsage {
+                prompt_tokens: 10,
+                completion_tokens: 20,
+                total_tokens: 30,
+                completion_tokens_details: None,
+            }),
+        };
+
+        let response = client.convert_response(&request, openai_response);
+
+        assert_eq!(response.message.text(), Some("Hi there!"));
+        assert_eq!(response.message.role, MessageRole::Assistant);
+        assert_eq!(response.usage.as_ref().unwrap().input_tokens, 10);
+        assert_eq!(response.usage.as_ref().unwrap().output_tokens, 20);
+        assert!(response.metadata.contains_key("model"));
+        assert!(response.metadata.contains_key("finish_reason"));
+    }
+
+    #[test]
+    fn test_response_conversion_with_reasoning_tokens() {
+        let config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "o1-preview");
+        let client = OpenAiClient::new(config);
+
+        let request = ChatRequest::new(vec![Message::human("Solve this problem")]);
+
+        let openai_response = OpenAiResponse {
+            id: "chatcmpl-o1-123".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "o1-preview".to_string(),
+            choices: vec![OpenAiChoice {
+                index: 0,
+                message: OpenAiMessage {
+                    role: "assistant".to_string(),
+                    content: Some("The answer is 42".to_string()),
+                    name: None,
+                    tool_call_id: None,
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: Some(OpenAiUsage {
+                prompt_tokens: 15,
+                completion_tokens: 50,
+                total_tokens: 65,
+                completion_tokens_details: Some(OpenAiCompletionTokensDetails {
+                    reasoning_tokens: Some(35),
+                }),
+            }),
+        };
+
+        let response = client.convert_response(&request, openai_response);
+
+        assert_eq!(response.usage.as_ref().unwrap().input_tokens, 15);
+        assert_eq!(response.usage.as_ref().unwrap().output_tokens, 50);
+        assert_eq!(response.usage.as_ref().unwrap().reasoning_tokens, Some(35));
+    }
+
+    #[test]
+    fn test_reasoning_extraction_with_think_tags() {
+        use langgraph_core::llm::ReasoningMode;
+
+        let config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "o1-preview");
+        let client = OpenAiClient::new(config);
+
+        let mut request = ChatRequest::new(vec![Message::human("Think about this")]);
+        request.config.reasoning_mode = ReasoningMode::Separated;
+
+        let openai_response = OpenAiResponse {
+            id: "chatcmpl-o1-456".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "o1-preview".to_string(),
+            choices: vec![OpenAiChoice {
+                index: 0,
+                message: OpenAiMessage {
+                    role: "assistant".to_string(),
+                    content: Some("<think>Let me analyze this step by step</think>The solution is X".to_string()),
+                    name: None,
+                    tool_call_id: None,
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: None,
+        };
+
+        let response = client.convert_response(&request, openai_response);
+
+        // Should extract reasoning from <think> tags
+        assert!(response.reasoning.is_some());
+        assert_eq!(response.reasoning.as_ref().unwrap().content, "Let me analyze this step by step");
+        assert_eq!(response.message.text(), Some("The solution is X"));
+    }
+
+    #[test]
+    fn test_reasoning_extraction_no_tags() {
+        use langgraph_core::llm::ReasoningMode;
+
+        let config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "o1-preview");
+        let client = OpenAiClient::new(config);
+
+        let mut request = ChatRequest::new(vec![Message::human("Simple question")]);
+        request.config.reasoning_mode = ReasoningMode::Separated;
+
+        let openai_response = OpenAiResponse {
+            id: "chatcmpl-o1-789".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "o1-preview".to_string(),
+            choices: vec![OpenAiChoice {
+                index: 0,
+                message: OpenAiMessage {
+                    role: "assistant".to_string(),
+                    content: Some("Simple answer without thinking".to_string()),
+                    name: None,
+                    tool_call_id: None,
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: None,
+        };
+
+        let response = client.convert_response(&request, openai_response);
+
+        // Should not extract reasoning if no tags present
+        assert!(response.reasoning.is_none());
+        assert_eq!(response.message.text(), Some("Simple answer without thinking"));
+    }
+
+    #[test]
+    fn test_reasoning_mode_disabled() {
+        use langgraph_core::llm::ReasoningMode;
+
+        let config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "o1-preview");
+        let client = OpenAiClient::new(config);
+
+        let mut request = ChatRequest::new(vec![Message::human("Question")]);
+        request.config.reasoning_mode = ReasoningMode::Disabled;
+
+        let openai_response = OpenAiResponse {
+            id: "chatcmpl-o1-999".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "o1-preview".to_string(),
+            choices: vec![OpenAiChoice {
+                index: 0,
+                message: OpenAiMessage {
+                    role: "assistant".to_string(),
+                    content: Some("<think>Hidden reasoning</think>Answer".to_string()),
+                    name: None,
+                    tool_call_id: None,
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: None,
+        };
+
+        let response = client.convert_response(&request, openai_response);
+
+        // Should not extract reasoning when mode is None
+        assert!(response.reasoning.is_none());
+        assert_eq!(response.message.text(), Some("<think>Hidden reasoning</think>Answer"));
+    }
+
+    // ============================================================
+    // Future Implementation Tests (Marked #[ignore])
+    // ============================================================
+
+    /// Test: Streaming support
+    ///
+    /// Verifies that OpenAI streaming returns token-by-token responses.
+    ///
+    /// NOTE: Currently ignored - streaming not yet implemented for OpenAI.
+    /// See line 209-212 in chat implementation.
+    #[tokio::test]
+    #[ignore]
+    async fn test_streaming_basic() {
+        let config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "gpt-4");
+        let client = OpenAiClient::new(config);
+
+        let request = ChatRequest::new(vec![Message::human("Count to 5")]);
+
+        // TODO: Currently returns error "Streaming not yet implemented"
+        // Once implemented, should work like:
+        // let stream = client.stream(request).await.unwrap();
+        // while let Some(result) = stream.receiver.recv().await {
+        //     match result {
+        //         Ok(event) => { /* process streaming event */ },
+        //         Err(_) => break,
+        //     }
+        // }
+
+        // For now, just verify it returns an error
+        let result = client.stream(request).await;
+        assert!(result.is_err());
+    }
+
+    /// Test: Tool calling support
+    ///
+    /// Verifies that OpenAI tool/function calling works correctly.
+    ///
+    /// NOTE: Currently ignored - tool calling not yet implemented in this client.
+    #[tokio::test]
+    #[ignore]
+    async fn test_tool_calling() {
+        let config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "gpt-4");
+        let client = OpenAiClient::new(config);
+
+        let request = ChatRequest::new(vec![Message::human("What's the weather?")]);
+
+        // TODO: Add tool definitions to request
+        // request.config.tools = vec![...];
+
+        let response = client.chat(request).await.unwrap();
+
+        // Should contain tool calls in response
+        assert!(response.message.tool_calls.is_some());
+    }
+
+    /// Test: Vision/multi-modal support
+    ///
+    /// Verifies that GPT-4 Vision handles image inputs correctly.
+    ///
+    /// NOTE: Currently ignored - multi-modal support not yet implemented.
+    #[tokio::test]
+    #[ignore]
+    async fn test_vision_support() {
+        let config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "gpt-4-vision-preview");
+        let client = OpenAiClient::new(config);
+
+        // TODO: Create message with image content
+        let request = ChatRequest::new(vec![Message::human("Describe this image")]);
+
+        let response = client.chat(request).await.unwrap();
+
+        assert!(response.message.text().is_some());
     }
 }
 
