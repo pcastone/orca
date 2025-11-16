@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Streaming Execution - rLangGraph</title>
+  <link rel="stylesheet" href="../../dist/css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+</head>
+<body class="font-sans antialiased">
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center">
+          <a href="../..//" class="flex items-center space-x-2">
+            <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+              <span class="text-white font-bold text-lg">r</span>
+            </div>
+            <span class="text-xl font-bold text-gray-900">rLangGraph</span>
+          </a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <article class="prose prose-lg max-w-none">
+      <div class="not-prose mb-8">
+        <div class="flex items-center gap-3 mb-4">
+          <h1 class="text-4xl font-bold text-gray-900 mb-0">Streaming Execution</h1>
+          <span class="px-3 py-1 text-sm font-medium bg-purple-100 text-purple-800 rounded-full">Advanced</span>
+        </div>
+        <p class="text-xl text-gray-600">
+          Stream real-time events during execution for responsive UIs and live progress updates.
+        </p>
+      </div>
+
+      <section>
+        <h2>Stream Types</h2>
+        <p>rLangGraph emits multiple event types during execution:</p>
+        <ul>
+          <li><strong>Values:</strong> Full state snapshots after each step</li>
+          <li><strong>Updates:</strong> Incremental state changes</li>
+          <li><strong>Tokens:</strong> LLM tokens as they're generated</li>
+          <li><strong>Checkpoints:</strong> Persistence events</li>
+          <li><strong>Debug:</strong> Execution trace information</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Streaming Example</h2>
+        <div class="code-block not-prose">
+          <pre><code class="language-rust">use langgraph_core::{StateGraph, StreamEvent};
+use futures::StreamExt;
+
+#[tokio::main]
+async fn main() -> Result&lt;(), GraphError&gt; {
+    let compiled = graph.compile()?;
+
+    // Stream execution events
+    let mut stream = compiled.stream(initial_state).await?;
+
+    while let Some(event) = stream.next().await {
+        match event {
+            StreamEvent::Values(state) => {
+                println!("State updated: {:?}", state);
+            }
+            StreamEvent::Token(token) => {
+                print!("{}", token);  // Print tokens as they arrive
+                stdout().flush()?;
+            }
+            StreamEvent::Checkpoint(id) => {
+                println!("\nCheckpoint created: {}", id);
+            }
+            StreamEvent::Debug(msg) => {
+                eprintln!("Debug: {}", msg);
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
+}</code></pre>
+        </div>
+      </section>
+
+      <section>
+        <h2>Token-by-Token Streaming</h2>
+        <p>Stream LLM responses token-by-token for ChatGPT-like UX:</p>
+        <div class="code-block not-prose">
+          <pre><code class="language-rust">// Enable streaming in LLM config
+let config = RemoteLlmConfig::new(api_key, endpoint, model)
+    .with_streaming(true);
+
+let client = OpenAiClient::new(config);
+
+// Stream will emit Token events
+let mut stream = compiled.stream_with_llm(state, client).await?;
+
+while let Some(event) = stream.next().await {
+    if let StreamEvent::Token(token) = event {
+        print!("{}", token);
+        stdout().flush()?;
+    }
+}
+println!();  // Newline at end</code></pre>
+        </div>
+      </section>
+
+      <section>
+        <h2>WebSocket Integration</h2>
+        <p>Stream events to web clients over WebSocket:</p>
+        <div class="code-block not-prose">
+          <pre><code class="language-rust">use tokio_tungstenite::tungstenite::Message as WsMessage;
+
+async fn handle_websocket(ws: WebSocket) {
+    let mut stream = compiled.stream(initial_state).await.unwrap();
+
+    while let Some(event) = stream.next().await {
+        let json = serde_json::to_string(&event).unwrap();
+        if ws.send(WsMessage::Text(json)).await.is_err() {
+            break;  // Client disconnected
+        }
+    }
+}</code></pre>
+        </div>
+      </section>
+
+      <section>
+        <h2>Best Practices</h2>
+        <ul>
+          <li>Use streaming for user-facing applications (better UX)</li>
+          <li>Handle backpressure - slow consumers may need buffering</li>
+          <li>Implement timeouts for long-running streams</li>
+          <li>Consider compression for WebSocket streaming</li>
+        </ul>
+      </section>
+    </article>
+  </div>
+
+  <footer class="bg-gray-900 text-gray-400 py-12 mt-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center text-sm">
+        <p>&copy; 2025 acolib. Built with Rust and Tailwind CSS.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+</body>
+</html>

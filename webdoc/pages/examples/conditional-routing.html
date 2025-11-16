@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Conditional Routing - rLangGraph</title>
+  <link rel="stylesheet" href="../../dist/css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+</head>
+<body class="font-sans antialiased">
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center">
+          <a href="../../" class="flex items-center space-x-2">
+            <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+              <span class="text-white font-bold text-lg">r</span>
+            </div>
+            <span class="text-xl font-bold text-gray-900">rLangGraph</span>
+          </a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <article class="prose prose-lg max-w-none">
+      <div class="not-prose mb-8">
+        <div class="flex items-center gap-3 mb-4">
+          <h1 class="text-4xl font-bold text-gray-900 mb-0">Conditional Routing</h1>
+          <span class="px-3 py-1 text-sm font-medium bg-blue-100 text-blue-800 rounded-full">Intermediate</span>
+        </div>
+        <p class="text-xl text-gray-600">
+          Build dynamic workflows with conditional edges that route based on state, LLM output, or custom logic.
+        </p>
+      </div>
+
+      <section>
+        <h2>Routing Types</h2>
+        <ul>
+          <li><strong>State-based:</strong> Route based on state values</li>
+          <li><strong>LLM-based:</strong> Let LLM decide next step</li>
+          <li><strong>Rule-based:</strong> Business logic determines path</li>
+          <li><strong>Multi-way:</strong> Multiple possible destinations</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Example: Customer Intent Router</h2>
+        <div class="code-block not-prose">
+          <pre><code class="language-rust">use langgraph_core::{StateGraph, Message, GraphError};
+
+#[derive(Clone, Serialize, Deserialize)]
+struct CustomerState {
+    intent: Option&lt;String&gt;,
+    messages: Vec&lt;Message&gt;,
+}
+
+async fn classify_intent(
+    mut state: CustomerState,
+    llm: &LlmClient,
+) -> Result&lt;CustomerState, GraphError&gt; {
+    let response = llm.chat(&[
+        Message::system(
+            "Classify the customer's intent as: billing, technical, sales, or other"
+        ),
+        state.messages.last().unwrap().clone(),
+    ]).await?;
+
+    state.intent = Some(response.to_lowercase());
+    Ok(state)
+}
+
+// Routing function - decides next node
+fn route_by_intent(state: &CustomerState) -> String {
+    match state.intent.as_deref() {
+        Some("billing") => "billing_team",
+        Some("technical") => "tech_support",
+        Some("sales") => "sales_team",
+        _ => "general_support",
+    }.to_string()
+}
+
+async fn billing_team(state: CustomerState) -> Result&lt;CustomerState, GraphError&gt; {
+    println!("Routing to billing team...");
+    Ok(state)
+}
+
+async fn tech_support(state: CustomerState) -> Result&lt;CustomerState, GraphError&gt; {
+    println!("Routing to technical support...");
+    Ok(state)
+}
+
+async fn sales_team(state: CustomerState) -> Result&lt;CustomerState, GraphError&gt; {
+    println!("Routing to sales team...");
+    Ok(state)
+}
+
+async fn general_support(state: CustomerState) -> Result&lt;CustomerState, GraphError&gt; {
+    println!("Routing to general support...");
+    Ok(state)
+}
+
+#[tokio::main]
+async fn main() -> Result&lt;(), GraphError&gt; {
+    let llm = LlmClient::new(env::var("ANTHROPIC_API_KEY")?);
+
+    let mut graph = StateGraph::new();
+
+    // Add nodes
+    graph.add_node("classify", |s| classify_intent(s, &llm));
+    graph.add_node("billing_team", billing_team);
+    graph.add_node("tech_support", tech_support);
+    graph.add_node("sales_team", sales_team);
+    graph.add_node("general_support", general_support);
+
+    // Start with classification
+    graph.add_edge("__start__", "classify");
+
+    // Conditional routing from classify
+    graph.add_conditional_edges("classify", route_by_intent);
+
+    // All teams route to end
+    graph.add_edge("billing_team", "__end__");
+    graph.add_edge("tech_support", "__end__");
+    graph.add_edge("sales_team", "__end__");
+    graph.add_edge("general_support", "__end__");
+
+    let compiled = graph.compile()?;
+
+    let result = compiled.invoke(CustomerState {
+        intent: None,
+        messages: vec![Message::human(
+            "My credit card was charged twice this month"
+        )],
+    }).await?;
+
+    println!("Routed to: {:?}", result.intent);
+    Ok(())
+}</code></pre>
+        </div>
+      </section>
+
+      <section>
+        <h2>Advanced: Multi-Output Routing</h2>
+        <p>Return a list of next nodes to execute in parallel:</p>
+        <div class="code-block not-prose">
+          <pre><code class="language-rust">fn route_parallel(state: &State) -> Vec&lt;String&gt; {
+    let mut next_nodes = vec![];
+
+    if state.needs_validation {
+        next_nodes.push("validate".to_string());
+    }
+    if state.needs_enrichment {
+        next_nodes.push("enrich".to_string());
+    }
+    if state.needs_notification {
+        next_nodes.push("notify".to_string());
+    }
+
+    // All selected nodes execute in parallel
+    next_nodes
+}
+
+graph.add_conditional_edges_parallel("process", route_parallel);</code></pre>
+        </div>
+      </section>
+
+      <section>
+        <h2>Pattern: Retry with Escalation</h2>
+        <div class="code-block not-prose">
+          <pre><code class="language-rust">fn retry_or_escalate(state: &State) -> String {
+    if state.retry_count < 3 {
+        "retry".to_string()
+    } else if state.error_severity == "critical" {
+        "escalate".to_string()
+    } else {
+        "fail_gracefully".to_string()
+    }
+}</code></pre>
+        </div>
+      </section>
+    </article>
+  </div>
+
+  <footer class="bg-gray-900 text-gray-400 py-12 mt-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center text-sm">
+        <p>&copy; 2025 acolib. Built with Rust and Tailwind CSS.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+</body>
+</html>
