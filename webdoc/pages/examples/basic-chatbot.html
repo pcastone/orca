@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Build a basic chatbot with rLangGraph - Complete tutorial with code examples">
+  <meta name="keywords" content="rlangraph, chatbot, rust, ai, tutorial, example">
+  <title>Basic Chatbot Example - rLangGraph</title>
+
+  <link rel="stylesheet" href="../../dist/css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="font-sans antialiased" data-category="Examples">
+  <!-- Header (same structure) -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center">
+          <a href="../../" class="flex items-center space-x-2">
+            <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+              <span class="text-white font-bold text-lg">r</span>
+            </div>
+            <span class="text-xl font-bold text-gray-900">rLangGraph</span>
+          </a>
+        </div>
+
+        <div class="hidden md:flex items-center space-x-8">
+          <a href="../../" class="nav-link">Home</a>
+          <a href="../getting-started/" class="nav-link">Getting Started</a>
+          <a href="../architecture/" class="nav-link">Architecture</a>
+          <a href="../api/" class="nav-link">API Reference</a>
+          <a href="../guides/" class="nav-link">Guides</a>
+          <a href="../examples/" class="nav-link nav-link-active">Examples</a>
+        </div>
+
+        <div class="hidden md:flex items-center space-x-4">
+          <div class="relative">
+            <input type="search" id="search-input" placeholder="Search docs..." class="search-input w-64 text-sm">
+            <div id="search-results" class="hidden absolute top-full mt-2 w-96 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto scrollbar-thin"></div>
+          </div>
+          <a href="https://github.com/pcastone/orca" target="_blank" rel="noopener" class="text-gray-700 hover:text-primary-600 transition-colors">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+            </svg>
+          </a>
+        </div>
+
+        <button id="mobile-menu-button" class="md:hidden p-2 rounded-lg text-gray-700 hover:bg-gray-100">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <div id="search-overlay" class="hidden fixed inset-0 bg-black bg-opacity-25 z-40"></div>
+
+  <!-- Main Content -->
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex flex-col lg:flex-row gap-8">
+      <!-- Sidebar TOC -->
+      <aside class="lg:w-64 flex-shrink-0">
+        <div class="sticky top-24">
+          <nav class="bg-white rounded-lg border border-gray-200 p-4">
+            <h2 class="font-semibold text-gray-900 mb-3">On This Page</h2>
+            <ul class="space-y-1 text-sm">
+              <li><a href="#overview" class="toc-link">Overview</a></li>
+              <li><a href="#prerequisites" class="toc-link">Prerequisites</a></li>
+              <li><a href="#complete-code" class="toc-link">Complete Code</a></li>
+              <li><a href="#step-by-step" class="toc-link">Step-by-Step Breakdown</a></li>
+              <li><a href="#running" class="toc-link">Running the Example</a></li>
+              <li><a href="#expected-output" class="toc-link">Expected Output</a></li>
+              <li><a href="#key-concepts" class="toc-link">Key Concepts</a></li>
+              <li><a href="#next-steps" class="toc-link">Next Steps</a></li>
+            </ul>
+          </nav>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="flex-1 min-w-0">
+        <!-- Breadcrumb -->
+        <div class="breadcrumb mb-6">
+          <a href="../../" class="hover:text-primary-600">Home</a>
+          <span class="breadcrumb-separator">/</span>
+          <a href="../examples/" class="hover:text-primary-600">Examples</a>
+          <span class="breadcrumb-separator">/</span>
+          <span class="text-gray-900">Basic Chatbot</span>
+        </div>
+
+        <article class="prose prose-lg max-w-none">
+          <!-- Title Section -->
+          <div class="not-prose mb-8">
+            <div class="flex items-center gap-3 mb-4">
+              <h1 class="text-4xl font-bold text-gray-900 mb-0">Basic Chatbot</h1>
+              <span class="px-3 py-1 text-sm font-medium bg-green-100 text-green-800 rounded-full">Beginner</span>
+            </div>
+            <p class="text-xl text-gray-600">
+              Build your first conversational AI agent with rLangGraph. This tutorial covers state management,
+              message history, and basic LLM integration.
+            </p>
+            <div class="flex items-center gap-6 mt-4 text-sm text-gray-600">
+              <span class="flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                15 min read
+              </span>
+              <span class="flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"/>
+                </svg>
+                Rust
+              </span>
+            </div>
+          </div>
+
+          <!-- Overview Section -->
+          <section id="overview">
+            <h2>Overview</h2>
+            <p>
+              In this tutorial, you'll build a simple conversational chatbot using rLangGraph. The chatbot will:
+            </p>
+            <ul>
+              <li>Maintain conversation history across multiple turns</li>
+              <li>Use state management with the <code>AppendReducer</code></li>
+              <li>Integrate with an LLM (Claude, OpenAI, or Ollama)</li>
+              <li>Handle user input and generate responses</li>
+            </ul>
+
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-4 my-6 not-prose">
+              <div class="flex">
+                <div class="flex-shrink-0">
+                  <svg class="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                  </svg>
+                </div>
+                <div class="ml-3">
+                  <p class="text-sm text-blue-900">
+                    <strong>What you'll learn:</strong> Core rLangGraph concepts including StateGraph, state reducers,
+                    message types, and basic LLM integration.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Prerequisites -->
+          <section id="prerequisites">
+            <h2>Prerequisites</h2>
+            <p>Before starting, ensure you have:</p>
+            <ul>
+              <li><strong>Rust 1.75+</strong> installed (<code>rustc --version</code>)</li>
+              <li><strong>Cargo</strong> package manager</li>
+              <li>An <strong>API key</strong> for your chosen LLM provider:
+                <ul>
+                  <li>Anthropic Claude: <code>ANTHROPIC_API_KEY</code></li>
+                  <li>OpenAI: <code>OPENAI_API_KEY</code></li>
+                  <li>Or a local Ollama instance running</li>
+                </ul>
+              </li>
+            </ul>
+
+            <h3>Dependencies</h3>
+            <p>Add these to your <code>Cargo.toml</code>:</p>
+            <div class="code-block not-prose">
+              <pre><code class="language-toml">[dependencies]
+langgraph-core = "0.1"
+langgraph-checkpoint = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.35", features = ["full"] }
+anyhow = "1.0"
+
+# Choose your LLM provider
+# anthropic = "0.1"  # For Claude
+# async-openai = "0.14"  # For OpenAI
+# ollama-rs = "0.1"  # For Ollama</code></pre>
+            </div>
+          </section>
+
+          <!-- Complete Code -->
+          <section id="complete-code">
+            <h2>Complete Code</h2>
+            <p>
+              Here's the complete chatbot implementation. We'll break it down step-by-step in the next section.
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">use langgraph_core::{StateGraph, Message, GraphError};
+use langgraph_checkpoint::MemoryCheckpointSaver;
+use serde::{Deserialize, Serialize};
+use std::env;
+
+// Define the chatbot state
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct ChatbotState {
+    // Messages array with AppendReducer behavior
+    messages: Vec&lt;Message&gt;,
+}
+
+// Chatbot node function
+async fn chatbot_node(mut state: ChatbotState) -> Result&lt;ChatbotState, GraphError&gt; {
+    // Get the last user message
+    let last_message = state.messages.last()
+        .ok_or_else(|| GraphError::InvalidState("No messages in state".to_string()))?;
+
+    // Simple echo response (replace with actual LLM call)
+    let response = format!("You said: {}", last_message.content());
+
+    // Add assistant response to messages
+    state.messages.push(Message::assistant(response));
+
+    Ok(state)
+}
+
+// Build and run the chatbot
+#[tokio::main]
+async fn main() -> Result&lt;(), GraphError&gt; {
+    // Create the state graph
+    let mut graph = StateGraph::new();
+
+    // Add the chatbot node
+    graph.add_node("chatbot", chatbot_node);
+
+    // Define edges: start -> chatbot -> end
+    graph.add_edge("__start__", "chatbot");
+    graph.add_edge("chatbot", "__end__");
+
+    // Compile the graph with a checkpoint saver
+    let checkpointer = MemoryCheckpointSaver::new();
+    let compiled = graph.compile()
+        .with_checkpointer(checkpointer);
+
+    // Create initial state
+    let initial_state = ChatbotState {
+        messages: vec![
+            Message::system("You are a helpful assistant."),
+            Message::human("Hello! What can you help me with?"),
+        ],
+    };
+
+    // Run the graph
+    let result = compiled.invoke(initial_state).await?;
+
+    // Print the conversation
+    println!("Conversation:");
+    for msg in &result.messages {
+        match msg {
+            Message::System(content) => println!("System: {}", content),
+            Message::Human(content) => println!("User: {}", content),
+            Message::Assistant(content) => println!("Assistant: {}", content),
+            _ => {}
+        }
+    }
+
+    Ok(())
+}</code></pre>
+            </div>
+          </section>
+
+          <!-- Step-by-Step Breakdown -->
+          <section id="step-by-step">
+            <h2>Step-by-Step Breakdown</h2>
+
+            <h3>Step 1: Define the State</h3>
+            <p>
+              First, we define the chatbot's state structure. The <code>messages</code> field uses
+              <code>Vec&lt;Message&gt;</code> which automatically uses the <code>AppendReducer</code> -
+              new messages are appended to the existing array.
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">#[derive(Clone, Debug, Serialize, Deserialize)]
+struct ChatbotState {
+    // Messages are accumulated across turns
+    messages: Vec&lt;Message&gt;,
+}</code></pre>
+            </div>
+
+            <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 my-6 not-prose">
+              <p class="text-sm text-yellow-900">
+                <strong>Note:</strong> The <code>AppendReducer</code> ensures that when multiple nodes
+                add messages, they're all preserved in order. This is crucial for maintaining conversation history.
+              </p>
+            </div>
+
+            <h3>Step 2: Implement the Chatbot Node</h3>
+            <p>
+              The chatbot node receives the current state, processes the last message, and returns
+              an updated state with the assistant's response.
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">async fn chatbot_node(mut state: ChatbotState) -> Result&lt;ChatbotState, GraphError&gt; {
+    // Get the last message (user input)
+    let last_message = state.messages.last()
+        .ok_or_else(|| GraphError::InvalidState("No messages".to_string()))?;
+
+    // Generate response (simplified - use LLM in production)
+    let response = format!("You said: {}", last_message.content());
+
+    // Add response to message history
+    state.messages.push(Message::assistant(response));
+
+    Ok(state)
+}</code></pre>
+            </div>
+
+            <h3>Step 3: Build the Graph</h3>
+            <p>
+              Create a <code>StateGraph</code>, add the chatbot node, and define the execution flow.
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">let mut graph = StateGraph::new();
+
+// Add node
+graph.add_node("chatbot", chatbot_node);
+
+// Define flow: start -> chatbot -> end
+graph.add_edge("__start__", "chatbot");
+graph.add_edge("chatbot", "__end__");</code></pre>
+            </div>
+
+            <h3>Step 4: Add Checkpointing</h3>
+            <p>
+              Compile the graph with a checkpoint saver to enable state persistence and resume capability.
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">let checkpointer = MemoryCheckpointSaver::new();
+let compiled = graph.compile()
+    .with_checkpointer(checkpointer);</code></pre>
+            </div>
+
+            <h3>Step 5: Execute the Graph</h3>
+            <p>
+              Create the initial state with a system message and user input, then invoke the graph.
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">let initial_state = ChatbotState {
+    messages: vec![
+        Message::system("You are a helpful assistant."),
+        Message::human("Hello! What can you help me with?"),
+    ],
+};
+
+let result = compiled.invoke(initial_state).await?;</code></pre>
+            </div>
+          </section>
+
+          <!-- Running the Example -->
+          <section id="running">
+            <h2>Running the Example</h2>
+
+            <h3>1. Create a new project</h3>
+            <div class="code-block not-prose">
+              <pre><code class="language-bash">cargo new chatbot-example
+cd chatbot-example</code></pre>
+            </div>
+
+            <h3>2. Add dependencies to Cargo.toml</h3>
+            <p>Copy the dependencies from the Prerequisites section above.</p>
+
+            <h3>3. Replace src/main.rs</h3>
+            <p>Copy the complete code into <code>src/main.rs</code>.</p>
+
+            <h3>4. Run the chatbot</h3>
+            <div class="code-block not-prose">
+              <pre><code class="language-bash">cargo run</code></pre>
+            </div>
+          </section>
+
+          <!-- Expected Output -->
+          <section id="expected-output">
+            <h2>Expected Output</h2>
+            <p>When you run the chatbot, you should see output similar to:</p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-plaintext">Conversation:
+System: You are a helpful assistant.
+User: Hello! What can you help me with?
+Assistant: You said: Hello! What can you help me with?</code></pre>
+            </div>
+          </section>
+
+          <!-- Key Concepts -->
+          <section id="key-concepts">
+            <h2>Key Concepts</h2>
+
+            <div class="space-y-6 not-prose">
+              <div class="card">
+                <h3 class="text-xl font-semibold text-primary-700 mb-2">StateGraph</h3>
+                <p class="text-gray-700">
+                  The core abstraction for building agent workflows. It manages nodes, edges, and state flow.
+                </p>
+              </div>
+
+              <div class="card">
+                <h3 class="text-xl font-semibold text-primary-700 mb-2">Message Types</h3>
+                <p class="text-gray-700 mb-2">rLangGraph supports multiple message types:</p>
+                <ul class="list-disc pl-6 text-gray-700 space-y-1">
+                  <li><code>Message::system()</code> - System instructions for the LLM</li>
+                  <li><code>Message::human()</code> - User input</li>
+                  <li><code>Message::assistant()</code> - LLM responses</li>
+                  <li><code>Message::tool_call()</code> - Tool invocations</li>
+                  <li><code>Message::tool_result()</code> - Tool results</li>
+                </ul>
+              </div>
+
+              <div class="card">
+                <h3 class="text-xl font-semibold text-primary-700 mb-2">State Reducers</h3>
+                <p class="text-gray-700">
+                  <code>Vec&lt;Message&gt;</code> automatically uses <code>AppendReducer</code>,
+                  which combines messages from parallel nodes by appending them. This ensures
+                  no messages are lost during execution.
+                </p>
+              </div>
+
+              <div class="card">
+                <h3 class="text-xl font-semibold text-primary-700 mb-2">Checkpointing</h3>
+                <p class="text-gray-700">
+                  The <code>MemoryCheckpointSaver</code> stores state snapshots after each step,
+                  enabling time-travel debugging and workflow resumption.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <!-- Next Steps -->
+          <section id="next-steps">
+            <h2>Next Steps</h2>
+            <p>Now that you've built a basic chatbot, you can:</p>
+
+            <div class="grid md:grid-cols-2 gap-4 not-prose mt-6">
+              <a href="react-agent.html" class="card hover:shadow-lg transition-shadow">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">Add Tool Support</h3>
+                <p class="text-sm text-gray-600">
+                  Learn how to give your chatbot access to external tools like web search,
+                  calculators, and APIs with the ReAct pattern.
+                </p>
+              </a>
+
+              <a href="streaming.html" class="card hover:shadow-lg transition-shadow">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">Enable Streaming</h3>
+                <p class="text-sm text-gray-600">
+                  Stream responses in real-time for a better user experience, showing
+                  tokens as they're generated.
+                </p>
+              </a>
+
+              <a href="checkpointing.html" class="card hover:shadow-lg transition-shadow">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">Persist Conversations</h3>
+                <p class="text-sm text-gray-600">
+                  Use SQLite or PostgreSQL checkpointers to save conversations across sessions
+                  and enable multi-user support.
+                </p>
+              </a>
+
+              <a href="human-in-loop.html" class="card hover:shadow-lg transition-shadow">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">Add Human Approval</h3>
+                <p class="text-sm text-gray-600">
+                  Implement human-in-the-loop patterns where the chatbot pauses for approval
+                  before taking sensitive actions.
+                </p>
+              </a>
+            </div>
+          </section>
+
+          <!-- Troubleshooting -->
+          <div class="bg-gray-50 rounded-lg p-6 my-8 not-prose">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Common Issues</h3>
+            <div class="space-y-4">
+              <div>
+                <h4 class="font-medium text-gray-900 mb-1">Graph compilation fails</h4>
+                <p class="text-sm text-gray-600">
+                  Ensure all nodes have edges connecting them. Every node must be reachable from
+                  <code>__start__</code> and must reach <code>__end__</code>.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-medium text-gray-900 mb-1">State not updating</h4>
+                <p class="text-sm text-gray-600">
+                  Make sure your node function returns the modified state. The state is immutable
+                  by default - you must return a new/modified copy.
+                </p>
+              </div>
+              <div>
+                <h4 class="font-medium text-gray-900 mb-1">Messages disappearing</h4>
+                <p class="text-sm text-gray-600">
+                  Verify you're using <code>Vec&lt;Message&gt;</code> for the messages field.
+                  This ensures the <code>AppendReducer</code> is used automatically.
+                </p>
+              </div>
+            </div>
+          </div>
+        </article>
+      </main>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="bg-gray-900 text-gray-400 py-12 mt-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid md:grid-cols-4 gap-8 mb-8">
+        <div>
+          <h3 class="text-white font-semibold mb-4">rLangGraph</h3>
+          <p class="text-sm">A Rust port of LangGraph for building stateful AI agent workflows.</p>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Documentation</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="../getting-started/" class="hover:text-white transition-colors">Getting Started</a></li>
+            <li><a href="../architecture/" class="hover:text-white transition-colors">Architecture</a></li>
+            <li><a href="../api/" class="hover:text-white transition-colors">API Reference</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Resources</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="../examples/" class="hover:text-white transition-colors">Examples</a></li>
+            <li><a href="https://github.com/pcastone/orca" target="_blank" rel="noopener" class="hover:text-white transition-colors">GitHub</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Project</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="https://github.com/pcastone/orca/blob/main/LICENSE" target="_blank" rel="noopener" class="hover:text-white transition-colors">License</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-gray-800 pt-8 text-center text-sm">
+        <p>&copy; 2025 acolib. Built with Rust and Tailwind CSS.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+  <script src="../../src/js/navigation.js"></script>
+  <script src="../../src/js/search.js"></script>
+</body>
+</html>
