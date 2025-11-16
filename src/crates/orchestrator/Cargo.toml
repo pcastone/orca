@@ -47,6 +47,9 @@ prost = "0.12"
 # LDAP
 ldap3 = "0.11"
 
+# Time handling
+time = { version = "0.3", features = ["macros", "formatting"] }
+
 # Web framework and HTTP
 axum = "0.7"
 tower-http = { version = "0.5", features = ["cors", "trace"] }
