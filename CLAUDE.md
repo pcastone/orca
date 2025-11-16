@@ -209,9 +209,15 @@ Location priority:
 Example structure:
 ```toml
 [llm]
-provider = "anthropic"  # or "openai", "ollama", etc.
+# Remote providers (requires API key)
+provider = "anthropic"  # or "openai", "gemini", "grok", "deepseek", "openrouter"
 model = "claude-3-sonnet"
 api_key = "${ANTHROPIC_API_KEY}"  # env var expansion
+
+# Local providers (no API key needed)
+# provider = "ollama"  # or "llama_cpp", "lmstudio"
+# model = "llama2"
+# base_url = "http://localhost:11434"
 
 [execution]
 streaming = true  # Enable token streaming
@@ -219,11 +225,15 @@ streaming = true  # Enable token streaming
 
 ### Environment Variables
 
-All LLM providers support API keys via environment:
-- `OPENAI_API_KEY`
-- `ANTHROPIC_API_KEY`
-- `GOOGLE_API_KEY`
-- etc.
+All remote LLM providers support API keys via environment:
+- `OPENAI_API_KEY` - OpenAI (GPT-4, o1)
+- `ANTHROPIC_API_KEY` - Anthropic Claude
+- `GOOGLE_API_KEY` - Google Gemini
+- `XAI_API_KEY` - xAI Grok
+- `DEEPSEEK_API_KEY` - Deepseek (including R1)
+- `OPENROUTER_API_KEY` - OpenRouter
+
+Local providers (Ollama, llama.cpp, LM Studio) don't require API keys.
 
 Use `utils::config` helpers for env var loading.
 
@@ -274,14 +284,74 @@ let graph = StateGraph::new()
 
 ### 5. LLM Integration
 
+#### Remote Providers
+
 ```rust
-use llm::remote::OpenAiClient;
 use llm::config::RemoteLlmConfig;
 use langgraph_core::llm::{ChatModel, ChatRequest};
 
+// OpenAI (GPT-4, o1)
+use llm::remote::OpenAiClient;
 let config = RemoteLlmConfig::from_env("OPENAI_API_KEY",
-    "https://api.openai.com/v1", "gpt-4");
+    "https://api.openai.com/v1", "gpt-4")?;
 let client = OpenAiClient::new(config);
+
+// Anthropic Claude
+use llm::remote::ClaudeClient;
+let config = RemoteLlmConfig::from_env("ANTHROPIC_API_KEY",
+    "https://api.anthropic.com/v1", "claude-3-opus-20240229")?;
+let client = ClaudeClient::new(config);
+
+// Google Gemini
+use llm::remote::GeminiClient;
+let config = RemoteLlmConfig::from_env("GOOGLE_API_KEY",
+    "https://generativelanguage.googleapis.com/v1beta", "gemini-pro")?;
+let client = GeminiClient::new(config);
+
+// xAI Grok
+use llm::remote::GrokClient;
+let config = RemoteLlmConfig::from_env("XAI_API_KEY",
+    "https://api.x.ai/v1", "grok-beta")?;
+let client = GrokClient::new(config);
+
+// Deepseek (including R1 thinking model)
+use llm::remote::DeepseekClient;
+let config = RemoteLlmConfig::from_env("DEEPSEEK_API_KEY",
+    "https://api.deepseek.com", "deepseek-reasoner")?;
+let client = DeepseekClient::new(config);
+
+// OpenRouter (unified API)
+use llm::remote::OpenRouterClient;
+let config = RemoteLlmConfig::from_env("OPENROUTER_API_KEY",
+    "https://openrouter.ai/api/v1", "anthropic/claude-3-opus")?;
+let client = OpenRouterClient::new(config);
+
+// Use any client
+let response = client.chat(request).await?;
+```
+
+#### Local Providers
+
+```rust
+use llm::config::LocalLlmConfig;
+use langgraph_core::llm::{ChatModel, ChatRequest};
+
+// Ollama
+use llm::local::OllamaClient;
+let config = LocalLlmConfig::new("http://localhost:11434", "llama2");
+let client = OllamaClient::new(config);
+
+// llama.cpp
+use llm::local::LlamaCppClient;
+let config = LocalLlmConfig::new("http://localhost:8080", "llama-2-7b");
+let client = LlamaCppClient::new(config);
+
+// LM Studio
+use llm::local::LmStudioClient;
+let config = LocalLlmConfig::new("http://localhost:1234/v1", "local-model");
+let client = LmStudioClient::new(config);
+
+// Use any client
 let response = client.chat(request).await?;
 ```
 

@@ -164,19 +164,39 @@ aco/
 
 ```
 llm/
-├── provider/
-│   ├── openai.rs      # OpenAI GPT models
-│   ├── anthropic.rs   # Claude models
-│   └── generic.rs     # Generic HTTP provider
-├── models.rs          # Model definitions
-└── errors.rs          # Provider errors
+├── remote/            # Cloud-hosted LLM APIs
+│   ├── claude.rs      # Anthropic Claude models (Claude 3 Opus, Sonnet, Haiku)
+│   ├── openai.rs      # OpenAI models (GPT-4, GPT-3.5, o1)
+│   ├── gemini.rs      # Google Gemini models (Gemini Pro, Gemini Pro Vision)
+│   ├── grok.rs        # xAI Grok models
+│   ├── deepseek.rs    # Deepseek models including R1 (thinking model)
+│   └── openrouter.rs  # Unified API for multiple providers
+├── local/             # Local LLM servers
+│   ├── ollama.rs      # Ollama local LLM runner
+│   ├── llama_cpp.rs   # llama.cpp server integration
+│   └── lmstudio.rs    # LM Studio local interface
+├── config.rs          # Provider configuration
+├── error.rs           # Provider errors
+└── provider_utils.rs  # Shared utilities
 ```
 
 **Key Responsibilities:**
-- OpenAI API integration
-- Anthropic API integration
-- Token counting
-- Error handling and retries
+- Remote provider integration (6 providers)
+  - Claude (Anthropic)
+  - OpenAI (GPT-4, o1)
+  - Gemini (Google)
+  - Grok (xAI)
+  - Deepseek (including R1 thinking model)
+  - OpenRouter (unified API)
+- Local provider integration (3 providers)
+  - Ollama
+  - llama.cpp
+  - LM Studio
+- Thinking model support (o1, R1 series) with reasoning extraction
+- Token counting and usage tracking
+- Streaming and non-streaming responses
+- Error handling with retries and backoff
+- Unified ChatModel trait interface
 
 ### 7. tooling
 
