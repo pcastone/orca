@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Customer Support Bot - rLangGraph</title>
+  <link rel="stylesheet" href="../../dist/css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+</head>
+<body class="font-sans antialiased">
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center">
+          <a href="../../" class="flex items-center space-x-2">
+            <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+              <span class="text-white font-bold text-lg">r</span>
+            </div>
+            <span class="text-xl font-bold text-gray-900">rLangGraph</span>
+          </a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <article class="prose prose-lg max-w-none">
+      <div class="not-prose mb-8">
+        <div class="flex items-center gap-3 mb-4">
+          <h1 class="text-4xl font-bold text-gray-900 mb-0">Customer Support Bot</h1>
+          <span class="px-3 py-1 text-sm font-medium bg-purple-100 text-purple-800 rounded-full">Advanced</span>
+        </div>
+        <p class="text-xl text-gray-600">
+          Production-ready customer support agent with knowledge base search, ticket creation,
+          and escalation to human agents.
+        </p>
+      </div>
+
+      <section>
+        <h2>Features</h2>
+        <ul>
+          <li><strong>Knowledge Base Search:</strong> RAG over documentation</li>
+          <li><strong>Ticket Management:</strong> Create, update, track tickets</li>
+          <li><strong>Sentiment Analysis:</strong> Detect frustrated customers</li>
+          <li><strong>Escalation:</strong> Hand off to human agents when needed</li>
+          <li><strong>Multi-Session:</strong> Continue conversations across sessions</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Complete Implementation</h2>
+        <div class="code-block not-prose">
+          <pre><code class="language-rust">use langgraph_core::{StateGraph, Message, Tool, GraphError};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Serialize, Deserialize)]
+struct SupportState {
+    messages: Vec&lt;Message&gt;,
+    ticket_id: Option&lt;String&gt;,
+    sentiment: String,
+    resolved: bool,
+    escalated: bool,
+}
+
+// Tools for the support agent
+fn create_tools() -> Vec&lt;Tool&gt; {
+    vec![
+        Tool::new(
+            "search_knowledge_base",
+            "Search the knowledge base for answers",
+            json!({
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"}
+                }
+            }),
+            Box::new(|args| {
+                Box::pin(async move {
+                    let query = args["query"].as_str().unwrap();
+                    // RAG implementation here
+                    let results = search_vector_db(query).await?;
+                    Ok(json!({"results": results}))
+                })
+            })
+        ),
+        Tool::new(
+            "create_ticket",
+            "Create a support ticket",
+            json!({
+                "type": "object",
+                "properties": {
+                    "subject": {"type": "string"},
+                    "description": {"type": "string"},
+                    "priority": {"type": "string", "enum": ["low", "medium", "high"]}
+                }
+            }),
+            Box::new(|args| {
+                Box::pin(async move {
+                    let ticket_id = create_support_ticket(
+                        args["subject"].as_str().unwrap(),
+                        args["description"].as_str().unwrap(),
+                        args["priority"].as_str().unwrap(),
+                    ).await?;
+                    Ok(json!({"ticket_id": ticket_id}))
+                })
+            })
+        ),
+        Tool::new(
+            "check_account_status",
+            "Check customer's account status",
+            json!({
+                "type": "object",
+                "properties": {
+                    "email": {"type": "string"}
+                }
+            }),
+            Box::new(|args| {
+                Box::pin(async move {
+                    let email = args["email"].as_str().unwrap();
+                    let status = get_account_status(email).await?;
+                    Ok(json!(status))
+                })
+            })
+        ),
+    ]
+}
+
+async fn support_agent(
+    mut state: SupportState,
+    llm: &LlmClient,
+    tools: &[Tool],
+) -> Result&lt;SupportState, GraphError&gt; {
+    let response = llm.chat_with_tools(&state.messages, tools).await?;
+    state.messages.push(Message::assistant(response));
+    Ok(state)
+}
+
+async fn analyze_sentiment(
+    mut state: SupportState,
+    llm: &LlmClient,
+) -> Result&lt;SupportState, GraphError&gt; {
+    let last_msg = state.messages.last().unwrap();
+
+    let sentiment = llm.chat(&[
+        Message::system("Analyze sentiment as: positive, neutral, or frustrated"),
+        Message::human(last_msg.content()),
+    ]).await?;
+
+    state.sentiment = sentiment.to_lowercase();
+    Ok(state)
+}
+
+fn should_escalate(state: &SupportState) -> String {
+    if state.escalated {
+        "escalate".to_string()
+    } else if state.sentiment == "frustrated" {
+        "escalate".to_string()
+    } else if state.resolved {
+        "__end__".to_string()
+    } else {
+        "agent".to_string()
+    }
+}
+
+async fn escalate_to_human(
+    state: SupportState
+) -> Result&lt;SupportState, GraphError&gt; {
+    println!("Escalating to human agent...");
+
+    // Notify human agent
+    notify_human_agent(&state).await?;
+
+    // Create interrupt for human takeover
+    Err(GraphError::Interrupt(Interrupt::new(
+        "human_handoff",
+        json!({
+            "reason": state.sentiment,
+            "ticket_id": state.ticket_id,
+            "summary": generate_conversation_summary(&state.messages)
+        })
+    )))
+}
+
+#[tokio::main]
+async fn main() -> Result&lt;(), GraphError&gt; {
+    let llm = LlmClient::new(env::var("ANTHROPIC_API_KEY")?);
+    let tools = create_tools();
+
+    let mut graph = StateGraph::new();
+
+    graph.add_node("sentiment", |s| analyze_sentiment(s, &llm));
+    graph.add_node("agent", |s| support_agent(s, &llm, &tools));
+    graph.add_node("escalate", escalate_to_human);
+
+    graph.add_edge("__start__", "sentiment");
+    graph.add_conditional_edges("sentiment", should_escalate);
+    graph.add_conditional_edges("agent", should_escalate);
+
+    // Use PostgreSQL for production multi-user support
+    let checkpointer = PostgresCheckpointSaver::new(
+        &env::var("DATABASE_URL")?
+    ).await?;
+
+    let compiled = graph.compile().with_checkpointer(checkpointer);
+
+    // Each customer gets unique thread ID
+    let customer_id = "customer-12345";
+    let config = CheckpointConfig::new()
+        .with_thread_id(format!("support-{}", customer_id));
+
+    let result = compiled.invoke(SupportState {
+        messages: vec![Message::human(
+            "I've been charged twice for my subscription!"
+        )],
+        ticket_id: None,
+        sentiment: "neutral".to_string(),
+        resolved: false,
+        escalated: false,
+    }, config).await?;
+
+    Ok(())
+}</code></pre>
+        </div>
+      </section>
+
+      <section>
+        <h2>Production Considerations</h2>
+        <ul>
+          <li><strong>Rate Limiting:</strong> Prevent abuse with token bucket</li>
+          <li><strong>Caching:</strong> Cache knowledge base results</li>
+          <li><strong>Monitoring:</strong> Track resolution rate, escalation rate</li>
+          <li><strong>Analytics:</strong> Log all conversations for improvement</li>
+          <li><strong>Security:</strong> Sanitize user input, validate tools</li>
+        </ul>
+      </section>
+    </article>
+  </div>
+
+  <footer class="bg-gray-900 text-gray-400 py-12 mt-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center text-sm">
+        <p>&copy; 2025 acolib. Built with Rust and Tailwind CSS.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+</body>
+</html>

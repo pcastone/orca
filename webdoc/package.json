@@ -1,0 +1,30 @@
+{
+  "name": "rlangraph-docs",
+  "version": "1.0.0",
+  "description": "Documentation website for rLangGraph - Rust implementation of LangGraph",
+  "scripts": {
+    "dev": "postcss src/css/main.css -o dist/css/styles.css --watch",
+    "build": "NODE_ENV=production postcss src/css/main.css -o dist/css/styles.css",
+    "serve": "python3 -m http.server 8000"
+  },
+  "keywords": [
+    "rlangraph",
+    "langgraph",
+    "rust",
+    "ai",
+    "agents",
+    "documentation"
+  ],
+  "author": "acolib",
+  "license": "MIT",
+  "devDependencies": {
+    "tailwindcss": "^3.4.0",
+    "postcss": "^8.4.32",
+    "postcss-cli": "^11.0.0",
+    "autoprefixer": "^10.4.16",
+    "@tailwindcss/typography": "^0.5.10"
+  },
+  "dependencies": {
+    "prismjs": "^1.29.0"
+  }
+}

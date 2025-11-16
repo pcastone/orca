@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Human-in-the-Loop - rLangGraph</title>
+  <link rel="stylesheet" href="../../dist/css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+</head>
+<body class="font-sans antialiased">
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center">
+          <a href="../../" class="flex items-center space-x-2">
+            <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+              <span class="text-white font-bold text-lg">r</span>
+            </div>
+            <span class="text-xl font-bold text-gray-900">rLangGraph</span>
+          </a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <article class="prose prose-lg max-w-none">
+      <div class="not-prose mb-8">
+        <div class="flex items-center gap-3 mb-4">
+          <h1 class="text-4xl font-bold text-gray-900 mb-0">Human-in-the-Loop</h1>
+          <span class="px-3 py-1 text-sm font-medium bg-purple-100 text-purple-800 rounded-full">Advanced</span>
+        </div>
+        <p class="text-xl text-gray-600">
+          Pause execution for human approval or input before proceeding with sensitive actions.
+        </p>
+      </div>
+
+      <section>
+        <h2>Use Cases</h2>
+        <ul>
+          <li><strong>Approval Workflows:</strong> Pause before deleting data, making purchases</li>
+          <li><strong>Data Validation:</strong> Let humans verify extracted information</li>
+          <li><strong>Decision Support:</strong> Present options, let human choose</li>
+          <li><strong>Quality Control:</strong> Review AI-generated content before publishing</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Complete Example</h2>
+        <div class="code-block not-prose">
+          <pre><code class="language-rust">use langgraph_core::{StateGraph, Message, Interrupt, GraphError};
+
+#[derive(Clone, Serialize, Deserialize)]
+struct ApprovalState {
+    action: String,
+    requires_approval: bool,
+    approved: Option&lt;bool&gt;,
+}
+
+async fn request_approval(
+    state: ApprovalState
+) -> Result&lt;ApprovalState, GraphError&gt; {
+    if state.requires_approval && state.approved.is_none() {
+        // Raise an interrupt - execution pauses here
+        return Err(GraphError::Interrupt(Interrupt::new(
+            "human_approval",
+            serde_json::json!({
+                "action": state.action,
+                "message": "Approval required to proceed"
+            })
+        )));
+    }
+
+    Ok(state)
+}
+
+async fn execute_action(
+    state: ApprovalState
+) -> Result&lt;ApprovalState, GraphError&gt; {
+    if state.approved == Some(true) {
+        println!("Executing action: {}", state.action);
+        // Perform the actual action...
+    } else {
+        println!("Action rejected");
+    }
+
+    Ok(state)
+}
+
+#[tokio::main]
+async fn main() -> Result&lt;(), GraphError&gt; {
+    let mut graph = StateGraph::new();
+    graph.add_node("request_approval", request_approval);
+    graph.add_node("execute", execute_action);
+
+    graph.add_edge("__start__", "request_approval");
+    graph.add_edge("request_approval", "execute");
+    graph.add_edge("execute", "__end__");
+
+    let checkpointer = SqliteCheckpointSaver::new("./db.sqlite").await?;
+    let compiled = graph.compile().with_checkpointer(checkpointer);
+
+    let thread_id = "approval-flow-123";
+    let config = CheckpointConfig::new().with_thread_id(thread_id);
+
+    // First execution - will pause at interrupt
+    match compiled.invoke(ApprovalState {
+        action: "Delete 1000 user accounts".to_string(),
+        requires_approval: true,
+        approved: None,
+    }, config.clone()).await {
+        Err(GraphError::Interrupt(interrupt)) => {
+            println!("Execution paused for: {}", interrupt.reason);
+            println!("Data: {}", interrupt.data);
+
+            // Simulate human approval (in real app, this comes from UI)
+            let approved = get_human_approval().await;
+
+            // Resume with approval decision
+            let resume_state = ApprovalState {
+                action: "Delete 1000 user accounts".to_string(),
+                requires_approval: true,
+                approved: Some(approved),
+            };
+
+            let result = compiled.invoke(resume_state, config).await?;
+            println!("Workflow completed");
+        }
+        Ok(_) => println!("No approval needed"),
+        Err(e) => return Err(e),
+    }
+
+    Ok(())
+}
+
+async fn get_human_approval() -> bool {
+    // In real application:
+    // - Show UI prompt to user
+    // - Wait for response
+    // - Return approval decision
+
+    println!("Do you approve this action? (y/n)");
+    // Simulate user input
+    true
+}</code></pre>
+        </div>
+      </section>
+
+      <section>
+        <h2>Resuming After Interrupt</h2>
+        <p>The key to human-in-the-loop is using checkpoints to resume:</p>
+        <ol>
+          <li>Execution pauses at interrupt, checkpoint saved</li>
+          <li>Human reviews and makes decision (can take minutes, hours, days)</li>
+          <li>Resume from checkpoint with updated state</li>
+          <li>Execution continues from where it paused</li>
+        </ol>
+
+        <div class="bg-blue-50 border-l-4 border-blue-500 p-4 my-6 not-prose">
+          <p class="text-sm text-blue-900">
+            <strong>Critical:</strong> Always use a checkpointer with human-in-the-loop patterns.
+            Without persistence, interrupts would lose all state.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>Multiple Approval Points</h2>
+        <p>You can have multiple interrupts in a single workflow:</p>
+        <div class="code-block not-prose">
+          <pre><code class="language-rust">// Interrupt before expensive operation
+if cost > 100.0 {
+    return Err(GraphError::Interrupt(Interrupt::new(
+        "cost_approval",
+        json!({"cost": cost, "currency": "USD"})
+    )));
+}
+
+// Later: Interrupt before final submission
+if submission.is_final {
+    return Err(GraphError::Interrupt(Interrupt::new(
+        "final_review",
+        json!({"preview": submission.preview()})
+    )));
+}</code></pre>
+        </div>
+      </section>
+    </article>
+  </div>
+
+  <footer class="bg-gray-900 text-gray-400 py-12 mt-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center text-sm">
+        <p>&copy; 2025 acolib. Built with Rust and Tailwind CSS.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+</body>
+</html>

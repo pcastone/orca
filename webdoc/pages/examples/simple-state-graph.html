@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Simple State Graph Example - Learn the fundamentals of rLangGraph">
+  <meta name="keywords" content="rlangraph, state graph, nodes, edges, rust, tutorial">
+  <title>Simple State Graph - rLangGraph</title>
+
+  <link rel="stylesheet" href="../../dist/css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="font-sans antialiased" data-category="Examples">
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center">
+          <a href="../../" class="flex items-center space-x-2">
+            <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+              <span class="text-white font-bold text-lg">r</span>
+            </div>
+            <span class="text-xl font-bold text-gray-900">rLangGraph</span>
+          </a>
+        </div>
+        <div class="hidden md:flex items-center space-x-8">
+          <a href="../../" class="nav-link">Home</a>
+          <a href="../getting-started/" class="nav-link">Getting Started</a>
+          <a href="../architecture/" class="nav-link">Architecture</a>
+          <a href="../api/" class="nav-link">API Reference</a>
+          <a href="../guides/" class="nav-link">Guides</a>
+          <a href="../examples/" class="nav-link nav-link-active">Examples</a>
+        </div>
+        <div class="hidden md:flex items-center space-x-4">
+          <div class="relative">
+            <input type="search" id="search-input" placeholder="Search docs..." class="search-input w-64 text-sm">
+            <div id="search-results" class="hidden absolute top-full mt-2 w-96 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto scrollbar-thin"></div>
+          </div>
+          <a href="https://github.com/pcastone/orca" target="_blank" rel="noopener" class="text-gray-700 hover:text-primary-600 transition-colors">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+            </svg>
+          </a>
+        </div>
+        <button id="mobile-menu-button" class="md:hidden p-2 rounded-lg text-gray-700 hover:bg-gray-100">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <div id="search-overlay" class="hidden fixed inset-0 bg-black bg-opacity-25 z-40"></div>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex flex-col lg:flex-row gap-8">
+      <aside class="lg:w-64 flex-shrink-0">
+        <div class="sticky top-24">
+          <nav class="bg-white rounded-lg border border-gray-200 p-4">
+            <h2 class="font-semibold text-gray-900 mb-3">On This Page</h2>
+            <ul class="space-y-1 text-sm">
+              <li><a href="#overview" class="toc-link">Overview</a></li>
+              <li><a href="#building-blocks" class="toc-link">Building Blocks</a></li>
+              <li><a href="#example-1" class="toc-link">Example 1: Linear Flow</a></li>
+              <li><a href="#example-2" class="toc-link">Example 2: Parallel Nodes</a></li>
+              <li><a href="#example-3" class="toc-link">Example 3: State Reducers</a></li>
+              <li><a href="#visualization" class="toc-link">Graph Visualization</a></li>
+            </ul>
+          </nav>
+        </div>
+      </aside>
+
+      <main class="flex-1 min-w-0">
+        <div class="breadcrumb mb-6">
+          <a href="../../" class="hover:text-primary-600">Home</a>
+          <span class="breadcrumb-separator">/</span>
+          <a href="../examples/" class="hover:text-primary-600">Examples</a>
+          <span class="breadcrumb-separator">/</span>
+          <span class="text-gray-900">Simple State Graph</span>
+        </div>
+
+        <article class="prose prose-lg max-w-none">
+          <div class="not-prose mb-8">
+            <div class="flex items-center gap-3 mb-4">
+              <h1 class="text-4xl font-bold text-gray-900 mb-0">Simple State Graph</h1>
+              <span class="px-3 py-1 text-sm font-medium bg-green-100 text-green-800 rounded-full">Beginner</span>
+            </div>
+            <p class="text-xl text-gray-600">
+              Learn the fundamentals of StateGraph construction with nodes, edges, and state reducers.
+              Master the core building blocks of rLangGraph.
+            </p>
+            <div class="flex items-center gap-6 mt-4 text-sm text-gray-600">
+              <span class="flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                10 min read
+              </span>
+            </div>
+          </div>
+
+          <section id="overview">
+            <h2>Overview</h2>
+            <p>
+              The StateGraph is the foundation of rLangGraph. It defines how data flows through
+              your application using nodes (processing steps) and edges (connections).
+            </p>
+          </section>
+
+          <section id="building-blocks">
+            <h2>Building Blocks</h2>
+
+            <div class="space-y-6 not-prose my-6">
+              <div class="card">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">1. State</h3>
+                <p class="text-sm text-gray-700">
+                  A struct that holds all data flowing through the graph. Must implement Clone, Serialize, Deserialize.
+                </p>
+                <div class="code-block mt-3">
+                  <pre><code class="language-rust">#[derive(Clone, Serialize, Deserialize)]
+struct MyState {
+    counter: i32,
+    messages: Vec&lt;String&gt;,
+}</code></pre>
+                </div>
+              </div>
+
+              <div class="card">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">2. Nodes</h3>
+                <p class="text-sm text-gray-700">
+                  Async functions that take state and return modified state. Each node processes data.
+                </p>
+                <div class="code-block mt-3">
+                  <pre><code class="language-rust">async fn my_node(mut state: MyState) -> Result&lt;MyState, GraphError&gt; {
+    state.counter += 1;
+    Ok(state)
+}</code></pre>
+                </div>
+              </div>
+
+              <div class="card">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">3. Edges</h3>
+                <p class="text-sm text-gray-700">
+                  Connections between nodes that define execution order.
+                </p>
+                <div class="code-block mt-3">
+                  <pre><code class="language-rust">graph.add_edge("node_a", "node_b");  // node_a → node_b</code></pre>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="example-1">
+            <h2>Example 1: Linear Flow</h2>
+            <p>A simple graph where nodes execute in sequence:</p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">use langgraph_core::{StateGraph, GraphError};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Serialize, Deserialize)]
+struct State {
+    value: i32,
+}
+
+async fn multiply_by_two(mut state: State) -> Result&lt;State, GraphError&gt; {
+    state.value *= 2;
+    println!("After multiply: {}", state.value);
+    Ok(state)
+}
+
+async fn add_ten(mut state: State) -> Result&lt;State, GraphError&gt; {
+    state.value += 10;
+    println!("After add: {}", state.value);
+    Ok(state)
+}
+
+#[tokio::main]
+async fn main() -> Result&lt;(), GraphError&gt; {
+    let mut graph = StateGraph::new();
+
+    // Add nodes
+    graph.add_node("multiply", multiply_by_two);
+    graph.add_node("add", add_ten);
+
+    // Define flow: start → multiply → add → end
+    graph.add_edge("__start__", "multiply");
+    graph.add_edge("multiply", "add");
+    graph.add_edge("add", "__end__");
+
+    // Compile
+    let compiled = graph.compile()?;
+
+    // Execute
+    let result = compiled.invoke(State { value: 5 }).await?;
+    println!("Final: {}", result.value);  // (5 * 2) + 10 = 20
+
+    Ok(())
+}</code></pre>
+            </div>
+
+            <div class="not-prose my-6">
+              <div class="bg-gray-50 rounded-lg p-6">
+                <h4 class="font-semibold text-gray-900 mb-3">Output:</h4>
+                <pre class="text-sm"><code>After multiply: 10
+After add: 20
+Final: 20</code></pre>
+              </div>
+            </div>
+          </section>
+
+          <section id="example-2">
+            <h2>Example 2: Parallel Nodes</h2>
+            <p>Multiple nodes executing in the same superstep:</p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">#[derive(Clone, Serialize, Deserialize)]
+struct ParallelState {
+    results: Vec&lt;String&gt;,
+}
+
+async fn worker_a(mut state: ParallelState) -> Result&lt;ParallelState, GraphError&gt; {
+    state.results.push("Worker A done".to_string());
+    Ok(state)
+}
+
+async fn worker_b(mut state: ParallelState) -> Result&lt;ParallelState, GraphError&gt; {
+    state.results.push("Worker B done".to_string());
+    Ok(state)
+}
+
+async fn aggregator(state: ParallelState) -> Result&lt;ParallelState, GraphError&gt; {
+    println!("Aggregating {} results", state.results.len());
+    Ok(state)
+}
+
+#[tokio::main]
+async fn main() -> Result&lt;(), GraphError&gt; {
+    let mut graph = StateGraph::new();
+
+    graph.add_node("worker_a", worker_a);
+    graph.add_node("worker_b", worker_b);
+    graph.add_node("aggregate", aggregator);
+
+    // Both workers execute in parallel
+    graph.add_edge("__start__", "worker_a");
+    graph.add_edge("__start__", "worker_b");
+
+    // Aggregator waits for both
+    graph.add_edge("worker_a", "aggregate");
+    graph.add_edge("worker_b", "aggregate");
+    graph.add_edge("aggregate", "__end__");
+
+    let compiled = graph.compile()?;
+    let result = compiled.invoke(ParallelState {
+        results: vec![]
+    }).await?;
+
+    for r in &result.results {
+        println!("- {}", r);
+    }
+
+    Ok(())
+}</code></pre>
+            </div>
+          </section>
+
+          <section id="example-3">
+            <h2>Example 3: State Reducers</h2>
+            <p>Understanding how state changes are merged:</p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">#[derive(Clone, Serialize, Deserialize)]
+struct CounterState {
+    count: i32,          // OverwriteReducer
+    messages: Vec&lt;String&gt;,  // AppendReducer
+}
+
+async fn increment_a(mut state: CounterState) -> Result&lt;CounterState, GraphError&gt; {
+    state.count = 1;
+    state.messages.push("A incremented".to_string());
+    Ok(state)
+}
+
+async fn increment_b(mut state: CounterState) -> Result&lt;CounterState, GraphError&gt; {
+    state.count = 2;
+    state.messages.push("B incremented".to_string());
+    Ok(state)
+}
+
+#[tokio::main]
+async fn main() -> Result&lt;(), GraphError&gt; {
+    let mut graph = StateGraph::new();
+
+    graph.add_node("inc_a", increment_a);
+    graph.add_node("inc_b", increment_b);
+
+    // Both run in parallel
+    graph.add_edge("__start__", "inc_a");
+    graph.add_edge("__start__", "inc_b");
+    graph.add_edge("inc_a", "__end__");
+    graph.add_edge("inc_b", "__end__");
+
+    let compiled = graph.compile()?;
+    let result = compiled.invoke(CounterState {
+        count: 0,
+        messages: vec![],
+    }).await?;
+
+    // count: Last write wins (2)
+    // messages: Both appended ["A incremented", "B incremented"]
+    println!("Count: {}", result.count);
+    println!("Messages: {:?}", result.messages);
+
+    Ok(())
+}</code></pre>
+            </div>
+
+            <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 my-6 not-prose">
+              <p class="text-sm text-yellow-900">
+                <strong>Reducer Behavior:</strong>
+              </p>
+              <ul class="text-sm text-yellow-900 list-disc pl-5 mt-2 space-y-1">
+                <li><code>i32</code>, <code>String</code>, etc.: Last write wins (OverwriteReducer)</li>
+                <li><code>Vec&lt;T&gt;</code>: All items appended (AppendReducer)</li>
+                <li><code>HashMap&lt;K,V&gt;</code>: Deep merge (MergeReducer)</li>
+              </ul>
+            </div>
+          </section>
+
+          <section id="visualization">
+            <h2>Graph Visualization</h2>
+            <p>Understanding the execution flow:</p>
+
+            <div class="not-prose my-6">
+              <div class="bg-gray-50 rounded-lg p-6">
+                <h4 class="font-semibold text-gray-900 mb-4">Linear Graph:</h4>
+                <pre class="text-sm"><code>__start__ → multiply → add → __end__</code></pre>
+
+                <h4 class="font-semibold text-gray-900 mt-6 mb-4">Parallel Graph:</h4>
+                <pre class="text-sm"><code>         ┌→ worker_a ─┐
+__start__─┤            ├→ aggregate → __end__
+         └→ worker_b ─┘</code></pre>
+              </div>
+            </div>
+          </section>
+
+          <div class="not-prose my-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Next Steps</h2>
+            <div class="grid md:grid-cols-2 gap-4">
+              <a href="basic-chatbot.html" class="card hover:shadow-lg transition-shadow">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">Build a Chatbot</h3>
+                <p class="text-sm text-gray-600">
+                  Apply state graph concepts to build a conversational AI agent.
+                </p>
+              </a>
+
+              <a href="conditional-routing.html" class="card hover:shadow-lg transition-shadow">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">Conditional Routing</h3>
+                <p class="text-sm text-gray-600">
+                  Learn to route execution dynamically based on state.
+                </p>
+              </a>
+            </div>
+          </div>
+        </article>
+      </main>
+    </div>
+  </div>
+
+  <footer class="bg-gray-900 text-gray-400 py-12 mt-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid md:grid-cols-4 gap-8 mb-8">
+        <div>
+          <h3 class="text-white font-semibold mb-4">rLangGraph</h3>
+          <p class="text-sm">A Rust port of LangGraph for building stateful AI agent workflows.</p>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Documentation</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="../getting-started/" class="hover:text-white transition-colors">Getting Started</a></li>
+            <li><a href="../architecture/" class="hover:text-white transition-colors">Architecture</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Resources</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="../examples/" class="hover:text-white transition-colors">Examples</a></li>
+            <li><a href="https://github.com/pcastone/orca" target="_blank" rel="noopener" class="hover:text-white transition-colors">GitHub</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Project</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="https://github.com/pcastone/orca/blob/main/LICENSE" target="_blank" rel="noopener" class="hover:text-white transition-colors">License</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-gray-800 pt-8 text-center text-sm">
+        <p>&copy; 2025 acolib. Built with Rust and Tailwind CSS.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+  <script src="../../src/js/navigation.js"></script>
+  <script src="../../src/js/search.js"></script>
+</body>
+</html>

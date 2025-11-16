@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="rLangGraph Examples - Comprehensive examples and tutorials for building AI agents">
+  <meta name="keywords" content="rlangraph, examples, tutorials, rust, ai agents, chatbot, react, plan-execute">
+  <title>Examples - rLangGraph Documentation</title>
+
+  <link rel="stylesheet" href="../../dist/css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="font-sans antialiased" data-category="Examples">
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center">
+          <a href="../../" class="flex items-center space-x-2">
+            <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+              <span class="text-white font-bold text-lg">r</span>
+            </div>
+            <span class="text-xl font-bold text-gray-900">rLangGraph</span>
+          </a>
+        </div>
+
+        <div class="hidden md:flex items-center space-x-8">
+          <a href="../../" class="nav-link">Home</a>
+          <a href="../getting-started/" class="nav-link">Getting Started</a>
+          <a href="../architecture/" class="nav-link">Architecture</a>
+          <a href="../api/" class="nav-link">API Reference</a>
+          <a href="../guides/" class="nav-link">Guides</a>
+          <a href="../examples/" class="nav-link nav-link-active">Examples</a>
+        </div>
+
+        <div class="hidden md:flex items-center space-x-4">
+          <div class="relative">
+            <input type="search" id="search-input" placeholder="Search docs..." class="search-input w-64 text-sm">
+            <div id="search-results" class="hidden absolute top-full mt-2 w-96 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto scrollbar-thin"></div>
+          </div>
+          <a href="https://github.com/pcastone/orca" target="_blank" rel="noopener" class="text-gray-700 hover:text-primary-600 transition-colors">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+            </svg>
+          </a>
+        </div>
+
+        <button id="mobile-menu-button" class="md:hidden p-2 rounded-lg text-gray-700 hover:bg-gray-100">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+    </nav>
+
+    <div id="mobile-menu" class="hidden md:hidden border-t border-gray-200 bg-white">
+      <div class="px-4 py-3 space-y-1">
+        <input type="search" placeholder="Search docs..." class="search-input w-full text-sm mb-3">
+        <a href="../../" class="nav-link">Home</a>
+        <a href="../getting-started/" class="nav-link">Getting Started</a>
+        <a href="../architecture/" class="nav-link">Architecture</a>
+        <a href="../api/" class="nav-link">API Reference</a>
+        <a href="../guides/" class="nav-link">Guides</a>
+        <a href="../examples/" class="nav-link nav-link-active">Examples</a>
+      </div>
+    </div>
+  </header>
+
+  <div id="search-overlay" class="hidden fixed inset-0 bg-black bg-opacity-25 z-40"></div>
+
+  <!-- Main Content -->
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="breadcrumb mb-6">
+      <a href="../../" class="hover:text-primary-600">Home</a>
+      <span class="breadcrumb-separator">/</span>
+      <span class="text-gray-900">Examples</span>
+    </div>
+
+    <div class="mb-12">
+      <h1 class="text-4xl font-bold text-gray-900 mb-4">Examples</h1>
+      <p class="text-xl text-gray-600">
+        Comprehensive examples and tutorials for building AI agents with rLangGraph.
+        Each example includes detailed explanations, complete code, and step-by-step breakdowns.
+      </p>
+    </div>
+
+    <!-- Example Categories -->
+    <div class="space-y-12">
+      <!-- Getting Started Examples -->
+      <section>
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">Getting Started</h2>
+        <div class="grid md:grid-cols-2 gap-6">
+          <!-- Basic Chatbot -->
+          <a href="basic-chatbot.html" class="card hover:shadow-lg transition-all group">
+            <div class="flex items-start justify-between mb-3">
+              <h3 class="text-xl font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+                Basic Chatbot
+              </h3>
+              <span class="px-3 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">Beginner</span>
+            </div>
+            <p class="text-gray-600 mb-4">
+              Build your first conversational AI agent with state management and message history.
+              Perfect introduction to rLangGraph fundamentals.
+            </p>
+            <div class="flex items-center text-sm text-gray-500">
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span>15 min read</span>
+            </div>
+          </a>
+
+          <!-- Simple State Graph -->
+          <a href="simple-state-graph.html" class="card hover:shadow-lg transition-all group">
+            <div class="flex items-start justify-between mb-3">
+              <h3 class="text-xl font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+                Simple State Graph
+              </h3>
+              <span class="px-3 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">Beginner</span>
+            </div>
+            <p class="text-gray-600 mb-4">
+              Learn the basics of StateGraph construction with nodes, edges, and state reducers.
+              Understand the core building blocks.
+            </p>
+            <div class="flex items-center text-sm text-gray-500">
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span>10 min read</span>
+            </div>
+          </a>
+        </div>
+      </section>
+
+      <!-- Agent Patterns -->
+      <section>
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">Agent Patterns</h2>
+        <div class="grid md:grid-cols-2 gap-6">
+          <!-- ReAct Agent -->
+          <a href="react-agent.html" class="card hover:shadow-lg transition-all group">
+            <div class="flex items-start justify-between mb-3">
+              <h3 class="text-xl font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+                ReAct Agent with Tools
+              </h3>
+              <span class="px-3 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">Intermediate</span>
+            </div>
+            <p class="text-gray-600 mb-4">
+              Build a Reasoning and Acting (ReAct) agent that can use tools to answer questions.
+              Includes web search, calculator, and custom tools.
+            </p>
+            <div class="flex items-center text-sm text-gray-500">
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span>25 min read</span>
+            </div>
+          </a>
+
+          <!-- Plan-Execute -->
+          <a href="plan-execute.html" class="card hover:shadow-lg transition-all group">
+            <div class="flex items-start justify-between mb-3">
+              <h3 class="text-xl font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+                Plan-Execute Pattern
+              </h3>
+              <span class="px-3 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">Intermediate</span>
+            </div>
+            <p class="text-gray-600 mb-4">
+              Implement a planning agent that breaks down complex tasks into steps, executes them,
+              and replans based on results.
+            </p>
+            <div class="flex items-center text-sm text-gray-500">
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span>30 min read</span>
+            </div>
+          </a>
+
+          <!-- Reflection -->
+          <a href="reflection.html" class="card hover:shadow-lg transition-all group">
+            <div class="flex items-start justify-between mb-3">
+              <h3 class="text-xl font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+                Reflection Pattern
+              </h3>
+              <span class="px-3 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">Intermediate</span>
+            </div>
+            <p class="text-gray-600 mb-4">
+              Create a self-improving agent that generates content, critiques it, and refines
+              based on feedback. Ideal for quality-critical tasks.
+            </p>
+            <div class="flex items-center text-sm text-gray-500">
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span>28 min read</span>
+            </div>
+          </a>
+        </div>
+      </section>
+
+      <!-- Advanced Features -->
+      <section>
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">Advanced Features</h2>
+        <div class="grid md:grid-cols-2 gap-6">
+          <!-- Checkpointing -->
+          <a href="checkpointing.html" class="card hover:shadow-lg transition-all group">
+            <div class="flex items-start justify-between mb-3">
+              <h3 class="text-xl font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+                Checkpoint & Resume
+              </h3>
+              <span class="px-3 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">Advanced</span>
+            </div>
+            <p class="text-gray-600 mb-4">
+              Learn to save and restore execution state, implement time-travel debugging,
+              and create branching workflows with checkpoints.
+            </p>
+            <div class="flex items-center text-sm text-gray-500">
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span>20 min read</span>
+            </div>
+          </a>
+
+          <!-- Human-in-the-Loop -->
+          <a href="human-in-loop.html" class="card hover:shadow-lg transition-all group">
+            <div class="flex items-start justify-between mb-3">
+              <h3 class="text-xl font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+                Human-in-the-Loop
+              </h3>
+              <span class="px-3 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">Advanced</span>
+            </div>
+            <p class="text-gray-600 mb-4">
+              Implement approval workflows where execution pauses for human input or confirmation.
+              Perfect for sensitive operations.
+            </p>
+            <div class="flex items-center text-sm text-gray-500">
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span>22 min read</span>
+            </div>
+          </a>
+
+          <!-- Streaming -->
+          <a href="streaming.html" class="card hover:shadow-lg transition-all group">
+            <div class="flex items-start justify-between mb-3">
+              <h3 class="text-xl font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+                Streaming Execution
+              </h3>
+              <span class="px-3 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">Advanced</span>
+            </div>
+            <p class="text-gray-600 mb-4">
+              Stream real-time events during execution, including LLM tokens, state updates,
+              and custom events for live UIs.
+            </p>
+            <div class="flex items-center text-sm text-gray-500">
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span>18 min read</span>
+            </div>
+          </a>
+
+          <!-- Conditional Routing -->
+          <a href="conditional-routing.html" class="card hover:shadow-lg transition-all group">
+            <div class="flex items-start justify-between mb-3">
+              <h3 class="text-xl font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+                Conditional Routing
+              </h3>
+              <span class="px-3 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">Intermediate</span>
+            </div>
+            <p class="text-gray-600 mb-4">
+              Build dynamic workflows with conditional edges that route based on state,
+              LLM output, or custom logic.
+            </p>
+            <div class="flex items-center text-sm text-gray-500">
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span>16 min read</span>
+            </div>
+          </a>
+        </div>
+      </section>
+
+      <!-- Real-World Applications -->
+      <section>
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">Real-World Applications</h2>
+        <div class="grid md:grid-cols-2 gap-6">
+          <!-- Customer Support Bot -->
+          <a href="customer-support.html" class="card hover:shadow-lg transition-all group">
+            <div class="flex items-start justify-between mb-3">
+              <h3 class="text-xl font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+                Customer Support Bot
+              </h3>
+              <span class="px-3 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">Advanced</span>
+            </div>
+            <p class="text-gray-600 mb-4">
+              Build a production-ready customer support agent with ticket creation,
+              knowledge base search, and escalation to human agents.
+            </p>
+            <div class="flex items-center text-sm text-gray-500">
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span>35 min read</span>
+            </div>
+          </a>
+
+          <!-- Code Review Agent -->
+          <a href="code-review.html" class="card hover:shadow-lg transition-all group">
+            <div class="flex items-start justify-between mb-3">
+              <h3 class="text-xl font-semibold text-gray-900 group-hover:text-primary-600 transition-colors">
+                Code Review Agent
+              </h3>
+              <span class="px-3 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">Advanced</span>
+            </div>
+            <p class="text-gray-600 mb-4">
+              Automated code review agent that analyzes code quality, suggests improvements,
+              and checks for common issues and security vulnerabilities.
+            </p>
+            <div class="flex items-center text-sm text-gray-500">
+              <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span>32 min read</span>
+            </div>
+          </a>
+        </div>
+      </section>
+    </div>
+
+    <!-- Getting Help -->
+    <div class="bg-gray-50 rounded-lg p-8 mt-12">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">Need Help?</h2>
+      <p class="text-gray-600 mb-6">
+        If you're stuck or have questions about these examples, check out our community resources:
+      </p>
+      <div class="grid md:grid-cols-3 gap-4">
+        <a href="https://github.com/pcastone/orca/discussions" target="_blank" rel="noopener" class="flex items-center p-4 bg-white rounded-lg border border-gray-200 hover:border-primary-500 transition-colors">
+          <svg class="w-8 h-8 text-primary-600 mr-3" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+          </svg>
+          <div>
+            <div class="font-semibold text-gray-900">GitHub Discussions</div>
+            <div class="text-sm text-gray-600">Ask questions</div>
+          </div>
+        </a>
+        <a href="https://github.com/pcastone/orca/issues" target="_blank" rel="noopener" class="flex items-center p-4 bg-white rounded-lg border border-gray-200 hover:border-primary-500 transition-colors">
+          <svg class="w-8 h-8 text-primary-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+          <div>
+            <div class="font-semibold text-gray-900">Report Issues</div>
+            <div class="text-sm text-gray-600">Found a bug?</div>
+          </div>
+        </a>
+        <a href="../guides/" class="flex items-center p-4 bg-white rounded-lg border border-gray-200 hover:border-primary-500 transition-colors">
+          <svg class="w-8 h-8 text-primary-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+          </svg>
+          <div>
+            <div class="font-semibold text-gray-900">Read Guides</div>
+            <div class="text-sm text-gray-600">In-depth tutorials</div>
+          </div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="bg-gray-900 text-gray-400 py-12 mt-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid md:grid-cols-4 gap-8 mb-8">
+        <div>
+          <h3 class="text-white font-semibold mb-4">rLangGraph</h3>
+          <p class="text-sm">A Rust port of LangGraph for building stateful AI agent workflows.</p>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Documentation</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="../getting-started/" class="hover:text-white transition-colors">Getting Started</a></li>
+            <li><a href="../architecture/" class="hover:text-white transition-colors">Architecture</a></li>
+            <li><a href="../api/" class="hover:text-white transition-colors">API Reference</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Resources</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="../examples/" class="hover:text-white transition-colors">Examples</a></li>
+            <li><a href="https://github.com/pcastone/orca" target="_blank" rel="noopener" class="hover:text-white transition-colors">GitHub</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Project</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="https://github.com/pcastone/orca/blob/main/LICENSE" target="_blank" rel="noopener" class="hover:text-white transition-colors">License</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-gray-800 pt-8 text-center text-sm">
+        <p>&copy; 2025 acolib. Built with Rust and Tailwind CSS.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="../../src/js/navigation.js"></script>
+  <script src="../../src/js/search.js"></script>
+</body>
+</html>

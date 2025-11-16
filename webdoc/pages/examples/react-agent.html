@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Build a ReAct agent with tools using rLangGraph - Complete tutorial">
+  <meta name="keywords" content="rlangraph, react, agent, tools, rust, ai, tutorial">
+  <title>ReAct Agent with Tools - rLangGraph</title>
+
+  <link rel="stylesheet" href="../../dist/css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="font-sans antialiased" data-category="Examples">
+  <!-- Header (reusing structure) -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center">
+          <a href="../../" class="flex items-center space-x-2">
+            <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+              <span class="text-white font-bold text-lg">r</span>
+            </div>
+            <span class="text-xl font-bold text-gray-900">rLangGraph</span>
+          </a>
+        </div>
+
+        <div class="hidden md:flex items-center space-x-8">
+          <a href="../../" class="nav-link">Home</a>
+          <a href="../getting-started/" class="nav-link">Getting Started</a>
+          <a href="../architecture/" class="nav-link">Architecture</a>
+          <a href="../api/" class="nav-link">API Reference</a>
+          <a href="../guides/" class="nav-link">Guides</a>
+          <a href="../examples/" class="nav-link nav-link-active">Examples</a>
+        </div>
+
+        <div class="hidden md:flex items-center space-x-4">
+          <div class="relative">
+            <input type="search" id="search-input" placeholder="Search docs..." class="search-input w-64 text-sm">
+            <div id="search-results" class="hidden absolute top-full mt-2 w-96 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto scrollbar-thin"></div>
+          </div>
+          <a href="https://github.com/pcastone/orca" target="_blank" rel="noopener" class="text-gray-700 hover:text-primary-600 transition-colors">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+            </svg>
+          </a>
+        </div>
+
+        <button id="mobile-menu-button" class="md:hidden p-2 rounded-lg text-gray-700 hover:bg-gray-100">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <div id="search-overlay" class="hidden fixed inset-0 bg-black bg-opacity-25 z-40"></div>
+
+  <!-- Main Content -->
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex flex-col lg:flex-row gap-8">
+      <!-- Sidebar TOC -->
+      <aside class="lg:w-64 flex-shrink-0">
+        <div class="sticky top-24">
+          <nav class="bg-white rounded-lg border border-gray-200 p-4">
+            <h2 class="font-semibold text-gray-900 mb-3">On This Page</h2>
+            <ul class="space-y-1 text-sm">
+              <li><a href="#overview" class="toc-link">Overview</a></li>
+              <li><a href="#what-is-react" class="toc-link">What is ReAct?</a></li>
+              <li><a href="#prerequisites" class="toc-link">Prerequisites</a></li>
+              <li><a href="#complete-code" class="toc-link">Complete Code</a></li>
+              <li><a href="#step-by-step" class="toc-link">Step-by-Step Breakdown</a></li>
+              <li><a href="#defining-tools" class="toc-link">Defining Tools</a></li>
+              <li><a href="#agent-loop" class="toc-link">Agent Loop</a></li>
+              <li><a href="#running" class="toc-link">Running the Example</a></li>
+              <li><a href="#example-execution" class="toc-link">Example Execution</a></li>
+              <li><a href="#advanced-usage" class="toc-link">Advanced Usage</a></li>
+            </ul>
+          </nav>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="flex-1 min-w-0">
+        <!-- Breadcrumb -->
+        <div class="breadcrumb mb-6">
+          <a href="../../" class="hover:text-primary-600">Home</a>
+          <span class="breadcrumb-separator">/</span>
+          <a href="../examples/" class="hover:text-primary-600">Examples</a>
+          <span class="breadcrumb-separator">/</span>
+          <span class="text-gray-900">ReAct Agent</span>
+        </div>
+
+        <article class="prose prose-lg max-w-none">
+          <!-- Title Section -->
+          <div class="not-prose mb-8">
+            <div class="flex items-center gap-3 mb-4">
+              <h1 class="text-4xl font-bold text-gray-900 mb-0">ReAct Agent with Tools</h1>
+              <span class="px-3 py-1 text-sm font-medium bg-blue-100 text-blue-800 rounded-full">Intermediate</span>
+            </div>
+            <p class="text-xl text-gray-600">
+              Build a Reasoning and Acting (ReAct) agent that can use tools to answer questions,
+              search the web, perform calculations, and interact with external APIs.
+            </p>
+            <div class="flex items-center gap-6 mt-4 text-sm text-gray-600">
+              <span class="flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                25 min read
+              </span>
+              <span class="flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"/>
+                </svg>
+                Rust
+              </span>
+            </div>
+          </div>
+
+          <!-- Overview -->
+          <section id="overview">
+            <h2>Overview</h2>
+            <p>
+              The ReAct (Reasoning and Acting) pattern is the most popular agent architecture,
+              used in 90% of production AI applications. It combines reasoning (thinking about
+              what to do) with acting (using tools to accomplish tasks).
+            </p>
+
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-4 my-6 not-prose">
+              <div class="flex">
+                <div class="flex-shrink-0">
+                  <svg class="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                  </svg>
+                </div>
+                <div class="ml-3">
+                  <p class="text-sm text-blue-900">
+                    <strong>What you'll learn:</strong> Tool definition, agent loops, conditional routing,
+                    tool execution, and the ReAct pattern implementation.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- What is ReAct? -->
+          <section id="what-is-react">
+            <h2>What is ReAct?</h2>
+            <p>
+              ReAct is a pattern where the LLM alternates between thinking and acting:
+            </p>
+
+            <div class="not-prose my-6">
+              <div class="bg-gray-50 rounded-lg p-6">
+                <div class="space-y-4">
+                  <div class="flex items-start">
+                    <div class="flex-shrink-0 w-8 h-8 bg-primary-600 text-white rounded-full flex items-center justify-center font-bold text-sm">1</div>
+                    <div class="ml-4">
+                      <h4 class="font-semibold text-gray-900">Think</h4>
+                      <p class="text-sm text-gray-600">LLM reasons about the problem and decides what action to take</p>
+                    </div>
+                  </div>
+                  <div class="flex items-start">
+                    <div class="flex-shrink-0 w-8 h-8 bg-primary-600 text-white rounded-full flex items-center justify-center font-bold text-sm">2</div>
+                    <div class="ml-4">
+                      <h4 class="font-semibold text-gray-900">Act</h4>
+                      <p class="text-sm text-gray-600">Execute the chosen tool/action (web search, calculator, database query, etc.)</p>
+                    </div>
+                  </div>
+                  <div class="flex items-start">
+                    <div class="flex-shrink-0 w-8 h-8 bg-primary-600 text-white rounded-full flex items-center justify-center font-bold text-sm">3</div>
+                    <div class="ml-4">
+                      <h4 class="font-semibold text-gray-900">Observe</h4>
+                      <p class="text-sm text-gray-600">LLM receives the tool result and decides whether to continue or respond</p>
+                    </div>
+                  </div>
+                  <div class="flex items-start">
+                    <div class="flex-shrink-0 w-8 h-8 bg-gray-300 text-gray-700 rounded-full flex items-center justify-center font-bold text-sm">↻</div>
+                    <div class="ml-4">
+                      <h4 class="font-semibold text-gray-900">Repeat</h4>
+                      <p class="text-sm text-gray-600">Loop until the LLM decides to give a final answer</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Prerequisites -->
+          <section id="prerequisites">
+            <h2>Prerequisites</h2>
+            <ul>
+              <li>Completed the <a href="basic-chatbot.html">Basic Chatbot</a> tutorial</li>
+              <li>Understanding of async Rust and <code>tokio</code></li>
+              <li>LLM API key (Claude or OpenAI recommended for tool use)</li>
+            </ul>
+
+            <h3>Dependencies</h3>
+            <div class="code-block not-prose">
+              <pre><code class="language-toml">[dependencies]
+langgraph-core = "0.1"
+langgraph-checkpoint = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.35", features = ["full"] }
+anyhow = "1.0"
+reqwest = { version = "0.11", features = ["json"] }</code></pre>
+            </div>
+          </section>
+
+          <!-- Complete Code -->
+          <section id="complete-code">
+            <h2>Complete Code</h2>
+            <p>
+              Here's a complete ReAct agent with three tools: calculator, web search, and current time.
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">use langgraph_core::{StateGraph, Message, Tool, GraphError};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use std::collections::HashMap;
+
+// Agent state
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct AgentState {
+    messages: Vec&lt;Message&gt;,
+}
+
+// Tool definitions
+fn create_tools() -> Vec&lt;Tool&gt; {
+    vec![
+        Tool::new(
+            "calculator",
+            "Evaluate mathematical expressions",
+            json!({
+                "type": "object",
+                "properties": {
+                    "expression": {
+                        "type": "string",
+                        "description": "The mathematical expression to evaluate"
+                    }
+                },
+                "required": ["expression"]
+            }),
+            Box::new(|args: Value| {
+                Box::pin(async move {
+                    let expr = args["expression"].as_str()
+                        .ok_or("Missing expression")?;
+
+                    // Simple calculator (use a proper math lib in production)
+                    let result = evaluate_math(expr)?;
+                    Ok(json!({ "result": result }))
+                })
+            })
+        ),
+        Tool::new(
+            "web_search",
+            "Search the web for current information",
+            json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query"
+                    }
+                },
+                "required": ["query"]
+            }),
+            Box::new(|args: Value| {
+                Box::pin(async move {
+                    let query = args["query"].as_str()
+                        .ok_or("Missing query")?;
+
+                    // Mock search results (use real API in production)
+                    Ok(json!({
+                        "results": [
+                            {
+                                "title": "Sample Result",
+                                "snippet": format!("Information about: {}", query)
+                            }
+                        ]
+                    }))
+                })
+            })
+        ),
+        Tool::new(
+            "get_current_time",
+            "Get the current date and time",
+            json!({
+                "type": "object",
+                "properties": {},
+            }),
+            Box::new(|_args: Value| {
+                Box::pin(async move {
+                    use chrono::Local;
+                    let now = Local::now();
+                    Ok(json!({
+                        "datetime": now.to_rfc3339(),
+                        "formatted": now.format("%Y-%m-%d %H:%M:%S").to_string()
+                    }))
+                })
+            })
+        ),
+    ]
+}
+
+// Agent node - decides whether to use tools or respond
+async fn agent_node(
+    state: AgentState,
+    llm: &LlmClient,
+    tools: &[Tool],
+) -> Result&lt;AgentState, GraphError&gt; {
+    // Call LLM with conversation history and available tools
+    let response = llm.chat_with_tools(&state.messages, tools).await?;
+
+    let mut new_state = state.clone();
+    new_state.messages.push(Message::assistant(response));
+
+    Ok(new_state)
+}
+
+// Tools node - executes tool calls
+async fn tools_node(
+    state: AgentState,
+    tools: &HashMap&lt;String, Tool&gt;,
+) -> Result&lt;AgentState, GraphError&gt; {
+    // Get the last assistant message
+    let last_msg = state.messages.last()
+        .ok_or_else(|| GraphError::InvalidState("No messages".to_string()))?;
+
+    // Extract tool calls from the message
+    let tool_calls = last_msg.tool_calls()
+        .ok_or_else(|| GraphError::InvalidState("No tool calls".to_string()))?;
+
+    let mut new_state = state.clone();
+
+    // Execute each tool call
+    for call in tool_calls {
+        let tool = tools.get(&call.name)
+            .ok_or_else(|| GraphError::ToolNotFound(call.name.clone()))?;
+
+        // Execute the tool
+        let result = tool.execute(call.arguments.clone()).await?;
+
+        // Add tool result to messages
+        new_state.messages.push(Message::tool_result(
+            call.id.clone(),
+            call.name.clone(),
+            result,
+        ));
+    }
+
+    Ok(new_state)
+}
+
+// Routing function - decides whether to continue or finish
+fn should_continue(state: &AgentState) -> String {
+    let last_msg = state.messages.last().unwrap();
+
+    // If last message has tool calls, route to tools
+    if last_msg.has_tool_calls() {
+        "tools".to_string()
+    } else {
+        // Otherwise, we're done
+        "__end__".to_string()
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result&lt;(), GraphError&gt; {
+    // Initialize LLM client
+    let llm = LlmClient::new(env::var("ANTHROPIC_API_KEY")?);
+
+    // Create tools
+    let tools = create_tools();
+    let tools_map: HashMap&lt;String, Tool&gt; = tools.iter()
+        .map(|t| (t.name.clone(), t.clone()))
+        .collect();
+
+    // Build the graph
+    let mut graph = StateGraph::new();
+
+    // Add nodes
+    graph.add_node("agent", move |state| {
+        agent_node(state, &llm, &tools)
+    });
+    graph.add_node("tools", move |state| {
+        tools_node(state, &tools_map)
+    });
+
+    // Add edges
+    graph.add_edge("__start__", "agent");
+    graph.add_conditional_edges("agent", should_continue);
+    graph.add_edge("tools", "agent");  // Loop back after tool execution
+
+    // Compile
+    let compiled = graph.compile()?;
+
+    // Run the agent
+    let initial_state = AgentState {
+        messages: vec![
+            Message::system("You are a helpful assistant with access to tools."),
+            Message::human("What is 125 * 47? Also, what time is it?"),
+        ],
+    };
+
+    let result = compiled.invoke(initial_state).await?;
+
+    // Print conversation
+    for msg in &result.messages {
+        println!("{:?}", msg);
+    }
+
+    Ok(())
+}
+
+// Helper function for math evaluation
+fn evaluate_math(expr: &str) -> Result&lt;f64, String&gt; {
+    // Simple eval - use a proper library like meval in production
+    meval::eval_str(expr).map_err(|e| e.to_string())
+}</code></pre>
+            </div>
+          </section>
+
+          <!-- Step-by-Step Breakdown -->
+          <section id="step-by-step">
+            <h2>Step-by-Step Breakdown</h2>
+
+            <h3>1. Define Tools</h3>
+            <p>
+              Each tool has a name, description, parameter schema (JSON Schema), and an execution function.
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">Tool::new(
+    "calculator",
+    "Evaluate mathematical expressions",
+    json!({
+        "type": "object",
+        "properties": {
+            "expression": { "type": "string" }
+        },
+        "required": ["expression"]
+    }),
+    Box::new(|args: Value| {
+        Box::pin(async move {
+            let expr = args["expression"].as_str().ok_or("Missing")?;
+            let result = evaluate_math(expr)?;
+            Ok(json!({ "result": result }))
+        })
+    })
+)</code></pre>
+            </div>
+
+            <h3>2. Agent Node</h3>
+            <p>
+              The agent node calls the LLM with the conversation history and available tools.
+              The LLM decides whether to use a tool or respond directly.
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">async fn agent_node(
+    state: AgentState,
+    llm: &LlmClient,
+    tools: &[Tool],
+) -> Result&lt;AgentState, GraphError&gt; {
+    // LLM analyzes the conversation and decides on action
+    let response = llm.chat_with_tools(&state.messages, tools).await?;
+
+    let mut new_state = state;
+    new_state.messages.push(Message::assistant(response));
+
+    Ok(new_state)
+}</code></pre>
+            </div>
+
+            <h3>3. Tools Node</h3>
+            <p>
+              The tools node extracts tool calls from the last message and executes them,
+              adding results back to the message history.
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">async fn tools_node(
+    state: AgentState,
+    tools: &HashMap&lt;String, Tool&gt;,
+) -> Result&lt;AgentState, GraphError&gt; {
+    let last_msg = state.messages.last().unwrap();
+    let tool_calls = last_msg.tool_calls().unwrap();
+
+    let mut new_state = state;
+
+    for call in tool_calls {
+        let tool = tools.get(&call.name).unwrap();
+        let result = tool.execute(call.arguments).await?;
+
+        new_state.messages.push(
+            Message::tool_result(call.id, call.name, result)
+        );
+    }
+
+    Ok(new_state)
+}</code></pre>
+            </div>
+
+            <h3>4. Conditional Routing</h3>
+            <p>
+              The routing function checks if the LLM wants to use tools or give a final answer.
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">fn should_continue(state: &AgentState) -> String {
+    let last_msg = state.messages.last().unwrap();
+
+    if last_msg.has_tool_calls() {
+        "tools".to_string()  // Execute tools
+    } else {
+        "__end__".to_string()  // Done
+    }
+}</code></pre>
+            </div>
+          </section>
+
+          <!-- Defining Tools -->
+          <section id="defining-tools">
+            <h2>Defining Tools</h2>
+            <p>
+              Tools follow a standard interface. Here's how to define a custom tool:
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">// Example: Weather tool
+Tool::new(
+    "get_weather",
+    "Get current weather for a location",
+    json!({
+        "type": "object",
+        "properties": {
+            "location": {
+                "type": "string",
+                "description": "City name or coordinates"
+            },
+            "units": {
+                "type": "string",
+                "enum": ["celsius", "fahrenheit"],
+                "description": "Temperature units"
+            }
+        },
+        "required": ["location"]
+    }),
+    Box::new(|args: Value| {
+        Box::pin(async move {
+            let location = args["location"].as_str()
+                .ok_or("Missing location")?;
+            let units = args["units"].as_str()
+                .unwrap_or("celsius");
+
+            // Call weather API
+            let client = reqwest::Client::new();
+            let response = client.get("https://api.weather.com/...")
+                .query(&[("location", location), ("units", units)])
+                .send()
+                .await?
+                .json::&lt;Value&gt;()
+                .await?;
+
+            Ok(response)
+        })
+    })
+)</code></pre>
+            </div>
+
+            <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 my-6 not-prose">
+              <p class="text-sm text-yellow-900">
+                <strong>Best Practices:</strong>
+              </p>
+              <ul class="text-sm text-yellow-900 list-disc pl-5 mt-2 space-y-1">
+                <li>Give tools clear, descriptive names</li>
+                <li>Write detailed descriptions - the LLM uses these to decide when to use each tool</li>
+                <li>Use JSON Schema for parameter validation</li>
+                <li>Handle errors gracefully and return informative error messages</li>
+                <li>Keep tool execution fast (< 5 seconds when possible)</li>
+              </ul>
+            </div>
+          </section>
+
+          <!-- Agent Loop -->
+          <section id="agent-loop">
+            <h2>The Agent Loop</h2>
+            <p>
+              The ReAct pattern creates a loop: Agent → Tools → Agent → ... → End
+            </p>
+
+            <div class="not-prose my-6">
+              <div class="bg-gray-50 rounded-lg p-6">
+                <pre class="text-sm"><code>User Question: "What is 125 * 47 and what time is it?"
+    ↓
+[Agent Node]
+  - LLM analyzes question
+  - Decides to use calculator and get_current_time tools
+  - Returns tool calls
+    ↓
+[Should Continue?] → Has tool calls → Route to "tools"
+    ↓
+[Tools Node]
+  - Execute calculator(125 * 47) → 5875
+  - Execute get_current_time() → "2025-01-15 14:30:00"
+  - Add results to messages
+    ↓
+[Loop back to Agent]
+    ↓
+[Agent Node]
+  - LLM sees tool results
+  - Formulates final answer
+  - Returns response without tool calls
+    ↓
+[Should Continue?] → No tool calls → Route to "__end__"
+    ↓
+[Done] Final answer: "125 * 47 = 5,875. The current time is 2:30 PM."</code></pre>
+              </div>
+            </div>
+          </section>
+
+          <!-- Running the Example -->
+          <section id="running">
+            <h2>Running the Example</h2>
+
+            <h3>1. Set up your environment</h3>
+            <div class="code-block not-prose">
+              <pre><code class="language-bash"># Set your API key
+export ANTHROPIC_API_KEY="your-key-here"
+
+# Or create a .env file
+echo "ANTHROPIC_API_KEY=your-key-here" > .env</code></pre>
+            </div>
+
+            <h3>2. Add required dependencies</h3>
+            <div class="code-block not-prose">
+              <pre><code class="language-bash">cargo add meval  # For math evaluation
+cargo add chrono  # For time handling
+cargo add reqwest --features json  # For web requests</code></pre>
+            </div>
+
+            <h3>3. Run the agent</h3>
+            <div class="code-block not-prose">
+              <pre><code class="language-bash">cargo run</code></pre>
+            </div>
+          </section>
+
+          <!-- Example Execution -->
+          <section id="example-execution">
+            <h2>Example Execution</h2>
+            <p>
+              Here's what a typical execution looks like:
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-plaintext">User: "What is 125 * 47? Also, what time is it?"
+
+[Agent] Thinking: I need to use the calculator and get_current_time tools.
+
+[Tool Call] calculator(expression: "125 * 47")
+[Tool Result] {"result": 5875}
+
+[Tool Call] get_current_time()
+[Tool Result] {"datetime": "2025-01-15T14:30:00Z", "formatted": "2025-01-15 14:30:00"}
+
+[Agent] Response: "The result of 125 × 47 is 5,875. The current time is 2:30 PM (14:30) on January 15, 2025."</code></pre>
+            </div>
+          </section>
+
+          <!-- Advanced Usage -->
+          <section id="advanced-usage">
+            <h2>Advanced Usage</h2>
+
+            <h3>Parallel Tool Calls</h3>
+            <p>
+              Modern LLMs can call multiple tools in parallel. The tools node handles this automatically:
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">// LLM can request multiple tools at once
+// [Tool Call] calculator(...)
+// [Tool Call] get_current_time()
+// [Tool Call] web_search(...)
+
+// All executed in parallel with tokio::join!
+let results = futures::future::join_all(
+    tool_calls.iter().map(|call| execute_tool(call))
+).await;</code></pre>
+            </div>
+
+            <h3>Error Handling</h3>
+            <p>
+              Handle tool errors gracefully by returning error messages to the LLM:
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">let result = match tool.execute(args).await {
+    Ok(result) => result,
+    Err(e) => json!({
+        "error": true,
+        "message": format!("Tool failed: {}", e)
+    })
+};
+
+new_state.messages.push(
+    Message::tool_result(call.id, call.name, result)
+);</code></pre>
+            </div>
+
+            <h3>Tool Rate Limiting</h3>
+            <p>
+              Prevent infinite loops by limiting the number of tool calls:
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">#[derive(Clone)]
+struct AgentState {
+    messages: Vec&lt;Message&gt;,
+    iterations: u32,
+    max_iterations: u32,
+}
+
+fn should_continue(state: &AgentState) -> String {
+    if state.iterations >= state.max_iterations {
+        return "__end__".to_string();
+    }
+
+    let last_msg = state.messages.last().unwrap();
+    if last_msg.has_tool_calls() {
+        "tools".to_string()
+    } else {
+        "__end__".to_string()
+    }
+}</code></pre>
+            </div>
+          </section>
+
+          <!-- Next Steps -->
+          <div class="not-prose my-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Next Steps</h2>
+            <div class="grid md:grid-cols-2 gap-4">
+              <a href="plan-execute.html" class="card hover:shadow-lg transition-shadow">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">Plan-Execute Pattern</h3>
+                <p class="text-sm text-gray-600">
+                  Learn advanced planning with multi-step task decomposition and execution.
+                </p>
+              </a>
+
+              <a href="streaming.html" class="card hover:shadow-lg transition-shadow">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">Stream Tool Execution</h3>
+                <p class="text-sm text-gray-600">
+                  Stream real-time updates as tools execute and LLM tokens are generated.
+                </p>
+              </a>
+
+              <a href="human-in-loop.html" class="card hover:shadow-lg transition-shadow">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">Add Human Approval</h3>
+                <p class="text-sm text-gray-600">
+                  Require human confirmation before executing sensitive tools.
+                </p>
+              </a>
+
+              <a href="customer-support.html" class="card hover:shadow-lg transition-shadow">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">Real-World Example</h3>
+                <p class="text-sm text-gray-600">
+                  Build a production-ready customer support bot with ReAct.
+                </p>
+              </a>
+            </div>
+          </div>
+        </article>
+      </main>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="bg-gray-900 text-gray-400 py-12 mt-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid md:grid-cols-4 gap-8 mb-8">
+        <div>
+          <h3 class="text-white font-semibold mb-4">rLangGraph</h3>
+          <p class="text-sm">A Rust port of LangGraph for building stateful AI agent workflows.</p>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Documentation</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="../getting-started/" class="hover:text-white transition-colors">Getting Started</a></li>
+            <li><a href="../architecture/" class="hover:text-white transition-colors">Architecture</a></li>
+            <li><a href="../api/" class="hover:text-white transition-colors">API Reference</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Resources</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="../examples/" class="hover:text-white transition-colors">Examples</a></li>
+            <li><a href="https://github.com/pcastone/orca" target="_blank" rel="noopener" class="hover:text-white transition-colors">GitHub</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Project</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="https://github.com/pcastone/orca/blob/main/LICENSE" target="_blank" rel="noopener" class="hover:text-white transition-colors">License</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-gray-800 pt-8 text-center text-sm">
+        <p>&copy; 2025 acolib. Built with Rust and Tailwind CSS.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+  <script src="../../src/js/navigation.js"></script>
+  <script src="../../src/js/search.js"></script>
+</body>
+</html>

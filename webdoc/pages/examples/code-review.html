@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Code Review Agent - rLangGraph</title>
+  <link rel="stylesheet" href="../../dist/css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+</head>
+<body class="font-sans antialiased">
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center">
+          <a href="../../" class="flex items-center space-x-2">
+            <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+              <span class="text-white font-bold text-lg">r</span>
+            </div>
+            <span class="text-xl font-bold text-gray-900">rLangGraph</span>
+          </a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <article class="prose prose-lg max-w-none">
+      <div class="not-prose mb-8">
+        <div class="flex items-center gap-3 mb-4">
+          <h1 class="text-4xl font-bold text-gray-900 mb-0">Code Review Agent</h1>
+          <span class="px-3 py-1 text-sm font-medium bg-purple-100 text-purple-800 rounded-full">Advanced</span>
+        </div>
+        <p class="text-xl text-gray-600">
+          Automated code review agent that analyzes code quality, suggests improvements,
+          and checks for security vulnerabilities.
+        </p>
+      </div>
+
+      <section>
+        <h2>Review Checks</h2>
+        <ul>
+          <li><strong>Code Quality:</strong> Complexity, readability, best practices</li>
+          <li><strong>Security:</strong> Common vulnerabilities (OWASP Top 10)</li>
+          <li><strong>Performance:</strong> Inefficient algorithms, memory leaks</li>
+          <li><strong>Testing:</strong> Test coverage, edge cases</li>
+          <li><strong>Documentation:</strong> Missing docs, unclear names</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Complete Implementation</h2>
+        <div class="code-block not-prose">
+          <pre><code class="language-rust">use langgraph_core::{StateGraph, Message, Tool, GraphError};
+
+#[derive(Clone, Serialize, Deserialize)]
+struct CodeReviewState {
+    code: String,
+    language: String,
+    issues: Vec&lt;Issue&gt;,
+    suggestions: Vec&lt;Suggestion&gt;,
+    security_score: f32,
+    quality_score: f32,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+struct Issue {
+    severity: String,  // critical, high, medium, low
+    category: String,  // security, performance, quality
+    line: Option&lt;usize&gt;,
+    description: String,
+}
+
+async fn analyze_security(
+    mut state: CodeReviewState,
+    llm: &LlmClient,
+) -> Result&lt;CodeReviewState, GraphError&gt; {
+    let prompt = format!(
+        "Analyze this {} code for security vulnerabilities:\n\n{}",
+        state.language, state.code
+    );
+
+    let response = llm.chat(&[
+        Message::system("You are a security expert. Find vulnerabilities."),
+        Message::human(prompt),
+    ]).await?;
+
+    // Parse issues from response
+    let issues = parse_security_issues(&response);
+    state.issues.extend(issues);
+    state.security_score = calculate_security_score(&state.issues);
+
+    Ok(state)
+}
+
+async fn analyze_quality(
+    mut state: CodeReviewState,
+    llm: &LlmClient,
+) -> Result&lt;CodeReviewState, GraphError&gt; {
+    let prompt = format!(
+        "Review this {} code for quality and best practices:\n\n{}",
+        state.language, state.code
+    );
+
+    let response = llm.chat(&[
+        Message::system("You are a code quality expert."),
+        Message::human(prompt),
+    ]).await?;
+
+    let suggestions = parse_suggestions(&response);
+    state.suggestions.extend(suggestions);
+    state.quality_score = calculate_quality_score(&state.suggestions);
+
+    Ok(state)
+}
+
+async fn run_static_analysis(
+    mut state: CodeReviewState
+) -> Result&lt;CodeReviewState, GraphError&gt; {
+    // Run language-specific linters
+    match state.language.as_str() {
+        "rust" => {
+            let output = Command::new("clippy")
+                .args(&["--", "--format", "json"])
+                .output()
+                .await?;
+
+            let clippy_issues = parse_clippy_output(&output.stdout);
+            state.issues.extend(clippy_issues);
+        }
+        "python" => {
+            // Run pylint, mypy, etc.
+        }
+        _ => {}
+    }
+
+    Ok(state)
+}
+
+async fn generate_report(
+    state: CodeReviewState,
+    llm: &LlmClient,
+) -> Result&lt;CodeReviewState, GraphError&gt; {
+    let summary = format!(
+        "Code Review Summary:\n\
+         Security Score: {}/10\n\
+         Quality Score: {}/10\n\
+         Issues Found: {}\n\
+         Suggestions: {}",
+        state.security_score,
+        state.quality_score,
+        state.issues.len(),
+        state.suggestions.len()
+    );
+
+    println!("{}", summary);
+
+    // Generate detailed markdown report
+    let report = create_markdown_report(&state);
+    save_report(&report).await?;
+
+    Ok(state)
+}
+
+#[tokio::main]
+async fn main() -> Result&lt;(), GraphError&gt; {
+    let llm = LlmClient::new(env::var("ANTHROPIC_API_KEY")?);
+
+    let mut graph = StateGraph::new();
+
+    // Parallel analysis
+    graph.add_node("security", |s| analyze_security(s, &llm));
+    graph.add_node("quality", |s| analyze_quality(s, &llm));
+    graph.add_node("static", run_static_analysis);
+    graph.add_node("report", |s| generate_report(s, &llm));
+
+    // Run security and quality checks in parallel
+    graph.add_edge("__start__", "security");
+    graph.add_edge("__start__", "quality");
+    graph.add_edge("__start__", "static");
+
+    // Wait for all, then generate report
+    graph.add_edge("security", "report");
+    graph.add_edge("quality", "report");
+    graph.add_edge("static", "report");
+    graph.add_edge("report", "__end__");
+
+    let compiled = graph.compile()?;
+
+    let code = std::fs::read_to_string("src/main.rs")?;
+
+    let result = compiled.invoke(CodeReviewState {
+        code,
+        language: "rust".to_string(),
+        issues: vec![],
+        suggestions: vec![],
+        security_score: 0.0,
+        quality_score: 0.0,
+    }).await?;
+
+    println!("\nReview complete!");
+    println!("Critical issues: {}", count_critical(&result.issues));
+
+    Ok(())
+}</code></pre>
+        </div>
+      </section>
+
+      <section>
+        <h2>Integration with CI/CD</h2>
+        <div class="code-block not-prose">
+          <pre><code class="language-yaml"># .github/workflows/code-review.yml
+name: AI Code Review
+
+on: [pull_request]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Run AI Code Review
+        run: cargo run --bin code-reviewer
+      - name: Comment on PR
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const report = require('./review-report.json');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              body: report.markdown
+            });</code></pre>
+        </div>
+      </section>
+    </article>
+  </div>
+
+  <footer class="bg-gray-900 text-gray-400 py-12 mt-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center text-sm">
+        <p>&copy; 2025 acolib. Built with Rust and Tailwind CSS.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom base styles */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply text-gray-900 bg-white;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold text-gray-900;
+  }
+
+  h1 {
+    @apply text-4xl mb-4;
+  }
+
+  h2 {
+    @apply text-3xl mb-3 mt-8;
+  }
+
+  h3 {
+    @apply text-2xl mb-2 mt-6;
+  }
+
+  h4 {
+    @apply text-xl mb-2 mt-4;
+  }
+
+  p {
+    @apply mb-4 leading-relaxed;
+  }
+
+  a {
+    @apply text-primary-600 hover:text-primary-700 transition-colors;
+  }
+
+  code {
+    @apply text-sm font-mono bg-gray-100 text-primary-600 px-1.5 py-0.5 rounded;
+  }
+
+  pre {
+    @apply mb-4 p-4 bg-gray-900 rounded-lg overflow-x-auto;
+  }
+
+  pre code {
+    @apply bg-transparent text-gray-100 p-0;
+  }
+}
+
+/* Custom components */
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  }
+
+  .btn-primary {
+    @apply bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-200 text-gray-900 hover:bg-gray-300 active:bg-gray-400;
+  }
+
+  .btn-outline {
+    @apply border-2 border-primary-600 text-primary-600 hover:bg-primary-50;
+  }
+
+  .card {
+    @apply bg-white rounded-lg shadow-md p-6 border border-gray-200;
+  }
+
+  .nav-link {
+    @apply block px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-primary-600 rounded transition-colors;
+  }
+
+  .nav-link-active {
+    @apply bg-primary-50 text-primary-700 font-medium;
+  }
+
+  .sidebar-link {
+    @apply block px-3 py-1.5 text-sm text-gray-600 hover:text-primary-600 hover:bg-gray-50 rounded transition-colors;
+  }
+
+  .sidebar-link-active {
+    @apply text-primary-700 bg-primary-50 font-medium;
+  }
+
+  .code-block {
+    @apply relative mb-6;
+  }
+
+  .copy-button {
+    @apply absolute top-2 right-2 px-3 py-1 text-xs bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors;
+  }
+
+  .search-input {
+    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+  }
+
+  .breadcrumb {
+    @apply flex items-center space-x-2 text-sm text-gray-600 mb-4;
+  }
+
+  .breadcrumb-separator {
+    @apply text-gray-400;
+  }
+
+  .toc-link {
+    @apply block py-1 text-sm text-gray-600 hover:text-primary-600 border-l-2 border-transparent hover:border-primary-600 pl-4 transition-all;
+  }
+
+  .toc-link-active {
+    @apply text-primary-700 border-primary-600 font-medium;
+  }
+}
+
+/* Custom utilities */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-gray-100;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-gray-400 rounded-full;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
+  }
+}
+
+/* Prism.js code highlighting adjustments */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  @apply text-gray-500;
+}
+
+.token.punctuation {
+  @apply text-gray-400;
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol,
+.token.deleted {
+  @apply text-red-400;
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted {
+  @apply text-green-400;
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  @apply text-yellow-400;
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  @apply text-blue-400;
+}
+
+.token.function,
+.token.class-name {
+  @apply text-purple-400;
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+  @apply text-orange-400;
+}

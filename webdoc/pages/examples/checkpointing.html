@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Checkpoint and Resume workflows with rLangGraph - Complete tutorial">
+  <meta name="keywords" content="rlangraph, checkpoint, resume, state, persistence, rust">
+  <title>Checkpoint & Resume - rLangGraph</title>
+
+  <link rel="stylesheet" href="../../dist/css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="font-sans antialiased" data-category="Examples">
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center">
+          <a href="../../" class="flex items-center space-x-2">
+            <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+              <span class="text-white font-bold text-lg">r</span>
+            </div>
+            <span class="text-xl font-bold text-gray-900">rLangGraph</span>
+          </a>
+        </div>
+
+        <div class="hidden md:flex items-center space-x-8">
+          <a href="../../" class="nav-link">Home</a>
+          <a href="../getting-started/" class="nav-link">Getting Started</a>
+          <a href="../architecture/" class="nav-link">Architecture</a>
+          <a href="../api/" class="nav-link">API Reference</a>
+          <a href="../guides/" class="nav-link">Guides</a>
+          <a href="../examples/" class="nav-link nav-link-active">Examples</a>
+        </div>
+
+        <div class="hidden md:flex items-center space-x-4">
+          <div class="relative">
+            <input type="search" id="search-input" placeholder="Search docs..." class="search-input w-64 text-sm">
+            <div id="search-results" class="hidden absolute top-full mt-2 w-96 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto scrollbar-thin"></div>
+          </div>
+          <a href="https://github.com/pcastone/orca" target="_blank" rel="noopener" class="text-gray-700 hover:text-primary-600 transition-colors">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+            </svg>
+          </a>
+        </div>
+
+        <button id="mobile-menu-button" class="md:hidden p-2 rounded-lg text-gray-700 hover:bg-gray-100">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <div id="search-overlay" class="hidden fixed inset-0 bg-black bg-opacity-25 z-40"></div>
+
+  <!-- Main Content -->
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex flex-col lg:flex-row gap-8">
+      <!-- Sidebar TOC -->
+      <aside class="lg:w-64 flex-shrink-0">
+        <div class="sticky top-24">
+          <nav class="bg-white rounded-lg border border-gray-200 p-4">
+            <h2 class="font-semibold text-gray-900 mb-3">On This Page</h2>
+            <ul class="space-y-1 text-sm">
+              <li><a href="#overview" class="toc-link">Overview</a></li>
+              <li><a href="#why-checkpoints" class="toc-link">Why Checkpoints?</a></li>
+              <li><a href="#checkpoint-savers" class="toc-link">Checkpoint Savers</a></li>
+              <li><a href="#basic-example" class="toc-link">Basic Example</a></li>
+              <li><a href="#resuming" class="toc-link">Resuming Execution</a></li>
+              <li><a href="#time-travel" class="toc-link">Time Travel Debugging</a></li>
+              <li><a href="#branching" class="toc-link">Branching Workflows</a></li>
+              <li><a href="#multi-user" class="toc-link">Multi-User Support</a></li>
+            </ul>
+          </nav>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="flex-1 min-w-0">
+        <!-- Breadcrumb -->
+        <div class="breadcrumb mb-6">
+          <a href="../../" class="hover:text-primary-600">Home</a>
+          <span class="breadcrumb-separator">/</span>
+          <a href="../examples/" class="hover:text-primary-600">Examples</a>
+          <span class="breadcrumb-separator">/</span>
+          <span class="text-gray-900">Checkpoint & Resume</span>
+        </div>
+
+        <article class="prose prose-lg max-w-none">
+          <!-- Title Section -->
+          <div class="not-prose mb-8">
+            <div class="flex items-center gap-3 mb-4">
+              <h1 class="text-4xl font-bold text-gray-900 mb-0">Checkpoint & Resume</h1>
+              <span class="px-3 py-1 text-sm font-medium bg-purple-100 text-purple-800 rounded-full">Advanced</span>
+            </div>
+            <p class="text-xl text-gray-600">
+              Learn to save and restore execution state, implement time-travel debugging,
+              and create branching workflows with checkpoints in rLangGraph.
+            </p>
+            <div class="flex items-center gap-6 mt-4 text-sm text-gray-600">
+              <span class="flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                20 min read
+              </span>
+            </div>
+          </div>
+
+          <!-- Overview -->
+          <section id="overview">
+            <h2>Overview</h2>
+            <p>
+              Checkpointing is one of rLangGraph's most powerful features. It automatically saves
+              the state of your workflow after each step, enabling:
+            </p>
+            <ul>
+              <li><strong>Resume from failures</strong> - Continue execution after crashes or errors</li>
+              <li><strong>Time-travel debugging</strong> - Step backwards through execution history</li>
+              <li><strong>Branching workflows</strong> - Create alternative timelines from any checkpoint</li>
+              <li><strong>Human-in-the-loop</strong> - Pause for approval and resume later</li>
+              <li><strong>Multi-session support</strong> - Save conversations across sessions</li>
+            </ul>
+
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-4 my-6 not-prose">
+              <div class="flex">
+                <div class="flex-shrink-0">
+                  <svg class="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                  </svg>
+                </div>
+                <div class="ml-3">
+                  <p class="text-sm text-blue-900">
+                    <strong>Key Concept:</strong> rLangGraph creates a checkpoint after every superstep in the Pregel
+                    execution model. This provides natural savepoints for persistence.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Why Checkpoints? -->
+          <section id="why-checkpoints">
+            <h2>Why Checkpoints?</h2>
+
+            <h3>Production Reliability</h3>
+            <p>
+              In production, things fail. Network issues, API rate limits, server crashes - checkpoints
+              ensure you never lose progress. Your agent can pick up exactly where it left off.
+            </p>
+
+            <h3>Development & Debugging</h3>
+            <p>
+              During development, checkpoints let you replay executions, step backwards, and
+              understand exactly what happened at each step.
+            </p>
+
+            <h3>User Experience</h3>
+            <p>
+              For long-running workflows, users can close the app and return later. Their progress
+              is preserved across sessions.
+            </p>
+          </section>
+
+          <!-- Checkpoint Savers -->
+          <section id="checkpoint-savers">
+            <h2>Checkpoint Savers</h2>
+            <p>
+              rLangGraph provides three built-in checkpoint savers:
+            </p>
+
+            <div class="space-y-4 not-prose my-6">
+              <div class="card">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">MemoryCheckpointSaver</h3>
+                <p class="text-sm text-gray-700 mb-2">
+                  <strong>Use for:</strong> Testing, development, single-session workflows
+                </p>
+                <p class="text-sm text-gray-600">
+                  Stores checkpoints in memory. Fast but not persistent - lost when process ends.
+                </p>
+                <div class="code-block mt-3">
+                  <pre><code class="language-rust">use langgraph_checkpoint::MemoryCheckpointSaver;
+
+let checkpointer = MemoryCheckpointSaver::new();</code></pre>
+                </div>
+              </div>
+
+              <div class="card">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">SqliteCheckpointSaver</h3>
+                <p class="text-sm text-gray-700 mb-2">
+                  <strong>Use for:</strong> Production (single-user), local development, small-scale deployments
+                </p>
+                <p class="text-sm text-gray-600">
+                  Stores checkpoints in a SQLite database. Persistent, file-based storage.
+                </p>
+                <div class="code-block mt-3">
+                  <pre><code class="language-rust">use langgraph_checkpoint::SqliteCheckpointSaver;
+
+let checkpointer = SqliteCheckpointSaver::new("./checkpoints.db").await?;</code></pre>
+                </div>
+              </div>
+
+              <div class="card">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">PostgresCheckpointSaver</h3>
+                <p class="text-sm text-gray-700 mb-2">
+                  <strong>Use for:</strong> Production (multi-user), distributed systems, cloud deployments
+                </p>
+                <p class="text-sm text-gray-600">
+                  Stores checkpoints in PostgreSQL. Fully persistent, supports multiple concurrent users.
+                </p>
+                <div class="code-block mt-3">
+                  <pre><code class="language-rust">use langgraph_checkpoint::PostgresCheckpointSaver;
+
+let checkpointer = PostgresCheckpointSaver::new(
+    "postgresql://user:pass@localhost/db"
+).await?;</code></pre>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Basic Example -->
+          <section id="basic-example">
+            <h2>Basic Example</h2>
+            <p>
+              Here's a simple workflow with SQLite checkpointing:
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">use langgraph_core::{StateGraph, Message, GraphError};
+use langgraph_checkpoint::SqliteCheckpointSaver;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Serialize, Deserialize)]
+struct State {
+    messages: Vec&lt;Message&gt;,
+    step: u32,
+}
+
+async fn process_step(mut state: State) -> Result&lt;State, GraphError&gt; {
+    state.step += 1;
+    state.messages.push(Message::assistant(
+        format!("Completed step {}", state.step)
+    ));
+
+    // Simulate some work
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+    Ok(state)
+}
+
+#[tokio::main]
+async fn main() -> Result&lt;(), GraphError&gt; {
+    // Create SQLite checkpoint saver
+    let checkpointer = SqliteCheckpointSaver::new("./checkpoints.db").await?;
+
+    // Build graph
+    let mut graph = StateGraph::new();
+    graph.add_node("process", process_step);
+    graph.add_edge("__start__", "process");
+    graph.add_edge("process", "__end__");
+
+    // Compile with checkpointer
+    let compiled = graph.compile().with_checkpointer(checkpointer);
+
+    // Create a thread ID for this conversation
+    let thread_id = "conversation-123";
+
+    // Initial execution
+    let initial_state = State {
+        messages: vec![Message::human("Start processing")],
+        step: 0,
+    };
+
+    let config = CheckpointConfig::new()
+        .with_thread_id(thread_id);
+
+    let result = compiled.invoke(initial_state, config).await?;
+
+    println!("Final state: step = {}", result.step);
+    // Checkpoint automatically saved!
+
+    Ok(())
+}</code></pre>
+            </div>
+          </section>
+
+          <!-- Resuming Execution -->
+          <section id="resuming">
+            <h2>Resuming Execution</h2>
+            <p>
+              To resume from a checkpoint, use the same thread ID:
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">// Resume from last checkpoint
+let config = CheckpointConfig::new()
+    .with_thread_id("conversation-123");
+
+// This will load the last state and continue
+let new_state = State {
+    messages: vec![Message::human("Continue from where we left off")],
+    step: 0,  // Will be overwritten by checkpoint
+};
+
+let result = compiled.invoke(new_state, config).await?;
+
+// Execution picks up from the last checkpoint
+println!("Resumed at step: {}", result.step);</code></pre>
+            </div>
+
+            <h3>Resume from Specific Checkpoint</h3>
+            <p>
+              You can also resume from a specific checkpoint ID:
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">// Get checkpoint history
+let checkpoints = checkpointer.list_checkpoints(thread_id).await?;
+
+// Resume from second-to-last checkpoint
+if checkpoints.len() > 1 {
+    let checkpoint_id = &checkpoints[checkpoints.len() - 2].id;
+
+    let config = CheckpointConfig::new()
+        .with_thread_id(thread_id)
+        .with_checkpoint_id(checkpoint_id);
+
+    let result = compiled.invoke(initial_state, config).await?;
+}</code></pre>
+            </div>
+          </section>
+
+          <!-- Time Travel Debugging -->
+          <section id="time-travel">
+            <h2>Time Travel Debugging</h2>
+            <p>
+              Checkpoints enable time-travel debugging - you can step backwards through execution:
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">// List all checkpoints for a thread
+let checkpoints = checkpointer.list_checkpoints("thread-123").await?;
+
+println!("Execution history:");
+for (i, checkpoint) in checkpoints.iter().enumerate() {
+    println!("  {}. Step {}: {} messages",
+        i,
+        checkpoint.metadata.step,
+        checkpoint.state.messages.len()
+    );
+}
+
+// Replay from any checkpoint
+println!("\nReplaying from step 3:");
+let config = CheckpointConfig::new()
+    .with_thread_id("thread-123")
+    .with_checkpoint_id(&checkpoints[3].id);
+
+let replayed_state = compiled.invoke(initial_state, config).await?;</code></pre>
+            </div>
+
+            <div class="not-prose my-6">
+              <div class="bg-gray-50 rounded-lg p-6">
+                <h4 class="font-semibold text-gray-900 mb-3">Example Output:</h4>
+                <pre class="text-sm"><code>Execution history:
+  0. Step 0: 1 messages
+  1. Step 1: 2 messages
+  2. Step 2: 3 messages
+  3. Step 3: 4 messages
+  4. Step 4: 5 messages
+
+Replaying from step 3:
+Current step: 3
+Messages: 4</code></pre>
+              </div>
+            </div>
+          </section>
+
+          <!-- Branching Workflows -->
+          <section id="branching">
+            <h2>Branching Workflows</h2>
+            <p>
+              Create alternative execution paths from any checkpoint:
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">// Original execution
+let thread_a = "thread-main";
+let config_a = CheckpointConfig::new().with_thread_id(thread_a);
+let result_a = compiled.invoke(initial_state.clone(), config_a).await?;
+
+// Get checkpoint from step 3
+let checkpoints = checkpointer.list_checkpoints(thread_a).await?;
+let step_3_checkpoint = &checkpoints[3];
+
+// Create a branch from step 3
+let thread_b = "thread-branch";
+let config_b = CheckpointConfig::new()
+    .with_thread_id(thread_b)
+    .with_checkpoint_id(&step_3_checkpoint.id);
+
+// Different input for the branch
+let branch_state = State {
+    messages: vec![Message::human("Take a different path")],
+    step: 0,  // Loaded from checkpoint
+};
+
+let result_b = compiled.invoke(branch_state, config_b).await?;
+
+// Now you have two timelines:
+// thread-main: Original execution
+// thread-branch: Alternative path from step 3</code></pre>
+            </div>
+
+            <div class="not-prose my-6">
+              <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4">
+                <p class="text-sm text-yellow-900">
+                  <strong>Use Case:</strong> This is perfect for A/B testing different prompts,
+                  trying alternative tool configurations, or exploring different reasoning paths.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <!-- Multi-User Support -->
+          <section id="multi-user">
+            <h2>Multi-User Support</h2>
+            <p>
+              Use unique thread IDs to support multiple concurrent users:
+            </p>
+
+            <div class="code-block not-prose">
+              <pre><code class="language-rust">// User A's conversation
+let user_a_thread = "user-alice-session-1";
+let config_a = CheckpointConfig::new().with_thread_id(user_a_thread);
+
+let state_a = State {
+    messages: vec![Message::human("Hello from Alice")],
+    step: 0,
+};
+let result_a = compiled.invoke(state_a, config_a).await?;
+
+// User B's conversation (completely independent)
+let user_b_thread = "user-bob-session-1";
+let config_b = CheckpointConfig::new().with_thread_id(user_b_thread);
+
+let state_b = State {
+    messages: vec![Message::human("Hello from Bob")],
+    step: 0,
+};
+let result_b = compiled.invoke(state_b, config_b).await?;
+
+// Each user has their own checkpoint history
+// Conversations never interfere with each other</code></pre>
+            </div>
+
+            <h3>Thread Naming Conventions</h3>
+            <div class="not-prose my-6">
+              <table class="min-w-full border border-gray-300">
+                <thead class="bg-gray-100">
+                  <tr>
+                    <th class="border border-gray-300 px-4 py-2 text-left">Pattern</th>
+                    <th class="border border-gray-300 px-4 py-2 text-left">Use Case</th>
+                    <th class="border border-gray-300 px-4 py-2 text-left">Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="border border-gray-300 px-4 py-2"><code>user-{id}-session-{n}</code></td>
+                    <td class="border border-gray-300 px-4 py-2">Multi-user sessions</td>
+                    <td class="border border-gray-300 px-4 py-2"><code>user-123-session-1</code></td>
+                  </tr>
+                  <tr class="bg-gray-50">
+                    <td class="border border-gray-300 px-4 py-2"><code>workflow-{type}-{id}</code></td>
+                    <td class="border border-gray-300 px-4 py-2">Different workflow types</td>
+                    <td class="border border-gray-300 px-4 py-2"><code>workflow-approval-789</code></td>
+                  </tr>
+                  <tr>
+                    <td class="border border-gray-300 px-4 py-2"><code>{date}-{task}</code></td>
+                    <td class="border border-gray-300 px-4 py-2">Time-based organization</td>
+                    <td class="border border-gray-300 px-4 py-2"><code>2025-01-15-report</code></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- Best Practices -->
+          <div class="not-prose my-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Best Practices</h2>
+            <div class="space-y-4">
+              <div class="card">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">1. Clean Up Old Checkpoints</h3>
+                <p class="text-sm text-gray-700 mb-2">
+                  Checkpoints accumulate over time. Implement cleanup for old threads:
+                </p>
+                <div class="code-block">
+                  <pre><code class="language-rust">// Delete checkpoints older than 30 days
+checkpointer.delete_old_checkpoints(
+    Duration::from_days(30)
+).await?;</code></pre>
+                </div>
+              </div>
+
+              <div class="card">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">2. Use Descriptive Thread IDs</h3>
+                <p class="text-sm text-gray-700">
+                  Make thread IDs self-documenting so you can identify conversations later:
+                  <code>user-123-support-ticket-456</code> instead of just <code>abc123</code>
+                </p>
+              </div>
+
+              <div class="card">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">3. Handle Checkpoint Not Found</h3>
+                <p class="text-sm text-gray-700 mb-2">
+                  Always handle the case where a checkpoint doesn't exist:
+                </p>
+                <div class="code-block">
+                  <pre><code class="language-rust">match compiled.invoke(state, config).await {
+    Ok(result) => Ok(result),
+    Err(GraphError::CheckpointNotFound(_)) => {
+        // Start fresh if checkpoint missing
+        compiled.invoke(initial_state, config).await
+    }
+    Err(e) => Err(e),
+}</code></pre>
+                </div>
+              </div>
+
+              <div class="card">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">4. Monitor Checkpoint Size</h3>
+                <p class="text-sm text-gray-700">
+                  Large states slow down checkpointing. Keep state minimal by:
+                </p>
+                <ul class="text-sm text-gray-700 list-disc pl-5 mt-2 space-y-1">
+                  <li>Storing only essential data in state</li>
+                  <li>Trimming old messages from history</li>
+                  <li>Moving large blobs to external storage (S3, etc.)</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Next Steps -->
+          <div class="not-prose my-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Next Steps</h2>
+            <div class="grid md:grid-cols-2 gap-4">
+              <a href="human-in-loop.html" class="card hover:shadow-lg transition-shadow">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">Human-in-the-Loop</h3>
+                <p class="text-sm text-gray-600">
+                  Combine checkpoints with interrupts to pause execution for human approval.
+                </p>
+              </a>
+
+              <a href="streaming.html" class="card hover:shadow-lg transition-shadow">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">Streaming with Checkpoints</h3>
+                <p class="text-sm text-gray-600">
+                  Stream real-time updates while automatically saving checkpoints.
+                </p>
+              </a>
+
+              <a href="customer-support.html" class="card hover:shadow-lg transition-shadow">
+                <h3 class="text-lg font-semibold text-primary-700 mb-2">Production Example</h3>
+                <p class="text-sm text-gray-600">
+                  See checkpointing in action in a real customer support application.
+                </p>
+              </a>
+            </div>
+          </div>
+        </article>
+      </main>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="bg-gray-900 text-gray-400 py-12 mt-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid md:grid-cols-4 gap-8 mb-8">
+        <div>
+          <h3 class="text-white font-semibold mb-4">rLangGraph</h3>
+          <p class="text-sm">A Rust port of LangGraph for building stateful AI agent workflows.</p>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Documentation</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="../getting-started/" class="hover:text-white transition-colors">Getting Started</a></li>
+            <li><a href="../architecture/" class="hover:text-white transition-colors">Architecture</a></li>
+            <li><a href="../api/" class="hover:text-white transition-colors">API Reference</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Resources</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="../examples/" class="hover:text-white transition-colors">Examples</a></li>
+            <li><a href="https://github.com/pcastone/orca" target="_blank" rel="noopener" class="hover:text-white transition-colors">GitHub</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Project</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="https://github.com/pcastone/orca/blob/main/LICENSE" target="_blank" rel="noopener" class="hover:text-white transition-colors">License</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-gray-800 pt-8 text-center text-sm">
+        <p>&copy; 2025 acolib. Built with Rust and Tailwind CSS.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+  <script src="../../src/js/navigation.js"></script>
+  <script src="../../src/js/search.js"></script>
+</body>
+</html>

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Reflection Pattern - rLangGraph</title>
+  <link rel="stylesheet" href="../../dist/css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+</head>
+<body class="font-sans antialiased">
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center">
+          <a href="../../" class="flex items-center space-x-2">
+            <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+              <span class="text-white font-bold text-lg">r</span>
+            </div>
+            <span class="text-xl font-bold text-gray-900">rLangGraph</span>
+          </a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="breadcrumb mb-6">
+      <a href="../../">Home</a>
+      <span class="breadcrumb-separator">/</span>
+      <a href="../examples/">Examples</a>
+      <span class="breadcrumb-separator">/</span>
+      <span class="text-gray-900">Reflection Pattern</span>
+    </div>
+
+    <article class="prose prose-lg max-w-none">
+      <div class="not-prose mb-8">
+        <div class="flex items-center gap-3 mb-4">
+          <h1 class="text-4xl font-bold text-gray-900 mb-0">Reflection Pattern</h1>
+          <span class="px-3 py-1 text-sm font-medium bg-blue-100 text-blue-800 rounded-full">Intermediate</span>
+        </div>
+        <p class="text-xl text-gray-600">
+          Create a self-improving agent that generates content, critiques it, and refines based on feedback.
+        </p>
+      </div>
+
+      <section>
+        <h2>Pattern Overview</h2>
+        <p>The Reflection pattern creates a feedback loop for quality improvement:</p>
+        <ol>
+          <li><strong>Generate:</strong> Create initial content (essay, code, design)</li>
+          <li><strong>Critique:</strong> Analyze quality, identify issues</li>
+          <li><strong>Refine:</strong> Improve based on critique</li>
+          <li><strong>Repeat:</strong> Until quality threshold met</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Complete Example: Essay Writer</h2>
+        <div class="code-block not-prose">
+          <pre><code class="language-rust">use langgraph_core::{StateGraph, Message, GraphError};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Serialize, Deserialize)]
+struct ReflectionState {
+    task: String,
+    drafts: Vec&lt;String&gt;,
+    critiques: Vec&lt;String&gt;,
+    iteration: u32,
+    max_iterations: u32,
+}
+
+async fn generator(
+    mut state: ReflectionState,
+    llm: &LlmClient,
+) -> Result&lt;ReflectionState, GraphError&gt; {
+    let prompt = if state.drafts.is_empty() {
+        format!("Write an essay about: {}", state.task)
+    } else {
+        format!(
+            "Improve this essay based on the critique:\n\nEssay:\n{}\n\nCritique:\n{}",
+            state.drafts.last().unwrap(),
+            state.critiques.last().unwrap()
+        )
+    };
+
+    let draft = llm.chat(&[Message::human(prompt)]).await?;
+    state.drafts.push(draft);
+    state.iteration += 1;
+
+    Ok(state)
+}
+
+async fn critic(
+    mut state: ReflectionState,
+    llm: &LlmClient,
+) -> Result&lt;ReflectionState, GraphError&gt; {
+    let draft = state.drafts.last().unwrap();
+
+    let critique = llm.chat(&[Message::system(
+        "You are a critical editor. Provide constructive criticism."
+    ), Message::human(format!("Critique this essay:\n{}", draft))]).await?;
+
+    state.critiques.push(critique);
+    Ok(state)
+}
+
+fn should_continue(state: &ReflectionState) -> String {
+    if state.iteration >= state.max_iterations {
+        "__end__".to_string()
+    } else if state.critiques.last().map_or(false, |c| c.contains("excellent")) {
+        "__end__".to_string()  // Quality threshold met
+    } else {
+        "generate".to_string()  // Refine further
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result&lt;(), GraphError&gt; {
+    let llm = LlmClient::new(env::var("ANTHROPIC_API_KEY")?);
+
+    let mut graph = StateGraph::new();
+    graph.add_node("generate", |s| generator(s, &llm));
+    graph.add_node("critique", |s| critic(s, &llm));
+
+    graph.add_edge("__start__", "generate");
+    graph.add_edge("generate", "critique");
+    graph.add_conditional_edges("critique", should_continue);
+
+    let compiled = graph.compile()?;
+
+    let result = compiled.invoke(ReflectionState {
+        task: "The impact of AI on software development".to_string(),
+        drafts: vec![],
+        critiques: vec![],
+        iteration: 0,
+        max_iterations: 3,
+    }).await?;
+
+    println!("Final essay (iteration {}):", result.iteration);
+    println!("{}", result.drafts.last().unwrap());
+
+    Ok(())
+}</code></pre>
+        </div>
+      </section>
+
+      <section>
+        <h2>Use Cases</h2>
+        <ul>
+          <li><strong>Content Writing:</strong> Essays, articles, documentation</li>
+          <li><strong>Code Generation:</strong> Generate, review, refactor</li>
+          <li><strong>Design:</strong> Create, critique, iterate on designs</li>
+          <li><strong>Translation:</strong> Translate, review quality, refine</li>
+        </ul>
+
+        <div class="bg-green-50 border-l-4 border-green-500 p-4 my-6 not-prose">
+          <p class="text-sm text-green-900">
+            <strong>Best Results:</strong> Use different personas for generator and critic
+            (e.g., "creative writer" vs "critical editor") to avoid confirmation bias.
+          </p>
+        </div>
+      </section>
+    </article>
+  </div>
+
+  <footer class="bg-gray-900 text-gray-400 py-12 mt-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center text-sm">
+        <p>&copy; 2025 acolib. Built with Rust and Tailwind CSS.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+  <script src="../../src/js/navigation.js"></script>
+</body>
+</html>
