@@ -232,6 +232,18 @@ tar -czf "$TARBALL_NAME" "build_${BUILD_DATE}/"
 echo -e "${GREEN}✓ Tarball created: ${TARBALL_NAME}${NC}"
 echo ""
 
+# Step 13: Create symlink to latest build
+echo -e "${YELLOW}🔗 Creating symlink to latest build...${NC}"
+cd "${RELEASE_DIR}"
+# Remove old symlink if it exists
+if [ -L "lastbuild" ]; then
+    rm "lastbuild"
+fi
+# Create new symlink
+ln -s "build_${BUILD_DATE}" "lastbuild"
+echo -e "${GREEN}✓ Symlink created: ${RELEASE_DIR}/lastbuild → build_${BUILD_DATE}${NC}"
+echo ""
+
 # Summary
 echo -e "${GREEN}═══════════════════════════════════════════════════════${NC}"
 echo -e "${GREEN}✓ Build and Release Complete!${NC}"
@@ -250,7 +262,11 @@ echo "  • Documentation: docs/"
 echo "  • Version info: VERSION"
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
-echo "1. Review and test the release in ${RELEASE_BUILD_DIR}"
-echo "2. Archive: tar -xzf ${RELEASE_DIR}/${TARBALL_NAME}"
-echo "3. Install: cp ${RELEASE_BUILD_DIR}/bin/orca /usr/local/bin/"
+echo "1. Quick access: ${RELEASE_DIR}/lastbuild/"
+echo "2. Review and test the release in ${RELEASE_BUILD_DIR}"
+echo "3. Archive: tar -xzf ${RELEASE_DIR}/${TARBALL_NAME}"
+echo "4. Install: cp ${RELEASE_DIR}/lastbuild/bin/orca /usr/local/bin/"
+echo ""
+echo -e "${YELLOW}Shortcut:${NC}"
+echo "   ./release/lastbuild/bin/orca"
 echo ""
