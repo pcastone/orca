@@ -127,14 +127,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // === First execution - will interrupt at approval ===
     println!("Starting execution with high value...\n");
 
-    let config = CheckpointConfig::new("demo_thread");
+    let config = CheckpointConfig::new().with_thread_id("demo_thread".to_string());
     let initial_state = json!({
         "value": 150,  // Exceeds threshold
         "user": "demo_user"
     });
 
     // This will interrupt at the approval request
-    let result = compiled.invoke(initial_state.clone(), config.clone()).await;
+    let result = compiled.invoke_with_config(initial_state.clone(), Some(config.clone())).await;
 
     match result {
         Err(GraphError::InlineInterrupt(interrupt)) => {

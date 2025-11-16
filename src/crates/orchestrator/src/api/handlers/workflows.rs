@@ -12,7 +12,7 @@ use crate::api::{
     models::{CreateWorkflowRequest, UpdateWorkflowRequest, WorkflowResponse, WorkflowListQuery},
     response,
 };
-use crate::db::{DatabaseConnection, repositories::WorkflowRepository};
+use crate::db::repositories::WorkflowRepository;
 
 /// Create a new workflow
 ///

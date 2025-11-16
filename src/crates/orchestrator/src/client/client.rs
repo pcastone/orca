@@ -95,9 +95,10 @@ impl AcoClient {
         self.send_message(WsMessage::ToolRequest(request.clone())).await?;
 
         // Wait for response (with timeout)
+        let request_id = request.request_id.as_deref().unwrap_or("");
         let response = tokio::time::timeout(
             std::time::Duration::from_secs(30),
-            self.wait_for_response(&request.request_id),
+            self.wait_for_response(request_id),
         )
         .await
         .map_err(|_| crate::OrchestratorError::General(
@@ -132,7 +133,7 @@ impl AcoClient {
         // Poll response channel
         if let Some(rx) = &mut self.response_rx {
             while let Some(response) = rx.recv().await {
-                if response.request_id == request_id {
+                if response.request_id.as_deref() == Some(request_id) {
                     return Ok(response);
                 }
             }

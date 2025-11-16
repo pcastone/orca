@@ -14,7 +14,7 @@ use crate::api::{
     models::{CreateTaskRequest, UpdateTaskRequest, TaskResponse, TaskListQuery},
     response,
 };
-use crate::db::{DatabaseConnection, repositories::TaskRepository};
+use crate::db::repositories::TaskRepository;
 
 /// Create a new task
 ///

@@ -12,7 +12,7 @@ use crate::api::{
     models::{ExecuteToolRequest, ToolExecutionResponse, ExecutionListQuery},
     response,
 };
-use crate::db::{DatabaseConnection, repositories::ToolExecutionRepository};
+use crate::db::repositories::ToolExecutionRepository;
 
 /// Execute a tool for a given task
 ///

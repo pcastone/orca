@@ -214,7 +214,6 @@ use crate::messages::Message;
 use crate::tools::Tool;
 use langgraph_core::StateGraph;
 use langgraph_core::compiled::CompiledGraph;
-use langgraph_core::messages::Message as CoreMessage;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::Arc;

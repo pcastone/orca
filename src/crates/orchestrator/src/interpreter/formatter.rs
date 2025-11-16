@@ -7,7 +7,6 @@
 //! - Error formatting
 
 use serde_json::Value;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tooling::runtime::ToolResponse;
 
 /// Result Formatter for converting ToolResponses to natural language
@@ -49,7 +48,9 @@ impl ResultFormatter {
             }
         }
 
-        formatted.push_str(&format!("\n(Duration: {}ms)", response.duration_ms));
+        if let Some(duration) = response.duration_ms {
+            formatted.push_str(&format!("\n(Duration: {}ms)", duration));
+        }
 
         // Apply length limit if set
         if let Some(max_len) = self.max_output_length {
@@ -143,11 +144,12 @@ impl ResultFormatter {
         for (i, response) in responses.iter().enumerate() {
             if response.ok {
                 success_count += 1;
-                summary.push_str(&format!("\n[{}] ✓ {} - {}ms", 
-                    i + 1, response.tool, response.duration_ms));
+                let duration = response.duration_ms.map(|d| format!("{}ms", d)).unwrap_or_else(|| "?".to_string());
+                summary.push_str(&format!("\n[{}] ✓ {} - {}",
+                    i + 1, response.tool, duration));
             } else {
                 failure_count += 1;
-                summary.push_str(&format!("\n[{}] ✗ {} - FAILED", 
+                summary.push_str(&format!("\n[{}] ✗ {} - FAILED",
                     i + 1, response.tool));
                 if !response.errors.is_empty() {
                     summary.push_str(&format!(": {}", response.errors[0]));
@@ -205,7 +207,9 @@ impl ResultFormatter {
             }
         }
 
-        writeln!(output, "  Duration: {}ms", response.duration_ms).ok();
+        if let Some(duration) = response.duration_ms {
+            writeln!(output, "  Duration: {}ms", duration).ok();
+        }
 
         output
     }

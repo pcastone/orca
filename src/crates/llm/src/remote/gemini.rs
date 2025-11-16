@@ -174,7 +174,7 @@ impl ChatModel for GeminiClient {
 
         let contents = self.convert_messages(&request.messages);
 
-        let mut generation_config = GeminiGenerationConfig {
+        let generation_config = GeminiGenerationConfig {
             temperature: request.config.temperature,
             max_output_tokens: request.config.max_tokens,
             top_p: request.config.top_p,

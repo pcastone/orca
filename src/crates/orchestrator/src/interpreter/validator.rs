@@ -102,24 +102,25 @@ impl ToolValidator {
         }
 
         // 3. Validate argument types
-        if let Some(obj) = request.args.as_object() {
-            for (key, value) in obj {
-                if let Some(expected_type) = schema.arg_types.get(key) {
-                    if !self.validate_arg_type(value, *expected_type) {
-                        return Err(crate::OrchestratorError::General(format!(
-                            "Invalid type for argument '{}' in tool '{}': expected {:?}, got {:?}",
-                            key,
-                            request.tool,
-                            expected_type,
-                            self.get_value_type(value)
-                        )));
-                    }
+        for (key, value) in &request.args {
+            if let Some(expected_type) = schema.arg_types.get(key) {
+                if !self.validate_arg_type(value, *expected_type) {
+                    return Err(crate::OrchestratorError::General(format!(
+                        "Invalid type for argument '{}' in tool '{}': expected {:?}, got {:?}",
+                        key,
+                        request.tool,
+                        expected_type,
+                        self.get_value_type(value)
+                    )));
                 }
             }
         }
 
         // 4. Validate paths (if tool uses paths)
-        self.validate_paths(&request.tool, &request.args)?;
+        // Convert HashMap to Value for validation
+        let args_value = serde_json::to_value(&request.args)
+            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+        self.validate_paths(&request.tool, &args_value)?;
 
         Ok(())
     }

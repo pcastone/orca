@@ -42,14 +42,14 @@ impl CompiledGraph {
     ) -> Result<EventStream> {
         use tokio::sync::mpsc;
 
-        // Create channel for streaming events
-        let (tx, mut rx) = mpsc::unbounded_channel();
+        // Create bounded channel for streaming events (100 item buffer for backpressure)
+        let (tx, mut rx) = mpsc::channel(100);
 
         // Build Pregel loop with streaming enabled
         let mut pregel_loop = self.build_pregel_loop(input)?;
 
         // Configure streaming
-        pregel_loop = pregel_loop.with_streaming(modes, tx);
+        pregel_loop = pregel_loop.with_streaming_mux(modes, tx);
 
         // Set checkpointer if both saver and config are available
         if let (Some(saver), Some(cfg)) = (&self.checkpoint_saver, config) {
@@ -73,10 +73,10 @@ impl CompiledGraph {
             let _ = pregel_loop.run().await;
         });
 
-        // Convert StreamEvent to ExecutionEvent
+        // Convert StreamChunk to ExecutionEvent
         let event_stream = async_stream::stream! {
-            while let Some(event) = rx.recv().await {
-                yield convert_stream_event(event);
+            while let Some(chunk) = rx.recv().await {
+                yield convert_stream_event(chunk.event);
             }
         };
 

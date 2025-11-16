@@ -7,10 +7,9 @@ use crate::proto::workflows::{
 };
 use crate::db::{DatabasePool, repositories::WorkflowRepository};
 use crate::proto_conv::workflow_to_proto;
-use crate::execution::{ExecutionStreamHandler, ExecutionEventType};
+use crate::execution::ExecutionStreamHandler;
 use tonic::{Request, Response, Status};
 use std::sync::Arc;
-use chrono::Utc;
 use uuid::Uuid;
 
 pub struct WorkflowServiceImpl {
@@ -69,7 +68,7 @@ impl WorkflowService for WorkflowServiceImpl {
                 .await
                 .map_err(|e| {
                     tracing::warn!("Failed to update workflow description: {}", e);
-                    // Continue anyway, non-critical error
+                    Status::internal(format!("Failed to update description: {}", e))
                 })?;
         }
 
@@ -118,23 +117,13 @@ impl WorkflowService for WorkflowServiceImpl {
         let req = request.into_inner();
 
         // Query workflows from database
-        let workflows = if !req.status.is_empty() {
-            // Filter by status
-            WorkflowRepository::list_by_status(&self.pool, &req.status)
-                .await
-                .map_err(|e| {
-                    tracing::error!("Database error listing workflows by status: {}", e);
-                    Status::internal(format!("Failed to list workflows: {}", e))
-                })?
-        } else {
-            // Get all workflows
-            WorkflowRepository::list(&self.pool)
+        // Note: Status filtering removed as ListWorkflowsRequest doesn't have status field
+        let workflows = WorkflowRepository::list(&self.pool)
                 .await
                 .map_err(|e| {
                     tracing::error!("Database error listing workflows: {}", e);
                     Status::internal(format!("Failed to list workflows: {}", e))
-                })?
-        };
+                })?;
 
         // Apply pagination (simple offset/limit)
         let offset = req.offset.max(0) as usize;
@@ -269,7 +258,7 @@ impl WorkflowService for WorkflowServiceImpl {
         Ok(Response::new(DeleteWorkflowResponse { success: true }))
     }
 
-    type ExecuteWorkflowStream = tokio_stream::wrappers::ReceiverStream<Result<ExecutionEvent, Status>>;
+    type ExecuteWorkflowStream = std::pin::Pin<Box<dyn futures::Stream<Item = Result<ExecutionEvent, Status>> + Send>>;
 
     async fn execute_workflow(
         &self,
@@ -373,7 +362,7 @@ impl WorkflowService for WorkflowServiceImpl {
                                     let _ = stream_handler_clone
                                         .send_progress(format!("Task node {} missing configuration", node_id))
                                         .await;
-                                    return String::from("Missing task_id");
+                                    continue; // Skip this node and continue with next
                                 }
                             };
 
@@ -467,9 +456,22 @@ impl WorkflowService for WorkflowServiceImpl {
 
         tracing::info!("Started streaming execution for workflow: {}", workflow_id);
 
-        Ok(Response::new(
-            tokio_stream::wrappers::ReceiverStream::new(rx)
-        ))
+        // Convert task execution events to workflow execution events
+        use tokio_stream::StreamExt;
+        let workflow_rx = Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx)
+            .map(|result| {
+                result.map(|task_event| {
+                    // Both event types have the same structure, so we can convert
+                    ExecutionEvent {
+                        timestamp: task_event.timestamp,
+                        event_type: task_event.event_type,
+                        message: task_event.message,
+                        status: task_event.status,
+                    }
+                })
+            }));
+
+        Ok(Response::new(workflow_rx))
     }
 }
 

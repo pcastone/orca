@@ -5,12 +5,11 @@ use crate::proto::tasks::{
     DeleteTaskRequest, DeleteTaskResponse, ExecuteTaskRequest,
     ExecutionEvent,
 };
-use crate::db::{DatabasePool, repositories::TaskRepository, models::Task as DbTask};
+use crate::db::{DatabasePool, repositories::TaskRepository};
 use crate::proto_conv::{task_to_proto, status_int_to_string};
-use crate::execution::{ExecutionStreamHandler, ExecutionEventType};
+use crate::execution::ExecutionStreamHandler;
 use tonic::{Request, Response, Status};
 use std::sync::Arc;
-use chrono::Utc;
 use uuid::Uuid;
 
 pub struct TaskServiceImpl {

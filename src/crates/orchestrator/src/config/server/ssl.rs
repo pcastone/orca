@@ -3,9 +3,9 @@
 //! Handles SSL/TLS setup, X509 certificate generation, and PEM file management.
 
 use crate::config::{SslConfig, SslMode, X509Config};
-use rcgen::{Certificate, CertificateParams, DistinguishedName, DnType, KeyPair};
+use rcgen::{Certificate, CertificateParams, DistinguishedName, DnType};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

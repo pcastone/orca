@@ -12,12 +12,14 @@
 //! - `serialization` - Stable JSON serialization and hashing utilities
 //! - `rate_limit` - Token bucket and sliding window rate limiters
 //! - `logging` - Structured logging helpers and formatters
+//! - `runtime` - Tool request/response types for runtime execution
 
 pub mod async_utils;
 pub mod config;
 pub mod error;
 pub mod logging;
 pub mod rate_limit;
+pub mod runtime;
 pub mod serialization;
 pub mod validation;
 pub mod tools;

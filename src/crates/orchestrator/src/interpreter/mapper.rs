@@ -65,8 +65,23 @@ impl ToolMapper {
         // Resolve paths in arguments if needed
         let args = self.resolve_paths_in_args(&call.tool, call.args)?;
 
+        // Convert args Value to HashMap
+        let args_map = if let Some(obj) = args.as_object() {
+            obj.iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect()
+        } else {
+            std::collections::HashMap::new()
+        };
+
         // Create ToolRequest
-        let request = ToolRequest::new(&call.tool, args, session_id);
+        let request = ToolRequest::new(&call.tool)
+            .with_session_id(session_id);
+
+        // Add all arguments
+        let request = args_map.into_iter().fold(request, |req, (k, v)| {
+            req.with_arg(k, v)
+        });
 
         Ok(request)
     }
