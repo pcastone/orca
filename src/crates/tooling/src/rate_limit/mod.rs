@@ -357,4 +357,286 @@ mod tests {
         // Should have waited for refill
         assert!(elapsed >= Duration::from_millis(40));
     }
+
+    #[tokio::test]
+    async fn test_rate_limiter_concurrent_access() {
+        use tokio::task::JoinSet;
+
+        let limiter = RateLimiter::new(10, Duration::from_secs(1));
+        let mut tasks = JoinSet::new();
+
+        // Spawn 20 concurrent tasks
+        for _ in 0..20 {
+            let limiter_clone = limiter.clone();
+            tasks.spawn(async move { limiter_clone.check().await });
+        }
+
+        // Collect results
+        let mut allowed = 0;
+        let mut denied = 0;
+        while let Some(result) = tasks.join_next().await {
+            if result.unwrap() {
+                allowed += 1;
+            } else {
+                denied += 1;
+            }
+        }
+
+        // Should allow exactly 10, deny 10
+        assert_eq!(allowed, 10);
+        assert_eq!(denied, 10);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_partial_refill() {
+        let limiter = RateLimiter::new(100, Duration::from_millis(100));
+
+        // Use up all tokens
+        for _ in 0..100 {
+            assert!(limiter.check().await);
+        }
+        assert!(!limiter.check().await);
+
+        // Wait for partial refill (50% of period)
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Should have approximately 50 tokens available
+        let available = limiter.available().await;
+        assert!(available >= 45 && available <= 55, "Expected ~50 tokens, got {}", available);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_zero_capacity() {
+        let limiter = RateLimiter::new(0, Duration::from_secs(1));
+
+        // Should never allow operations with zero capacity
+        assert!(!limiter.check().await);
+        assert_eq!(limiter.available().await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_burst_handling() {
+        let limiter = RateLimiter::new(5, Duration::from_millis(100));
+
+        // Consume all tokens rapidly (burst)
+        let start = Instant::now();
+        for _ in 0..5 {
+            assert!(limiter.check().await);
+        }
+        let burst_time = start.elapsed();
+
+        // Burst should be fast (< 10ms)
+        assert!(burst_time < Duration::from_millis(10));
+
+        // Next request should be denied
+        assert!(!limiter.check().await);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_gradual_refill() {
+        let limiter = RateLimiter::new(10, Duration::from_millis(100));
+
+        // Use all tokens
+        for _ in 0..10 {
+            limiter.check().await;
+        }
+
+        // Wait for 25% refill
+        tokio::time::sleep(Duration::from_millis(25)).await;
+        let tokens_1 = limiter.available().await;
+
+        // Wait for another 25% refill
+        tokio::time::sleep(Duration::from_millis(25)).await;
+        let tokens_2 = limiter.available().await;
+
+        // Should show gradual increase
+        assert!(tokens_2 >= tokens_1);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_capacity_ceiling() {
+        let limiter = RateLimiter::new(5, Duration::from_millis(50));
+
+        // Use 2 tokens
+        limiter.check().await;
+        limiter.check().await;
+
+        // Wait for full refill period
+        tokio::time::sleep(Duration::from_millis(60)).await;
+
+        // Should be capped at capacity, not exceed it
+        assert_eq!(limiter.available().await, 5);
+    }
+
+    #[tokio::test]
+    async fn test_sliding_window_concurrent_operations() {
+        use tokio::task::JoinSet;
+
+        let limiter = SlidingWindowLimiter::new(5, Duration::from_secs(1));
+        let mut tasks = JoinSet::new();
+
+        // Spawn 10 concurrent operations
+        for _ in 0..10 {
+            let limiter_clone = limiter.clone();
+            tasks.spawn(async move { limiter_clone.check().await });
+        }
+
+        // Collect results
+        let mut allowed = 0;
+        while let Some(result) = tasks.join_next().await {
+            if result.unwrap() {
+                allowed += 1;
+            }
+        }
+
+        // Should allow exactly 5
+        assert_eq!(allowed, 5);
+        assert_eq!(limiter.count().await, 5);
+    }
+
+    #[tokio::test]
+    async fn test_sliding_window_gradual_expiration() {
+        let limiter = SlidingWindowLimiter::new(3, Duration::from_millis(100));
+
+        // Add operations at different times
+        limiter.check().await;
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        limiter.check().await;
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        limiter.check().await;
+
+        assert_eq!(limiter.count().await, 3);
+
+        // Wait for first operation to expire
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // First operation should be expired
+        let count = limiter.count().await;
+        assert!(count <= 2, "Expected <= 2 operations, got {}", count);
+    }
+
+    #[tokio::test]
+    async fn test_sliding_window_empty_window() {
+        let limiter = SlidingWindowLimiter::new(5, Duration::from_millis(50));
+
+        limiter.check().await;
+        limiter.check().await;
+
+        // Wait for all operations to expire
+        tokio::time::sleep(Duration::from_millis(60)).await;
+
+        assert_eq!(limiter.count().await, 0);
+
+        // Should allow new operations
+        assert!(limiter.check().await);
+    }
+
+    #[tokio::test]
+    async fn test_sliding_window_zero_capacity() {
+        let limiter = SlidingWindowLimiter::new(0, Duration::from_secs(1));
+
+        // Should never allow operations
+        assert!(!limiter.check().await);
+        assert_eq!(limiter.count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_sliding_window_boundary() {
+        let limiter = SlidingWindowLimiter::new(2, Duration::from_millis(100));
+
+        // Fill to capacity
+        assert!(limiter.check().await);
+        assert!(limiter.check().await);
+        assert!(!limiter.check().await);
+
+        // Wait exactly at boundary
+        tokio::time::sleep(Duration::from_millis(101)).await;
+
+        // Window should have expired, allowing new operations
+        assert!(limiter.check().await);
+        assert!(limiter.check().await);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_high_capacity() {
+        let limiter = RateLimiter::new(1000, Duration::from_secs(1));
+
+        // Should handle large capacity
+        assert_eq!(limiter.available().await, 1000);
+
+        // Use 500 tokens
+        for _ in 0..500 {
+            assert!(limiter.check().await);
+        }
+
+        assert_eq!(limiter.available().await, 500);
+    }
+
+    #[tokio::test]
+    async fn test_sliding_window_high_throughput() {
+        let limiter = SlidingWindowLimiter::new(100, Duration::from_millis(100));
+
+        // Perform 100 operations rapidly
+        for _ in 0..100 {
+            assert!(limiter.check().await);
+        }
+
+        // 101st should fail
+        assert!(!limiter.check().await);
+        assert_eq!(limiter.count().await, 100);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_multiple_resets() {
+        let limiter = RateLimiter::new(5, Duration::from_secs(1));
+
+        limiter.check().await;
+        limiter.reset().await;
+        assert_eq!(limiter.available().await, 5);
+
+        limiter.check().await;
+        limiter.check().await;
+        limiter.reset().await;
+        assert_eq!(limiter.available().await, 5);
+    }
+
+    #[tokio::test]
+    async fn test_sliding_window_multiple_resets() {
+        let limiter = SlidingWindowLimiter::new(3, Duration::from_secs(1));
+
+        limiter.check().await;
+        limiter.reset().await;
+        assert_eq!(limiter.count().await, 0);
+
+        limiter.check().await;
+        limiter.check().await;
+        limiter.reset().await;
+        assert_eq!(limiter.count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_clone_shares_state() {
+        let limiter1 = RateLimiter::new(5, Duration::from_secs(1));
+        let limiter2 = limiter1.clone();
+
+        // Use tokens from first limiter
+        limiter1.check().await;
+        limiter1.check().await;
+
+        // Should affect second limiter (shared state)
+        assert_eq!(limiter2.available().await, 3);
+    }
+
+    #[tokio::test]
+    async fn test_sliding_window_clone_shares_state() {
+        let limiter1 = SlidingWindowLimiter::new(5, Duration::from_secs(1));
+        let limiter2 = limiter1.clone();
+
+        // Use from first limiter
+        limiter1.check().await;
+        limiter1.check().await;
+
+        // Should affect second limiter (shared state)
+        assert_eq!(limiter2.count().await, 2);
+    }
 }

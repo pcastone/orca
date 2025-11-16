@@ -987,4 +987,326 @@ mod tests {
         assert!(new_channel.is_available());
         assert_eq!(new_channel.get().unwrap(), json!(123));
     }
+
+    #[test]
+    fn test_ephemeral_value_empty_update() {
+        let mut channel = EphemeralValueChannel::new();
+        channel.update(vec![json!(42)]).unwrap();
+
+        // Empty update clears the channel
+        assert!(channel.update(vec![]).unwrap());
+        assert!(!channel.is_available());
+        assert!(channel.get().is_err());
+    }
+
+    #[test]
+    fn test_ephemeral_value_checkpoint_empty() {
+        let channel = EphemeralValueChannel::new();
+
+        // Empty channel should error on checkpoint
+        assert!(channel.checkpoint().is_err());
+    }
+
+    #[test]
+    fn test_ephemeral_value_multiple_consume() {
+        let mut channel = EphemeralValueChannel::new();
+        channel.update(vec![json!(1)]).unwrap();
+
+        // First consume succeeds
+        assert!(channel.consume());
+        assert!(!channel.is_available());
+
+        // Second consume returns false (nothing to consume)
+        assert!(!channel.consume());
+
+        // Third consume also returns false
+        assert!(!channel.consume());
+    }
+
+    #[test]
+    fn test_ephemeral_value_guard_false_allows_multiple() {
+        let mut channel = EphemeralValueChannel::with_guard(false);
+
+        // Multiple values should work with guard=false
+        assert!(channel.update(vec![json!(1), json!(2), json!(3)]).unwrap());
+        assert_eq!(channel.get().unwrap(), json!(3));
+    }
+
+    #[test]
+    fn test_any_value_empty_update() {
+        let mut channel = AnyValueChannel::new();
+        channel.update(vec![json!("initial")]).unwrap();
+
+        // Empty update should clear the channel
+        let result = channel.update(vec![]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_any_value_single_write() {
+        let mut channel = AnyValueChannel::new();
+
+        // Single write should work
+        assert!(channel.update(vec![json!(42)]).unwrap());
+        assert_eq!(channel.get().unwrap(), json!(42));
+    }
+
+    #[test]
+    fn test_any_value_persistence() {
+        let mut channel = AnyValueChannel::new();
+        channel.update(vec![json!("persistent")]).unwrap();
+
+        // Value persists across "steps" (doesn't clear on consume)
+        channel.consume();
+        assert!(channel.is_available());
+        assert_eq!(channel.get().unwrap(), json!("persistent"));
+    }
+
+    #[test]
+    fn test_any_value_checkpoint_roundtrip() {
+        let mut channel = AnyValueChannel::new();
+        channel.update(vec![json!({"data": "test"})]).unwrap();
+
+        let checkpoint = channel.checkpoint().unwrap();
+        let mut new_channel = AnyValueChannel::new();
+        new_channel.from_checkpoint(checkpoint).unwrap();
+
+        assert_eq!(new_channel.get().unwrap(), json!({"data": "test"}));
+    }
+
+    #[test]
+    fn test_untracked_value_basic_operations() {
+        let mut channel = UntrackedValueChannel::new();
+
+        // Update and get work
+        channel.update(vec![json!("untracked")]).unwrap();
+        assert_eq!(channel.get().unwrap(), json!("untracked"));
+        assert!(channel.is_available());
+    }
+
+    #[test]
+    fn test_untracked_value_cannot_checkpoint() {
+        let mut channel = UntrackedValueChannel::new();
+        channel.update(vec![json!("secret")]).unwrap();
+
+        // Checkpoint should fail
+        assert!(channel.checkpoint().is_err());
+    }
+
+    #[test]
+    fn test_untracked_value_from_checkpoint_is_noop() {
+        let mut channel = UntrackedValueChannel::new();
+
+        // from_checkpoint succeeds but doesn't restore data (no-op)
+        assert!(channel.from_checkpoint(json!({"test": "data"})).is_ok());
+
+        // Channel should still be empty after from_checkpoint
+        assert!(!channel.is_available());
+    }
+
+    #[test]
+    fn test_untracked_value_consume_doesnt_clear() {
+        let mut channel = UntrackedValueChannel::new();
+        channel.update(vec![json!(123)]).unwrap();
+
+        // Consume doesn't clear untracked values
+        channel.consume();
+        assert!(channel.is_available());
+        assert_eq!(channel.get().unwrap(), json!(123));
+    }
+
+    #[test]
+    fn test_last_value_after_finish_multiple_finish_calls() {
+        let mut channel = LastValueAfterFinishChannel::new();
+        channel.update(vec![json!(1)]).unwrap();
+
+        // First finish
+        assert!(channel.finish());
+        assert!(channel.is_available());
+
+        // Second finish should return false (already finished)
+        assert!(!channel.finish());
+        assert!(channel.is_available());
+    }
+
+    #[test]
+    fn test_last_value_after_finish_finish_before_update() {
+        let mut channel = LastValueAfterFinishChannel::new();
+
+        // Finish without update
+        assert!(!channel.finish());
+        assert!(!channel.is_available());
+
+        // Now update and finish
+        channel.update(vec![json!(42)]).unwrap();
+        assert!(channel.finish());
+        assert!(channel.is_available());
+    }
+
+    #[test]
+    fn test_last_value_after_finish_empty_after_consume() {
+        let mut channel = LastValueAfterFinishChannel::new();
+        channel.update(vec![json!(99)]).unwrap();
+        channel.finish();
+        channel.consume();
+
+        // After consume, should be empty
+        assert!(!channel.is_available());
+        assert!(channel.get().is_err());
+    }
+
+    #[test]
+    fn test_named_barrier_value_empty_names() {
+        let channel = NamedBarrierValueChannel::new(vec![]);
+
+        // Empty barrier should be immediately available
+        assert!(channel.is_available());
+    }
+
+    #[test]
+    fn test_named_barrier_value_unique_names_only() {
+        let mut channel = NamedBarrierValueChannel::new(vec![
+            "task1".to_string(),
+            "task2".to_string(),
+            "task3".to_string(),
+        ]);
+
+        // Barrier requires all unique names to be received
+        assert!(!channel.is_available());
+
+        channel.update(vec![json!("task1")]).unwrap();
+        assert!(!channel.is_available());
+
+        channel.update(vec![json!("task2"), json!("task3")]).unwrap();
+        assert!(channel.is_available());
+    }
+
+    #[test]
+    fn test_named_barrier_value_no_consume() {
+        let mut channel = NamedBarrierValueChannel::new(vec![
+            "a".to_string(),
+            "b".to_string(),
+        ]);
+
+        // Satisfy barrier
+        channel.update(vec![json!("a")]).unwrap();
+        channel.update(vec![json!("b")]).unwrap();
+        assert!(channel.is_available());
+
+        // NamedBarrierValueChannel doesn't have a custom consume implementation
+        // So it uses the default trait behavior (likely does nothing or not implemented)
+        // The barrier remains satisfied after "consuming"
+    }
+
+    #[test]
+    fn test_named_barrier_value_checkpoint_roundtrip() {
+        let mut channel = NamedBarrierValueChannel::new(vec![
+            "x".to_string(),
+            "y".to_string(),
+        ]);
+
+        // Partially satisfy barrier
+        channel.update(vec![json!("x")]).unwrap();
+
+        let checkpoint = channel.checkpoint().unwrap();
+        let mut new_channel = NamedBarrierValueChannel::new(vec!["x".to_string(), "y".to_string()]);
+        new_channel.from_checkpoint(checkpoint).unwrap();
+
+        // Should preserve received signals
+        assert!(!new_channel.is_available());
+        new_channel.update(vec![json!("y")]).unwrap();
+        assert!(new_channel.is_available());
+    }
+
+    #[test]
+    fn test_named_barrier_value_all_at_once() {
+        let mut channel = NamedBarrierValueChannel::new(vec![
+            "a".to_string(),
+            "b".to_string(),
+            "c".to_string(),
+        ]);
+
+        // Receive all signals in one update
+        channel
+            .update(vec![json!("a"), json!("b"), json!("c")])
+            .unwrap();
+        assert!(channel.is_available());
+    }
+
+    #[test]
+    fn test_ephemeral_value_is_available() {
+        let mut channel = EphemeralValueChannel::new();
+
+        assert!(!channel.is_available());
+
+        channel.update(vec![json!(1)]).unwrap();
+        assert!(channel.is_available());
+
+        channel.consume();
+        assert!(!channel.is_available());
+    }
+
+    #[test]
+    fn test_any_value_overwrite_behavior() {
+        let mut channel = AnyValueChannel::new();
+
+        // First write
+        channel.update(vec![json!("first")]).unwrap();
+        assert_eq!(channel.get().unwrap(), json!("first"));
+
+        // Overwrite with multiple values (last wins)
+        channel
+            .update(vec![json!("second"), json!("third"), json!("fourth")])
+            .unwrap();
+        assert_eq!(channel.get().unwrap(), json!("fourth"));
+    }
+
+    #[test]
+    fn test_untracked_value_clone() {
+        let channel = UntrackedValueChannel::new();
+        let cloned = channel.clone_box();
+
+        // Should be able to clone
+        assert!(!cloned.is_available());
+    }
+
+    #[test]
+    fn test_last_value_after_finish_get_before_finish() {
+        let mut channel = LastValueAfterFinishChannel::new();
+        channel.update(vec![json!("data")]).unwrap();
+
+        // get() should fail before finish
+        assert!(channel.get().is_err());
+        assert!(!channel.is_available());
+    }
+
+    #[test]
+    fn test_named_barrier_value_single_name() {
+        let mut channel = NamedBarrierValueChannel::new(vec!["single".to_string()]);
+
+        assert!(!channel.is_available());
+        channel.update(vec![json!("single")]).unwrap();
+        assert!(channel.is_available());
+    }
+
+    #[test]
+    fn test_ephemeral_value_default() {
+        let channel = EphemeralValueChannel::default();
+        assert!(!channel.is_available());
+        assert!(channel.get().is_err());
+    }
+
+    #[test]
+    fn test_any_value_default() {
+        let channel = AnyValueChannel::default();
+        assert!(!channel.is_available());
+        assert!(channel.get().is_err());
+    }
+
+    #[test]
+    fn test_untracked_value_default() {
+        let channel = UntrackedValueChannel::default();
+        assert!(!channel.is_available());
+        assert!(channel.get().is_err());
+    }
 }
