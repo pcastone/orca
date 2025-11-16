@@ -23,42 +23,57 @@ acolib is a Rust-based platform for building and executing stateful AI agent wor
 
 ## Build System
 
-This is NOT a standard Cargo workspace - there is no root `Cargo.toml`. All crates are located in `src/crates/`.
+This IS a standard Cargo workspace with a root `Cargo.toml`. All crates are located in `src/crates/` and are workspace members.
 
 ### Quick Build Commands
 
 ```bash
 # Build Orca (standalone orchestrator) - most common use case
-cd src/crates/orca
-cargo build --release
+cargo build -p orca --release
 
 # Or use the helper script
 ./scripts/build-orca.sh --install
 
-# Build all crates
-cd src/crates/orca  # or any crate directory
+# Build all workspace crates
 cargo build --release
 
-# Fast check without building
+# Build specific crate
+cargo build -p langgraph-core --release
+
+# Fast check without building (all workspace)
 cargo check
 
-# Run tests
+# Check specific crate
+cargo check -p orca
+
+# Run tests (all workspace)
 cargo test
 
 # Run tests for specific crate
-cd src/crates/<crate-name>
-cargo test
+cargo test -p orca
 
-# Format code
+# Format code (all workspace)
 cargo fmt
 
-# Lint code
-cargo clippy
+# Lint code (all workspace)
+cargo clippy --all
 ```
 
-### Crate Structure
+### Workspace Structure
 
-Each crate in `src/crates/` has its own `Cargo.toml` and must be built independently. To work with any crate, `cd` into its directory first.
+The project uses a standard Cargo workspace with 10 member crates:
+1. **langgraph-core** - Core graph execution engine
+2. **langgraph-checkpoint** - Persistence abstraction
+3. **langgraph-prebuilt** - Pre-built agent patterns
+4. **langgraph-cli** - Development CLI tools
+5. **orca** - Standalone orchestrator (primary user tool)
+6. **orchestrator** - Distributed orchestration engine
+7. **aco** - Client application with TUI/CLI
+8. **llm** - LLM provider integrations
+9. **tooling** - Configuration and utilities
+10. **utils** - Shared utilities
+
+The root `Cargo.toml` defines workspace-level dependencies and configuration that all crates inherit. You can build from the workspace root using `-p <crate-name>` or from individual crate directories.
 
 ## Architecture
 
@@ -112,7 +127,14 @@ Each crate in `src/crates/` has its own `Cargo.toml` and must be built independe
    - Environment variable and config file loading
    - Authentication helpers
 
-9. **aco** - Web UI, TUI, and CLI binaries (if present)
+9. **aco** - Client application for tool execution
+   - Terminal User Interface (TUI) with ratatui
+   - CLI interface for remote tool execution
+   - WebSocket client for orchestrator communication
+
+10. **langgraph-cli** - Command-line development tools
+   - Development utilities for langgraph
+   - Testing and debugging tools
 
 ### Execution Model: Pregel (BSP)
 
