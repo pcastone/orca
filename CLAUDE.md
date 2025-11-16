@@ -1,21 +1,22 @@
 # CLAUDE.md
 
-## project_rules
-- Please follow File System Layout for putting file placements.
-- First think through the problem,
-   - read the codebase for relevant files,
-   - Look for existing script, function, or implementation and build on them before create new script, function and implementation.
-   - write a plan to todo/tasks.md
- - The plan should have a list of todo items that you can check off as you complete them
- - Alway try to re-use, repurpose, and extend before create new.  
- - Before you begin working, check in with me and I will verify the plan.
- - Then, begin working on the todo items, marking them as complete as you go.
- - At every step of the way please give me a high level explanation of what changes you made
- - Make every task and code change you do as simple as possible. We want to avoid making any massive or complex changes. Every changeshould impact as little code as possible. Everything is about simplicity.
- - Test your changes after each task compile and resolve errors.
- - Do local git commit with summary of the changes you made any time you make a change.
-
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Rules
+
+- Please follow the File System Layout for file placement
+- First think through the problem:
+  - Read the codebase for relevant files
+  - Look for existing scripts, functions, or implementations and build on them before creating new ones
+  - Write a plan with todo items that can be checked off as completed
+- Always try to re-use, repurpose, and extend before creating new code
+- Before you begin working, check in with me to verify the plan
+- Then begin working on the todo items, marking them as complete as you go
+- At every step of the way, provide a high-level explanation of what changes you made
+- Make every task and code change as simple as possible—avoid massive or complex changes
+- Every change should impact as little code as possible; simplicity is paramount
+- Test your changes after each task and compile to resolve errors
+- Create local git commits with a summary of changes made at any time you make a change
 
 ## Project Overview
 
@@ -371,8 +372,8 @@ Per-crate docs in `src/crates/<crate>/README.md`.
 
 ## Known Constraints
 
-- No root workspace `Cargo.toml` - each crate is independent
-- Must `cd` into crate directory before running cargo commands
+- Standard Cargo workspace with root `Cargo.toml` in project root
+- Can build from workspace root using `-p <crate-name>` or from individual crate directories
 - Orca is the primary user-facing tool (standalone, simple)
 - Orchestrator is for distributed/production use (complex)
 - SQLite used for both (Orca and Orchestrator)
