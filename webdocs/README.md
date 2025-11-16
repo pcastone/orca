@@ -24,6 +24,7 @@ webdocs/
 ├── index.html              # Homepage with project overview
 ├── llm.html               # LLM crate documentation
 ├── tooling.html           # Tooling crate documentation
+├── api.html               # REST API documentation
 ├── assets/
 │   ├── css/               # Custom CSS (if needed)
 │   └── js/
@@ -55,6 +56,19 @@ Complete documentation for the Tooling crate including:
 - **Serialization**: Stable JSON serialization and hashing
 - **Rate Limiting**: Token bucket and sliding window limiters
 - **Logging**: Structured logging with timing and formatting
+
+### API Documentation (`api.html`)
+Complete REST API and WebSocket protocol documentation:
+- **Authentication**: JWT token generation and usage
+- **Tasks API**: Create, list, update, execute, and delete tasks
+- **Workflows API**: Multi-step workflow management and compilation
+- **Executions API**: Workflow execution, status, logs, and cancellation
+- **Checkpoints API**: List and retrieve workflow checkpoints
+- **Tools API**: Register and manage custom tools
+- **System API**: Health checks, metrics, and system info
+- **WebSocket**: Real-time updates for task and workflow execution
+- **Error Handling**: Comprehensive error codes and response formats
+- **Data Models**: TypeScript interfaces for all API entities
 
 ## Technology Stack
 

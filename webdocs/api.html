@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>REST API - acolib Documentation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#6366f1',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .sidebar-link {
+            @apply block py-2 px-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded;
+        }
+        .sidebar-link.active {
+            @apply bg-green-50 text-green-600 font-medium;
+        }
+        .http-method {
+            @apply inline-block px-2 py-1 text-xs font-bold rounded uppercase;
+        }
+        .method-get { @apply bg-blue-100 text-blue-700; }
+        .method-post { @apply bg-green-100 text-green-700; }
+        .method-put { @apply bg-yellow-100 text-yellow-700; }
+        .method-delete { @apply bg-red-100 text-red-700; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center">
+                    <h1 class="text-2xl font-bold text-gray-900">acolib</h1>
+                    <span class="ml-3 px-2 py-1 text-xs font-semibold text-green-600 bg-green-100 rounded">API</span>
+                </div>
+                <nav class="hidden md:flex space-x-8">
+                    <a href="index.html" class="text-gray-600 hover:text-gray-900">Home</a>
+                    <a href="llm.html" class="text-gray-600 hover:text-gray-900">LLM</a>
+                    <a href="tooling.html" class="text-gray-600 hover:text-gray-900">Tooling</a>
+                    <a href="api.html" class="text-green-600 font-medium hover:text-green-800">API</a>
+                    <a href="https://github.com/pcastone/orca" class="text-gray-600 hover:text-gray-900">GitHub</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="flex gap-8">
+            <!-- Sidebar -->
+            <aside class="hidden lg:block w-64 flex-shrink-0">
+                <div class="sticky top-24">
+                    <nav class="space-y-1">
+                        <a href="#overview" class="sidebar-link">Overview</a>
+                        <div class="mt-4">
+                            <p class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">REST API</p>
+                            <a href="#authentication" class="sidebar-link">Authentication</a>
+                            <a href="#tasks" class="sidebar-link">Tasks</a>
+                            <a href="#workflows" class="sidebar-link">Workflows</a>
+                            <a href="#executions" class="sidebar-link">Executions</a>
+                            <a href="#checkpoints" class="sidebar-link">Checkpoints</a>
+                            <a href="#tools" class="sidebar-link">Tools</a>
+                            <a href="#system" class="sidebar-link">System</a>
+                        </div>
+                        <div class="mt-4">
+                            <p class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Real-Time</p>
+                            <a href="#websocket" class="sidebar-link">WebSocket</a>
+                        </div>
+                        <div class="mt-4">
+                            <p class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Reference</p>
+                            <a href="#errors" class="sidebar-link">Error Handling</a>
+                            <a href="#data-models" class="sidebar-link">Data Models</a>
+                        </div>
+                    </nav>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="flex-1 min-w-0">
+                <!-- Overview Section -->
+                <section id="overview" class="mb-16">
+                    <h2 class="text-3xl font-bold text-gray-900 mb-4">REST API Reference</h2>
+                    <p class="text-lg text-gray-600 mb-6">
+                        Complete HTTP REST API and WebSocket protocol documentation for the acolib orchestrator.
+                    </p>
+
+                    <div class="bg-green-50 border-l-4 border-green-500 p-4 mb-6">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm text-green-700">
+                                    <strong>Base URL:</strong> <code class="bg-green-100 px-2 py-1 rounded">http://localhost:8080/api</code>
+                                    <br>All endpoints return JSON. Authentication required except for <code>/health</code>.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid md:grid-cols-3 gap-6">
+                        <div class="bg-white p-6 rounded-lg border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-2 text-gray-900">RESTful Design</h3>
+                            <p class="text-gray-600 text-sm">Standard HTTP verbs and JSON payloads</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-2 text-gray-900">WebSocket Support</h3>
+                            <p class="text-gray-600 text-sm">Real-time updates for tasks and workflows</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-2 text-gray-900">Comprehensive</h3>
+                            <p class="text-gray-600 text-sm">Full CRUD operations with filtering and pagination</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Authentication Section -->
+                <section id="authentication" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Authentication</h2>
+                    <p class="text-gray-600 mb-6">
+                        All API endpoints (except <code class="bg-gray-100 px-2 py-1 rounded text-sm">/health</code>) require JWT authentication.
+                    </p>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4">Generate API Token</h3>
+                    <div class="mb-4">
+                        <span class="http-method method-post">POST</span>
+                        <code class="ml-2 text-sm">/auth/token</code>
+                    </div>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-bash">curl -X POST http://localhost:8080/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "user@example.com",
+    "password": "secure_password"
+  }'</code></pre>
+
+                    <p class="text-sm text-gray-600 mb-2"><strong>Response (200 OK):</strong></p>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-json">{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_in": 3600
+}</code></pre>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4 mt-8">Using the Token</h3>
+                    <p class="text-gray-600 mb-4">Include the JWT token in the Authorization header:</p>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-bash">curl -H "Authorization: Bearer eyJhbGc..." \
+  http://localhost:8080/api/tasks</code></pre>
+                </section>
+
+                <!-- Tasks API Section -->
+                <section id="tasks" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Tasks API</h2>
+
+                    <!-- Create Task -->
+                    <div class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Create Task</h3>
+                        <div class="mb-4">
+                            <span class="http-method method-post">POST</span>
+                            <code class="ml-2 text-sm">/tasks</code>
+                        </div>
+                        <p class="text-gray-600 mb-4">Create a new task for execution.</p>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-4"><code class="language-bash">curl -X POST http://localhost:8080/api/tasks \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Research AI frameworks",
+    "description": "Find top 10 AI frameworks",
+    "priority": "high",
+    "tags": ["research", "ai"],
+    "assignee": "john@example.com",
+    "due_date": "2025-12-01"
+  }'</code></pre>
+
+                        <p class="text-sm text-gray-600 mb-2"><strong>Response (201 Created):</strong></p>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-json">{
+  "id": "task_1",
+  "name": "Research AI frameworks",
+  "status": "pending",
+  "created_at": "2025-11-10T10:00:00Z",
+  "created_by": "user@example.com"
+}</code></pre>
+                    </div>
+
+                    <!-- List Tasks -->
+                    <div class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">List Tasks</h3>
+                        <div class="mb-4">
+                            <span class="http-method method-get">GET</span>
+                            <code class="ml-2 text-sm">/tasks</code>
+                        </div>
+                        <p class="text-gray-600 mb-4">List all tasks with filtering and pagination.</p>
+
+                        <div class="bg-white rounded-lg border border-gray-200 overflow-hidden mb-4">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parameter</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">status</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">string</td>
+                                        <td class="px-6 py-4 text-sm text-gray-600">Filter by status (pending, in-progress, completed, failed)</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">priority</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">string</td>
+                                        <td class="px-6 py-4 text-sm text-gray-600">Filter by priority (low, normal, high)</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">limit</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">integer</td>
+                                        <td class="px-6 py-4 text-sm text-gray-600">Max results (default: 20)</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">offset</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">integer</td>
+                                        <td class="px-6 py-4 text-sm text-gray-600">Pagination offset (default: 0)</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-bash"># Get pending tasks
+curl "http://localhost:8080/api/tasks?status=pending&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Get high priority tasks
+curl "http://localhost:8080/api/tasks?priority=high" \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+                    </div>
+
+                    <!-- Get Task -->
+                    <div class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Get Task</h3>
+                        <div class="mb-4">
+                            <span class="http-method method-get">GET</span>
+                            <code class="ml-2 text-sm">/tasks/{id}</code>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-bash">curl http://localhost:8080/api/tasks/task_1 \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+                    </div>
+
+                    <!-- Update Task -->
+                    <div class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Update Task</h3>
+                        <div class="mb-4">
+                            <span class="http-method method-put">PUT</span>
+                            <code class="ml-2 text-sm">/tasks/{id}</code>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-bash">curl -X PUT http://localhost:8080/api/tasks/task_1 \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "status": "in-progress",
+    "priority": "normal"
+  }'</code></pre>
+                    </div>
+
+                    <!-- Delete Task -->
+                    <div class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Delete Task</h3>
+                        <div class="mb-4">
+                            <span class="http-method method-delete">DELETE</span>
+                            <code class="ml-2 text-sm">/tasks/{id}</code>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-bash">curl -X DELETE http://localhost:8080/api/tasks/task_1 \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+                    </div>
+                </section>
+
+                <!-- Workflows API Section -->
+                <section id="workflows" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Workflows API</h2>
+
+                    <!-- Create Workflow -->
+                    <div class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Create Workflow</h3>
+                        <div class="mb-4">
+                            <span class="http-method method-post">POST</span>
+                            <code class="ml-2 text-sm">/workflows</code>
+                        </div>
+                        <p class="text-gray-600 mb-4">Create a new workflow with multiple nodes and edges.</p>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-json">{
+  "name": "research-workflow",
+  "description": "Multi-step research workflow",
+  "nodes": [
+    {
+      "id": "planner",
+      "display_name": "Plan Research",
+      "handler": "llm"
+    }
+  ],
+  "edges": [
+    {
+      "source": "start",
+      "target": "planner"
+    }
+  ]
+}</code></pre>
+                    </div>
+
+                    <!-- Execute Workflow -->
+                    <div class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Execute Workflow</h3>
+                        <div class="mb-4">
+                            <span class="http-method method-post">POST</span>
+                            <code class="ml-2 text-sm">/executions</code>
+                        </div>
+                        <p class="text-gray-600 mb-4">Start workflow execution with input data.</p>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-json">{
+  "workflow_id": "workflow_1",
+  "input": {
+    "topic": "machine learning"
+  },
+  "stream_modes": ["values", "tokens"]
+}</code></pre>
+                    </div>
+
+                    <!-- Compile Workflow -->
+                    <div class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Compile Workflow</h3>
+                        <div class="mb-4">
+                            <span class="http-method method-post">POST</span>
+                            <code class="ml-2 text-sm">/workflows/{id}/compile</code>
+                        </div>
+                        <p class="text-gray-600 mb-4">Validate and compile workflow before execution.</p>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-bash">curl -X POST http://localhost:8080/api/workflows/workflow_1/compile \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+                    </div>
+                </section>
+
+                <!-- Executions API Section -->
+                <section id="executions" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Executions API</h2>
+
+                    <!-- Get Execution -->
+                    <div class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Get Execution Status</h3>
+                        <div class="mb-4">
+                            <span class="http-method method-get">GET</span>
+                            <code class="ml-2 text-sm">/executions/{id}</code>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-4"><code class="language-bash">curl http://localhost:8080/api/executions/exec_1 \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+
+                        <p class="text-sm text-gray-600 mb-2"><strong>Response:</strong></p>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-json">{
+  "execution_id": "exec_1",
+  "workflow_id": "workflow_1",
+  "status": "running",
+  "started_at": "2025-11-10T10:00:00Z",
+  "nodes": [
+    {
+      "node_id": "planner",
+      "status": "completed",
+      "duration_ms": 2500
+    }
+  ]
+}</code></pre>
+                    </div>
+
+                    <!-- Cancel Execution -->
+                    <div class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Cancel Execution</h3>
+                        <div class="mb-4">
+                            <span class="http-method method-post">POST</span>
+                            <code class="ml-2 text-sm">/executions/{id}/cancel</code>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-bash">curl -X POST http://localhost:8080/api/executions/exec_1/cancel \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+                    </div>
+
+                    <!-- Get Execution Logs -->
+                    <div class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Get Execution Logs</h3>
+                        <div class="mb-4">
+                            <span class="http-method method-get">GET</span>
+                            <code class="ml-2 text-sm">/executions/{id}/logs</code>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-bash">curl "http://localhost:8080/api/executions/exec_1/logs?level=info" \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+                    </div>
+                </section>
+
+                <!-- Checkpoints API Section -->
+                <section id="checkpoints" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Checkpoints API</h2>
+                    <p class="text-gray-600 mb-6">
+                        Checkpoints are created automatically after each superstep for workflow resilience.
+                    </p>
+
+                    <div class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">List Checkpoints</h3>
+                        <div class="mb-4">
+                            <span class="http-method method-get">GET</span>
+                            <code class="ml-2 text-sm">/checkpoints</code>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-bash">curl "http://localhost:8080/api/checkpoints?execution_id=exec_1" \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+                    </div>
+
+                    <div class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Get Checkpoint State</h3>
+                        <div class="mb-4">
+                            <span class="http-method method-get">GET</span>
+                            <code class="ml-2 text-sm">/checkpoints/{id}</code>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-bash">curl http://localhost:8080/api/checkpoints/cp_1 \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+                    </div>
+                </section>
+
+                <!-- Tools API Section -->
+                <section id="tools" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Tools API</h2>
+
+                    <div class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">List Tools</h3>
+                        <div class="mb-4">
+                            <span class="http-method method-get">GET</span>
+                            <code class="ml-2 text-sm">/tools</code>
+                        </div>
+                        <p class="text-gray-600 mb-4">List all registered tools with their schemas.</p>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-bash">curl http://localhost:8080/api/tools \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+                    </div>
+
+                    <div class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Register Tool</h3>
+                        <div class="mb-4">
+                            <span class="http-method method-post">POST</span>
+                            <code class="ml-2 text-sm">/tools</code>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-json">{
+  "name": "web_search",
+  "description": "Search the web",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Search query"
+      }
+    },
+    "required": ["query"]
+  }
+}</code></pre>
+                    </div>
+                </section>
+
+                <!-- System API Section -->
+                <section id="system" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">System API</h2>
+
+                    <div class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Health Check</h3>
+                        <div class="mb-4">
+                            <span class="http-method method-get">GET</span>
+                            <code class="ml-2 text-sm">/health</code>
+                            <span class="ml-2 px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded">No auth required</span>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-4"><code class="language-bash">curl http://localhost:8080/health</code></pre>
+
+                        <p class="text-sm text-gray-600 mb-2"><strong>Response:</strong></p>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-json">{
+  "status": "healthy",
+  "database": "connected",
+  "uptime_seconds": 3600
+}</code></pre>
+                    </div>
+
+                    <div class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">System Metrics</h3>
+                        <div class="mb-4">
+                            <span class="http-method method-get">GET</span>
+                            <code class="ml-2 text-sm">/system/metrics</code>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-4"><code class="language-bash">curl http://localhost:8080/api/system/metrics \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+
+                        <p class="text-sm text-gray-600 mb-2"><strong>Response:</strong></p>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-json">{
+  "cpu_usage_percent": 45.2,
+  "memory_usage_bytes": 524288000,
+  "active_executions": 3,
+  "total_executions": 42
+}</code></pre>
+                    </div>
+                </section>
+
+                <!-- WebSocket Section -->
+                <section id="websocket" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">WebSocket Protocol</h2>
+                    <p class="text-gray-600 mb-6">
+                        WebSocket connection for real-time updates on task and workflow execution.
+                    </p>
+
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+                        <p class="text-sm text-blue-700">
+                            <strong>WebSocket URL:</strong> <code class="bg-blue-100 px-2 py-1 rounded">ws://localhost:8080/ws</code>
+                        </p>
+                    </div>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4">Connection Example</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-javascript">const ws = new WebSocket('ws://localhost:8080/ws');
+
+ws.onopen = () => {
+  console.log('Connected');
+
+  // Subscribe to task updates
+  ws.send(JSON.stringify({
+    type: 'subscribe',
+    resource: 'task',
+    id: 'task_1'
+  }));
+};
+
+ws.onmessage = (event) => {
+  const message = JSON.parse(event.data);
+  console.log('Received:', message);
+};</code></pre>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4 mt-8">Message Types</h3>
+
+                    <h4 class="text-lg font-semibold text-gray-900 mb-3">Subscribe to Task</h4>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-json">{
+  "type": "subscribe",
+  "resource": "task",
+  "id": "task_1"
+}</code></pre>
+
+                    <h4 class="text-lg font-semibold text-gray-900 mb-3">Task Update</h4>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-json">{
+  "type": "task_update",
+  "task_id": "task_1",
+  "status": "running",
+  "progress": 0.45,
+  "message": "Processing step 3 of 5",
+  "timestamp": "2025-11-10T10:30:02Z"
+}</code></pre>
+
+                    <h4 class="text-lg font-semibold text-gray-900 mb-3">Task Complete</h4>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-json">{
+  "type": "task_complete",
+  "task_id": "task_1",
+  "status": "completed",
+  "result": { "data": "..." },
+  "duration_ms": 125,
+  "timestamp": "2025-11-10T10:30:05Z"
+}</code></pre>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4 mt-8">Full Client Example</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-javascript">class AcoWebSocketClient {
+  constructor(url = 'ws://localhost:8080/ws') {
+    this.url = url;
+    this.ws = null;
+  }
+
+  connect() {
+    this.ws = new WebSocket(this.url);
+
+    this.ws.onopen = () => {
+      console.log('WebSocket connected');
+      this.startHeartbeat();
+    };
+
+    this.ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      this.handleMessage(message);
+    };
+
+    this.ws.onclose = () => {
+      console.log('Reconnecting in 5s...');
+      setTimeout(() => this.connect(), 5000);
+    };
+  }
+
+  handleMessage(message) {
+    switch (message.type) {
+      case 'task_update':
+        console.log(`Task ${message.task_id}: ${message.message}`);
+        break;
+      case 'task_complete':
+        console.log(`Task ${message.task_id} completed`);
+        break;
+    }
+  }
+
+  subscribe(resource, id) {
+    this.send({
+      type: 'subscribe',
+      resource,
+      id
+    });
+  }
+
+  send(message) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(message));
+    }
+  }
+
+  startHeartbeat() {
+    setInterval(() => {
+      this.send({ type: 'ping' });
+    }, 30000);
+  }
+}
+
+// Usage
+const client = new AcoWebSocketClient();
+client.connect();
+client.subscribe('task', 'task_1');</code></pre>
+                </section>
+
+                <!-- Error Handling Section -->
+                <section id="errors" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Error Handling</h2>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4">HTTP Status Codes</h3>
+                    <div class="bg-white rounded-lg border border-gray-200 overflow-hidden mb-6">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Meaning</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usage</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">200</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">OK</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Successful GET, PUT</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">201</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">Created</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Successful POST (resource created)</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">204</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">No Content</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Successful DELETE</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">400</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">Bad Request</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Invalid input, validation error</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">401</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">Unauthorized</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Missing or invalid authentication</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">404</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">Not Found</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Resource doesn't exist</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">409</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">Conflict</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Resource state conflict</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">500</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">Internal Server Error</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Server error</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4 mt-8">Error Response Format</h3>
+                    <p class="text-gray-600 mb-4">All errors follow a consistent JSON structure:</p>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-json">{
+  "error": "invalid_input",
+  "message": "Field 'name' is required",
+  "details": {
+    "field": "name"
+  }
+}</code></pre>
+
+                    <h4 class="text-lg font-semibold text-gray-900 mb-3">Example: 404 Not Found</h4>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-json">{
+  "error": "not_found",
+  "message": "Task with ID 'task_999' not found"
+}</code></pre>
+
+                    <h4 class="text-lg font-semibold text-gray-900 mb-3">Example: 401 Unauthorized</h4>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-json">{
+  "error": "unauthorized",
+  "message": "Invalid or missing authentication token"
+}</code></pre>
+                </section>
+
+                <!-- Data Models Section -->
+                <section id="data-models" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Data Models</h2>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4">Task</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-typescript">interface Task {
+  id: string;              // UUID
+  title: string;
+  description?: string;
+  task_type: string;       // file_operation, git_operation, workflow, etc.
+  status: string;          // pending, running, completed, failed, cancelled
+  config: object;          // Tool-specific configuration
+  metadata?: object;       // User-defined metadata
+  workspace_path?: string;
+  created_at: string;      // ISO 8601
+  updated_at: string;
+  started_at?: string;
+  completed_at?: string;
+  error?: string;
+}</code></pre>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4 mt-8">Workflow</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-typescript">interface Workflow {
+  id: string;              // UUID
+  name: string;
+  description?: string;
+  pattern_type: string;    // ReAct, Plan-Execute, Router, Reflection
+  config: object;
+  state: object;           // Current workflow state
+  status: string;          // pending, running, completed, failed
+  created_at: string;
+  updated_at: string;
+  completed_at?: string;
+}</code></pre>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4 mt-8">Execution</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-typescript">interface Execution {
+  execution_id: string;
+  workflow_id: string;
+  status: string;
+  input: object;
+  final_state?: object;
+  started_at: string;
+  completed_at?: string;
+  duration_ms?: number;
+  nodes_executed?: number;
+}</code></pre>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-gray-300 py-8 mt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center">
+                <p class="text-sm">&copy; 2024 acolib. Licensed under Apache 2.0 or MIT.</p>
+                <div class="flex space-x-6 text-sm">
+                    <a href="index.html" class="hover:text-white">Home</a>
+                    <a href="llm.html" class="hover:text-white">LLM</a>
+                    <a href="tooling.html" class="hover:text-white">Tooling</a>
+                    <a href="api.html" class="hover:text-white">API</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <script src="assets/js/main.js"></script>
+</body>
+</html>
