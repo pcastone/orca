@@ -7,10 +7,9 @@ use crate::proto::workflows::{
 };
 use crate::db::{DatabasePool, repositories::WorkflowRepository};
 use crate::proto_conv::workflow_to_proto;
-use crate::execution::{ExecutionStreamHandler, ExecutionEventType};
+use crate::execution::ExecutionStreamHandler;
 use tonic::{Request, Response, Status};
 use std::sync::Arc;
-use chrono::Utc;
 use uuid::Uuid;
 
 pub struct WorkflowServiceImpl {

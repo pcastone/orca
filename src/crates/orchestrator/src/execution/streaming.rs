@@ -5,7 +5,6 @@
 
 use crate::proto::tasks::ExecutionEvent;
 use tokio::sync::mpsc;
-use tracing::{debug, error, warn};
 
 /// Types of execution events that can be streamed
 #[derive(Debug, Clone)]

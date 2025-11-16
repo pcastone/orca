@@ -3,7 +3,7 @@
 //! Handles LDAP connection and authentication based on configuration.
 
 use crate::config::LdapConfig;
-use ldap3::{Ldap, LdapConnAsync, Scope, SearchEntry};
+use ldap3::{Ldap, LdapConnAsync};
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, info, warn};
@@ -54,7 +54,7 @@ impl LdapClient {
             .map_err(|e| LdapError::Connection(format!("Failed to connect: {}", e)))?;
 
         // Bind with DN (empty password for anonymous bind, or use readonly credentials)
-        let bind_result = if let Some((user, pass)) = self.readonly_credentials() {
+        let _ = if let Some((user, pass)) = self.readonly_credentials() {
             ldap.simple_bind(&user, &pass)
                 .await
                 .map_err(|e| LdapError::Bind(format!("Bind failed: {}", e)))?;

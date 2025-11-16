@@ -9,7 +9,6 @@ use axum::{
 };
 
 use crate::api::{models::HealthResponse, response, routes::AppState};
-use crate::db::DatabaseConnection;
 
 /// Handler for GET /health
 ///

@@ -1,12 +1,9 @@
 //! System information and metrics endpoint handlers
 
 use axum::extract::State;
-use std::sync::Arc;
 
 use crate::api::models::{SystemInfoResponse, SystemMetricsResponse, StatusResponse};
 use crate::api::response;
-use crate::api::ws::BroadcastState;
-use crate::db::DatabaseConnection;
 use crate::db::repositories::ConfigurationRepository;
 
 /// Get system information

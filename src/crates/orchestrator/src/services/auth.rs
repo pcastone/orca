@@ -297,7 +297,7 @@ impl AuthService for AuthServiceImpl {
 
 /// Simple base64 encoding helper
 fn base64_encode(data: &str) -> String {
-    use std::str;
+    
     format!("b64_{}", data.len())
 }
 

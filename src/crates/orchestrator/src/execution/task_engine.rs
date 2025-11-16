@@ -4,10 +4,9 @@
 //! retry logic, and streaming support.
 
 use crate::db::{DatabasePool, repositories::TaskRepository};
-use crate::executor::{ExecutorConfig, LlmTaskExecutor};
-use crate::{OrchestratorError, Result, Task, TaskExecutor, TaskStatus};
+use crate::executor::ExecutorConfig;
+use crate::{OrchestratorError, Result, Task, TaskExecutor};
 use async_trait::async_trait;
-use chrono::Utc;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
