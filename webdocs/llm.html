@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Crate - acolib Documentation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#6366f1',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .sidebar-link {
+            @apply block py-2 px-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded;
+        }
+        .sidebar-link.active {
+            @apply bg-blue-50 text-blue-600 font-medium;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center">
+                    <h1 class="text-2xl font-bold text-gray-900">acolib</h1>
+                    <span class="ml-3 px-2 py-1 text-xs font-semibold text-blue-600 bg-blue-100 rounded">LLM</span>
+                </div>
+                <nav class="hidden md:flex space-x-8">
+                    <a href="index.html" class="text-gray-600 hover:text-gray-900">Home</a>
+                    <a href="llm.html" class="text-blue-600 font-medium hover:text-blue-800">LLM</a>
+                    <a href="tooling.html" class="text-gray-600 hover:text-gray-900">Tooling</a>
+                    <a href="api.html" class="text-gray-600 hover:text-gray-900">API</a>
+                    <a href="https://github.com/pcastone/orca" class="text-gray-600 hover:text-gray-900">GitHub</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="flex gap-8">
+            <!-- Sidebar -->
+            <aside class="hidden lg:block w-64 flex-shrink-0">
+                <div class="sticky top-24">
+                    <nav class="space-y-1">
+                        <a href="#overview" class="sidebar-link">Overview</a>
+                        <div class="mt-4">
+                            <p class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Local Providers</p>
+                            <a href="#ollama" class="sidebar-link">Ollama</a>
+                            <a href="#llamacpp" class="sidebar-link">llama.cpp</a>
+                            <a href="#lmstudio" class="sidebar-link">LM Studio</a>
+                        </div>
+                        <div class="mt-4">
+                            <p class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Remote Providers</p>
+                            <a href="#claude" class="sidebar-link">Claude (Anthropic)</a>
+                            <a href="#openai" class="sidebar-link">OpenAI</a>
+                            <a href="#gemini" class="sidebar-link">Gemini (Google)</a>
+                            <a href="#grok" class="sidebar-link">Grok (xAI)</a>
+                            <a href="#deepseek" class="sidebar-link">Deepseek</a>
+                            <a href="#openrouter" class="sidebar-link">OpenRouter</a>
+                        </div>
+                        <div class="mt-4">
+                            <p class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Advanced</p>
+                            <a href="#thinking-models" class="sidebar-link">Thinking Models</a>
+                            <a href="#provider-utils" class="sidebar-link">Provider Utilities</a>
+                            <a href="#configuration" class="sidebar-link">Configuration</a>
+                        </div>
+                    </nav>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="flex-1 min-w-0">
+                <!-- Overview Section -->
+                <section id="overview" class="mb-16">
+                    <h2 class="text-3xl font-bold text-gray-900 mb-4">LLM Crate</h2>
+                    <p class="text-lg text-gray-600 mb-6">
+                        The LLM crate provides concrete implementations of the <code class="bg-gray-100 px-2 py-1 rounded text-sm">ChatModel</code> trait
+                        from <code class="bg-gray-100 px-2 py-1 rounded text-sm">langgraph-core</code> for various LLM providers.
+                    </p>
+
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm text-blue-700">
+                                    <strong>Unified Interface:</strong> All providers implement the same <code>ChatModel</code> trait,
+                                    making it easy to switch between providers without changing your code.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-lg border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-3 text-gray-900">Local Providers</h3>
+                            <p class="text-gray-600 text-sm mb-4">Run models on your local machine or network</p>
+                            <ul class="space-y-2 text-sm">
+                                <li class="flex items-center text-gray-700">
+                                    <svg class="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    Ollama
+                                </li>
+                                <li class="flex items-center text-gray-700">
+                                    <svg class="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    llama.cpp
+                                </li>
+                                <li class="flex items-center text-gray-700">
+                                    <svg class="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    LM Studio
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-lg border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-3 text-gray-900">Remote Providers</h3>
+                            <p class="text-gray-600 text-sm mb-4">Connect to cloud-hosted LLM APIs</p>
+                            <ul class="space-y-2 text-sm">
+                                <li class="flex items-center text-gray-700">
+                                    <svg class="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    Claude (Anthropic)
+                                </li>
+                                <li class="flex items-center text-gray-700">
+                                    <svg class="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    OpenAI (GPT-4, o1)
+                                </li>
+                                <li class="flex items-center text-gray-700">
+                                    <svg class="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    Gemini, Grok, Deepseek, OpenRouter
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Local Providers Section -->
+                <section class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Local Providers</h2>
+
+                    <!-- Ollama -->
+                    <div id="ollama" class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Ollama</h3>
+                        <p class="text-gray-600 mb-4">
+                            Popular local LLM runner supporting Llama 2, Mistral, Mixtral, and many more models.
+                        </p>
+                        <div class="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                            <p class="text-sm text-gray-600 mb-2"><strong>Default URL:</strong> <code class="bg-gray-100 px-2 py-1 rounded">http://localhost:11434</code></p>
+                            <p class="text-sm text-gray-600"><strong>Client:</strong> <code class="bg-gray-100 px-2 py-1 rounded">OllamaClient</code></p>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-rust">use llm::local::OllamaClient;
+use llm::config::LocalLlmConfig;
+use langgraph_core::llm::{ChatModel, ChatRequest};
+use langgraph_core::Message;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = LocalLlmConfig::new("http://localhost:11434", "llama2");
+    let client = OllamaClient::new(config);
+
+    let request = ChatRequest::new(vec![
+        Message::human("What is Rust?")
+    ]);
+
+    let response = client.chat(request).await?;
+    println!("Response: {}", response.message.text().unwrap());
+
+    Ok(())
+}</code></pre>
+                    </div>
+
+                    <!-- llama.cpp -->
+                    <div id="llamacpp" class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">llama.cpp</h3>
+                        <p class="text-gray-600 mb-4">
+                            Direct llama.cpp server integration with OpenAI-compatible API.
+                        </p>
+                        <div class="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                            <p class="text-sm text-gray-600 mb-2"><strong>Default URL:</strong> <code class="bg-gray-100 px-2 py-1 rounded">http://localhost:8080</code></p>
+                            <p class="text-sm text-gray-600"><strong>Client:</strong> <code class="bg-gray-100 px-2 py-1 rounded">LlamaCppClient</code></p>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-rust">use llm::local::LlamaCppClient;
+use llm::config::LocalLlmConfig;
+use langgraph_core::llm::{ChatModel, ChatRequest};
+use langgraph_core::Message;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = LocalLlmConfig::new("http://localhost:8080", "llama-2-7b");
+    let client = LlamaCppClient::new(config);
+
+    let request = ChatRequest::new(vec![
+        Message::human("Explain async/await in Rust")
+    ]);
+
+    let response = client.chat(request).await?;
+    println!("{}", response.message.text().unwrap());
+
+    Ok(())
+}</code></pre>
+                    </div>
+
+                    <!-- LM Studio -->
+                    <div id="lmstudio" class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">LM Studio</h3>
+                        <p class="text-gray-600 mb-4">
+                            User-friendly local LLM interface with OpenAI-compatible API.
+                        </p>
+                        <div class="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                            <p class="text-sm text-gray-600 mb-2"><strong>Default URL:</strong> <code class="bg-gray-100 px-2 py-1 rounded">http://localhost:1234/v1</code></p>
+                            <p class="text-sm text-gray-600"><strong>Client:</strong> <code class="bg-gray-100 px-2 py-1 rounded">LmStudioClient</code></p>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-rust">use llm::local::LmStudioClient;
+use llm::config::LocalLlmConfig;
+use langgraph_core::llm::{ChatModel, ChatRequest};
+use langgraph_core::Message;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = LocalLlmConfig::new("http://localhost:1234/v1", "mistral-7b");
+    let client = LmStudioClient::new(config);
+
+    let request = ChatRequest::new(vec![
+        Message::human("Write a quicksort in Rust")
+    ]).with_temperature(0.7);
+
+    let response = client.chat(request).await?;
+    println!("{}", response.message.text().unwrap());
+
+    Ok(())
+}</code></pre>
+                    </div>
+                </section>
+
+                <!-- Remote Providers Section -->
+                <section class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Remote Providers</h2>
+
+                    <!-- Claude -->
+                    <div id="claude" class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Claude (Anthropic)</h3>
+                        <p class="text-gray-600 mb-4">
+                            Anthropic's Claude models including Claude 3 Opus, Sonnet, Haiku, and Claude 3.5 Sonnet.
+                        </p>
+                        <div class="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                            <p class="text-sm text-gray-600 mb-2"><strong>API Key:</strong> <code class="bg-gray-100 px-2 py-1 rounded">ANTHROPIC_API_KEY</code></p>
+                            <p class="text-sm text-gray-600"><strong>Client:</strong> <code class="bg-gray-100 px-2 py-1 rounded">ClaudeClient</code></p>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-rust">use llm::remote::ClaudeClient;
+use llm::config::RemoteLlmConfig;
+use langgraph_core::llm::{ChatModel, ChatRequest};
+use langgraph_core::Message;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = RemoteLlmConfig::from_env(
+        "ANTHROPIC_API_KEY",
+        "https://api.anthropic.com/v1",
+        "claude-3-5-sonnet-20240620"
+    )?;
+    let client = ClaudeClient::new(config);
+
+    let request = ChatRequest::new(vec![
+        Message::human("Explain the actor model")
+    ]).with_temperature(0.7);
+
+    let response = client.chat(request).await?;
+    println!("{}", response.message.text().unwrap());
+
+    Ok(())
+}</code></pre>
+                    </div>
+
+                    <!-- OpenAI -->
+                    <div id="openai" class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">OpenAI</h3>
+                        <p class="text-gray-600 mb-4">
+                            OpenAI models including GPT-4, GPT-4 Turbo, GPT-3.5 Turbo, and o1/o1-mini thinking models.
+                        </p>
+                        <div class="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                            <p class="text-sm text-gray-600 mb-2"><strong>API Key:</strong> <code class="bg-gray-100 px-2 py-1 rounded">OPENAI_API_KEY</code></p>
+                            <p class="text-sm text-gray-600"><strong>Client:</strong> <code class="bg-gray-100 px-2 py-1 rounded">OpenAiClient</code></p>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-rust">use llm::remote::OpenAiClient;
+use llm::config::RemoteLlmConfig;
+use langgraph_core::llm::{ChatModel, ChatRequest};
+use langgraph_core::Message;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = RemoteLlmConfig::from_env(
+        "OPENAI_API_KEY",
+        "https://api.openai.com/v1",
+        "gpt-4"
+    )?;
+    let client = OpenAiClient::new(config);
+
+    let request = ChatRequest::new(vec![
+        Message::human("Explain quantum computing briefly")
+    ]).with_temperature(0.7);
+
+    let response = client.chat(request).await?;
+    println!("{}", response.message.text().unwrap());
+
+    Ok(())
+}</code></pre>
+                    </div>
+
+                    <!-- Gemini -->
+                    <div id="gemini" class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Gemini (Google)</h3>
+                        <p class="text-gray-600 mb-4">
+                            Google's Gemini models including Gemini Pro, Gemini Pro Vision, Gemini 1.5 Pro, and Flash.
+                        </p>
+                        <div class="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                            <p class="text-sm text-gray-600 mb-2"><strong>API Key:</strong> <code class="bg-gray-100 px-2 py-1 rounded">GOOGLE_API_KEY</code></p>
+                            <p class="text-sm text-gray-600"><strong>Client:</strong> <code class="bg-gray-100 px-2 py-1 rounded">GeminiClient</code></p>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-rust">use llm::remote::GeminiClient;
+use llm::config::RemoteLlmConfig;
+use langgraph_core::llm::{ChatModel, ChatRequest};
+use langgraph_core::Message;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = RemoteLlmConfig::from_env(
+        "GOOGLE_API_KEY",
+        "https://generativelanguage.googleapis.com/v1beta",
+        "gemini-pro"
+    )?;
+    let client = GeminiClient::new(config);
+
+    let request = ChatRequest::new(vec![
+        Message::human("What is machine learning?")
+    ]).with_temperature(0.7);
+
+    let response = client.chat(request).await?;
+    println!("{}", response.message.text().unwrap());
+
+    Ok(())
+}</code></pre>
+                    </div>
+
+                    <!-- Grok -->
+                    <div id="grok" class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Grok (xAI)</h3>
+                        <p class="text-gray-600 mb-4">
+                            xAI's Grok models with OpenAI-compatible API.
+                        </p>
+                        <div class="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                            <p class="text-sm text-gray-600 mb-2"><strong>API Key:</strong> <code class="bg-gray-100 px-2 py-1 rounded">GROK_API_KEY</code></p>
+                            <p class="text-sm text-gray-600"><strong>Client:</strong> <code class="bg-gray-100 px-2 py-1 rounded">GrokClient</code></p>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-rust">use llm::remote::GrokClient;
+use llm::config::RemoteLlmConfig;
+use langgraph_core::llm::{ChatModel, ChatRequest};
+use langgraph_core::Message;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = RemoteLlmConfig::from_env(
+        "GROK_API_KEY",
+        "https://api.x.ai/v1",
+        "grok-1"
+    )?;
+    let client = GrokClient::new(config);
+
+    let request = ChatRequest::new(vec![
+        Message::human("Explain neural networks")
+    ]);
+
+    let response = client.chat(request).await?;
+    println!("{}", response.message.text().unwrap());
+
+    Ok(())
+}</code></pre>
+                    </div>
+
+                    <!-- Deepseek -->
+                    <div id="deepseek" class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Deepseek</h3>
+                        <p class="text-gray-600 mb-4">
+                            Deepseek models including Deepseek Chat, Deepseek Coder, and Deepseek R1 (thinking model).
+                        </p>
+                        <div class="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                            <p class="text-sm text-gray-600 mb-2"><strong>API Key:</strong> <code class="bg-gray-100 px-2 py-1 rounded">DEEPSEEK_API_KEY</code></p>
+                            <p class="text-sm text-gray-600"><strong>Client:</strong> <code class="bg-gray-100 px-2 py-1 rounded">DeepseekClient</code></p>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-rust">use llm::remote::DeepseekClient;
+use llm::config::RemoteLlmConfig;
+use langgraph_core::llm::{ChatModel, ChatRequest};
+use langgraph_core::Message;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = RemoteLlmConfig::from_env(
+        "DEEPSEEK_API_KEY",
+        "https://api.deepseek.com",
+        "deepseek-chat"
+    )?;
+    let client = DeepseekClient::new(config);
+
+    let request = ChatRequest::new(vec![
+        Message::human("Write a binary search in Rust")
+    ]);
+
+    let response = client.chat(request).await?;
+    println!("{}", response.message.text().unwrap());
+
+    Ok(())
+}</code></pre>
+                    </div>
+
+                    <!-- OpenRouter -->
+                    <div id="openrouter" class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">OpenRouter</h3>
+                        <p class="text-gray-600 mb-4">
+                            Unified API for multiple providers - route to any supported model with a single API key.
+                        </p>
+                        <div class="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                            <p class="text-sm text-gray-600 mb-2"><strong>API Key:</strong> <code class="bg-gray-100 px-2 py-1 rounded">OPENROUTER_API_KEY</code></p>
+                            <p class="text-sm text-gray-600"><strong>Client:</strong> <code class="bg-gray-100 px-2 py-1 rounded">OpenRouterClient</code></p>
+                        </div>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-rust">use llm::remote::OpenRouterClient;
+use llm::config::RemoteLlmConfig;
+use langgraph_core::llm::{ChatModel, ChatRequest};
+use langgraph_core::Message;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = RemoteLlmConfig::from_env(
+        "OPENROUTER_API_KEY",
+        "https://openrouter.ai/api/v1",
+        "anthropic/claude-3-opus"
+    )?;
+    let client = OpenRouterClient::new(config);
+
+    let request = ChatRequest::new(vec![
+        Message::human("Compare Rust and Go")
+    ]);
+
+    let response = client.chat(request).await?;
+    println!("{}", response.message.text().unwrap());
+
+    Ok(())
+}</code></pre>
+                    </div>
+                </section>
+
+                <!-- Advanced Features -->
+                <section class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Advanced Features</h2>
+
+                    <!-- Thinking Models -->
+                    <div id="thinking-models" class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Thinking Models with Reasoning</h3>
+                        <p class="text-gray-600 mb-4">
+                            Support for thinking models (o1, R1 series) that expose their reasoning process.
+                        </p>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-rust">use llm::remote::DeepseekClient;
+use llm::config::RemoteLlmConfig;
+use langgraph_core::llm::{ChatModel, ChatRequest, ReasoningMode};
+use langgraph_core::Message;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = RemoteLlmConfig::from_env(
+        "DEEPSEEK_API_KEY",
+        "https://api.deepseek.com",
+        "deepseek-reasoner"
+    )?;
+    let client = DeepseekClient::new(config);
+
+    let request = ChatRequest::new(vec![
+        Message::human("Solve this logic puzzle: ...")
+    ]).with_reasoning(ReasoningMode::Separated);
+
+    let response = client.chat(request).await?;
+
+    // Access the thinking process
+    if let Some(reasoning) = response.reasoning {
+        println!("Model's thinking: {}", reasoning.content);
+    }
+
+    // Access the final answer
+    println!("Final answer: {}", response.message.text().unwrap());
+
+    Ok(())
+}</code></pre>
+                    </div>
+
+                    <!-- Provider Utilities -->
+                    <div id="provider-utils" class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Provider Utilities</h3>
+                        <p class="text-gray-600 mb-4">
+                            All providers support the <code class="bg-gray-100 px-2 py-1 rounded text-sm">ProviderUtils</code> trait for common operations.
+                        </p>
+
+                        <h4 class="text-lg font-semibold text-gray-900 mb-3 mt-6">Check Connection</h4>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-rust">use llm::ProviderUtils;
+
+if client.ping().await? {
+    println!("Provider is online");
+}</code></pre>
+
+                        <h4 class="text-lg font-semibold text-gray-900 mb-3">List Available Models</h4>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-rust">use llm::ProviderUtils;
+
+let models = client.fetch_models().await?;
+for model in models {
+    println!("Model: {} - {}", model.id, model.name);
+}</code></pre>
+
+                        <h4 class="text-lg font-semibold text-gray-900 mb-3">Switch Models</h4>
+                        <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-rust">use llm::ProviderUtils;
+
+client.use_model("different-model").await?;
+println!("Now using: {}", client.current_model());</code></pre>
+                    </div>
+
+                    <!-- Configuration -->
+                    <div id="configuration" class="mb-12">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-4">Configuration</h3>
+                        <p class="text-gray-600 mb-4">
+                            All providers support common configuration options:
+                        </p>
+
+                        <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Feature</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Request Timeouts</td>
+                                        <td class="px-6 py-4 text-sm text-gray-600">Configurable timeout for API requests</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Retry Logic</td>
+                                        <td class="px-6 py-4 text-sm text-gray-600">Automatic retries with exponential backoff</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Environment Variables</td>
+                                        <td class="px-6 py-4 text-sm text-gray-600">Load API keys from environment</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Temperature</td>
+                                        <td class="px-6 py-4 text-sm text-gray-600">Control randomness in responses (0.0-2.0)</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Max Tokens</td>
+                                        <td class="px-6 py-4 text-sm text-gray-600">Limit response length</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-gray-300 py-8 mt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center">
+                <p class="text-sm">&copy; 2024 acolib. Licensed under Apache 2.0 or MIT.</p>
+                <div class="flex space-x-6 text-sm">
+                    <a href="index.html" class="hover:text-white">Home</a>
+                    <a href="llm.html" class="hover:text-white">LLM</a>
+                    <a href="tooling.html" class="hover:text-white">Tooling</a>
+                    <a href="api.html" class="hover:text-white">API</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+    <script src="assets/js/main.js"></script>
+</body>
+</html>
