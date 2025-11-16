@@ -64,6 +64,9 @@ pub mod workflow;
 // Executor module
 pub mod executor;
 
+// TUI module for interactive interface
+pub mod tui;
+
 // Error types and utilities
 mod error;
 

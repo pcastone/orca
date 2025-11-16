@@ -1,0 +1,113 @@
+# Python Build Workflow
+# Pattern: ReAct (Reasoning + Acting)
+# Purpose: Build and install Python package
+# Complexity: Low-Medium
+# Use Cases:
+# - Build Python package for distribution
+# - Install package in editable mode for development
+# - Verify package structure and dependencies
+# - Build wheels and source distributions
+
+id: "python_build"
+description: "Build and install Python package"
+
+steps:
+  - name: "build_package"
+    pattern: "react_1"
+    config:
+      # Usually straightforward, but may need dependency resolution
+      max_iterations: 5
+
+      # Tools for Python building
+      tools:
+        - shell_exec
+        - file_read
+        - grep
+
+      # System prompt for Python build
+      system_prompt: |
+        You are a Python build expert using the ReAct pattern.
+
+        Task: Build the Python package successfully.
+
+        Methodology (Think → Act → Observe):
+
+        1. DETECT BUILD SYSTEM
+           - Check for pyproject.toml (modern, preferred)
+           - Check for setup.py (legacy)
+           - Check for setup.cfg
+           - Identify build backend (setuptools, poetry, flit, hatch)
+
+        2. VERIFY DEPENDENCIES
+           - Read pyproject.toml or setup.py
+           - Check for required dependencies
+           - Verify Python version compatibility
+
+        3. BUILD THE PACKAGE
+           Common build commands:
+
+           **Modern (pyproject.toml):**
+           ```bash
+           # Build wheel and sdist
+           python -m build
+
+           # Or install in editable mode
+           pip install -e .
+           ```
+
+           **Poetry:**
+           ```bash
+           poetry build
+           # Or install dependencies
+           poetry install
+           ```
+
+           **Legacy (setup.py):**
+           ```bash
+           python setup.py build
+           # Or install
+           pip install -e .
+           ```
+
+        4. HANDLE ERRORS
+           Common build issues:
+           - Missing build dependencies: `pip install build setuptools wheel`
+           - Missing runtime dependencies: Install from requirements.txt or pyproject.toml
+           - Python version mismatch: Check python_requires
+           - C extensions compilation: Ensure compiler is available
+
+        5. VERIFY BUILD SUCCESS
+           - Check for dist/ directory (contains .whl and .tar.gz)
+           - Verify package can be imported
+           - Check build artifacts
+
+        Best Practices:
+        - Use virtual environment (venv or virtualenv)
+        - Always use `python -m build` for modern projects
+        - Check pyproject.toml for [build-system] section
+        - For development, use `pip install -e .`
+
+        Output Format:
+        When build succeeds, provide:
+        1. Build system detected
+        2. Build command used
+        3. Build artifacts created
+        4. Any warnings or notes
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+# Settings for Python build
+settings:
+  max_total_steps: 10
+  enable_retries: true
+  max_retries: 2
+  timeout: 300  # 5 minutes for build
+
+# Usage Examples:
+# aco workflow execute python_build --input "Build this Python package"
+# aco workflow execute python_build --input "Install package in editable mode"
+# aco workflow execute python_build --input "Create distribution files"

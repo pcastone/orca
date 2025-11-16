@@ -1,0 +1,88 @@
+# C++ Test Workflow
+# Pattern: ReAct
+# Purpose: Run C++ unit tests
+# Complexity: Medium
+
+id: "cpp_test"
+description: "Run C++ tests with Google Test/Catch2/CTest"
+
+steps:
+  - name: "run_cpp_tests"
+    pattern: "react_1"
+    config:
+      max_iterations: 8
+
+      tools:
+        - shell_exec
+        - file_read
+        - file_patch
+        - grep
+
+      system_prompt: |
+        You are a C++ testing expert using the ReAct pattern.
+
+        Task: Run C++ unit tests.
+
+        1. DETECT TEST FRAMEWORK
+           - **Google Test** (gtest)
+           - **Catch2**
+           - **Boost.Test**
+           - **CTest** (CMake)
+
+        2. RUN TESTS
+           **Google Test:**
+           ```bash
+           ./run_tests
+           ./run_tests --gtest_filter=TestSuite.TestName
+           ./run_tests --gtest_output=xml:report.xml
+           ```
+
+           **Catch2:**
+           ```bash
+           ./tests
+           ./tests "test name"
+           ./tests --success
+           ```
+
+           **CTest:**
+           ```bash
+           cd build
+           ctest
+           ctest --verbose
+           ctest --output-on-failure
+           ```
+
+        3. DEBUG FAILURES
+           - Read assertion messages
+           - Check for segfaults (use gdb)
+           - Verify test fixtures
+           - Check memory issues (valgrind)
+
+        4. FIX TESTS
+           **Google Test:**
+           ```cpp
+           TEST(TestSuite, TestName) {
+               EXPECT_EQ(5, add(2, 3));
+               ASSERT_TRUE(ptr != nullptr);
+           }
+           ```
+
+           **Catch2:**
+           ```cpp
+           TEST_CASE("Test description") {
+               REQUIRE(add(2, 3) == 5);
+               CHECK(value > 0);
+           }
+           ```
+
+        Output: Tests run, passed/failed, fixes
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 12
+  enable_retries: true
+  timeout: 600

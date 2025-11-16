@@ -52,6 +52,11 @@ indicatif = "0.17"
 colored = "2.1"
 tabled = "0.15"
 
+# TUI
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+parking_lot = { workspace = true }
+
 # LangGraph patterns
 langgraph-core = { workspace = true }
 langgraph-prebuilt = { workspace = true }

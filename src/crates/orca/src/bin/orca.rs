@@ -463,8 +463,28 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
         None => {
-            println!("{}", version_info());
-            println!("\nUse --help to see available commands");
+            // Check if initialized
+            if !orca::cli::is_initialized() {
+                eprintln!("{}", orca::cli::get_init_instructions());
+                return Err(anyhow::anyhow!("Orca not initialized"));
+            }
+
+            // Launch interactive TUI
+            println!("Launching Orca TUI...");
+            let mut app = orca::tui::App::new();
+
+            // Try to load health report
+            if let Ok(context) = orca::cli::get_or_create_context().await {
+                if let Ok(report) = orca::HealthChecker::check_context(&context).await {
+                    app.health_report = Some(report);
+                }
+            }
+
+            app.add_log("Orca TUI started".to_string());
+
+            // Run the TUI
+            orca::tui::run_tui(&mut app).await?;
+
             Ok(())
         }
     }
