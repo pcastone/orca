@@ -15,9 +15,13 @@ Analysis of the `/docs` directory revealed **15 major discrepancies** between do
 - Inaccurate module organization details
 - Environment-specific hardcoded paths
 
+**Progress Update** (2025-11-16):
+- ✅ **1 issue resolved** (#10: LLM Provider Documentation)
+- 🔄 **14 issues remaining**
+
 **Severity Breakdown**:
 - **Critical**: 5 issues (fundamental inaccuracies)
-- **High**: 6 issues (significant discrepancies)
+- **High**: 5 issues (1 resolved, 5 remaining)
 - **Medium**: 4 issues (minor inaccuracies or missing details)
 
 ---
@@ -190,29 +194,36 @@ aco/src/
 
 **Expected**: At least 7 dynamic libraries (depending on build configuration)
 
-### 10. ⚠️ Missing LLM Provider Details (architecture.md)
+### 10. ✅ ~~Missing LLM Provider Details (architecture.md)~~ **RESOLVED**
 
+**Status**: ✅ **FIXED** (2025-11-16)
 **Location**: `/docs/architecture.md` lines 162-180
-**Issue**: LLM section only lists OpenAI and Anthropic
-**Reality**: LLM crate supports many more providers
+**Issue**: LLM section only listed OpenAI and Anthropic
+**Reality**: LLM crate supports 9 providers (6 remote + 3 local)
 
-**Documented**:
-```
-llm/
-├── provider/
-│   ├── openai.rs      # OpenAI GPT models
-│   ├── anthropic.rs   # Claude models
-│   └── generic.rs     # Generic HTTP provider
-```
+**Resolution**:
+- Updated `docs/architecture.md` with complete provider list and structure
+- Updated `CLAUDE.md` with all provider configurations and examples
+- Created comprehensive `docs/llm_providers.md` (500+ lines)
+  - Detailed guide for each provider
+  - Configuration examples
+  - Code examples
+  - Troubleshooting section
 
-**Actual Additional Providers**:
+**Now Documents All 9 Providers**:
+
+**Remote (6)**:
+- Claude (Anthropic)
+- OpenAI (GPT-4, o1)
 - Gemini (Google)
 - Grok (xAI)
-- Deepseek
-- OpenRouter
-- Ollama (local)
-- LM Studio (local)
-- llama.cpp (local)
+- Deepseek (including R1 thinking model)
+- OpenRouter (unified API)
+
+**Local (3)**:
+- Ollama
+- llama.cpp
+- LM Studio
 
 ### 11. ⚠️ Incomplete Tooling Crate Documentation
 
