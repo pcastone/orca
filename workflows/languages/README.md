@@ -4,6 +4,9 @@ This directory contains workflow templates tailored for specific programming lan
 
 ## Table of Contents
 
+- [Validation Workflows](#validation-workflows) ⭐ NEW
+  - [Pre-Commit Validation](#pre-commit-validation)
+  - [CI/CD Validation](#cicd-validation)
 - [Compiled Languages](#compiled-languages)
   - [C](#c)
   - [C++](#c-1)
@@ -27,6 +30,77 @@ This directory contains workflow templates tailored for specific programming lan
 
 ---
 
+## Validation Workflows
+
+⭐ **NEW**: Comprehensive validation workflows that combine multiple quality checks!
+
+### Pre-Commit Validation
+
+**Location:** `/workflows/validation/`
+
+Fast validation for pre-commit hooks - checks only staged files.
+
+| Workflow | ID | Purpose |
+|----------|-----|---------|
+| `pre_commit.yaml` | `pre_commit_validate` | Fast pre-commit checks (<30s) on staged files |
+
+**Features:**
+- Language detection (Python, TypeScript, JavaScript, C/C++, etc.)
+- Quick linting on changed files only
+- Format checking
+- Secret detection
+- Merge conflict detection
+- Blocks critical issues, warns on minor ones
+
+**Usage:**
+```bash
+aco workflow execute pre_commit_validate --input "Check staged files"
+```
+
+**Git Hook Integration:**
+```bash
+# .git/hooks/pre-commit
+#!/bin/bash
+aco workflow execute pre_commit_validate --input "Pre-commit validation"
+```
+
+---
+
+### CI/CD Validation
+
+**Location:** `/workflows/validation/`
+
+Comprehensive validation for CI/CD pipelines - full test suite and all checks.
+
+| Workflow | ID | Purpose |
+|----------|-----|---------|
+| `ci_cd.yaml` | `ci_cd_validate` | Full CI/CD pipeline validation |
+
+**Features:**
+- Auto-detect project type and language
+- Run language-specific validation workflows
+- Security scanning (dependency audit, secret detection, SAST)
+- Full test suite with coverage
+- Build verification
+- Integration tests
+- Performance checks
+- Comprehensive quality gates
+
+**Usage:**
+```bash
+aco workflow execute ci_cd_validate --input "Full CI validation"
+aco workflow execute ci_cd_validate --input "PR validation check"
+```
+
+**Quality Gates:**
+- ✅ All tests pass
+- ✅ Coverage >= 80%
+- ✅ No critical security issues
+- ✅ Build succeeds
+- ✅ Lint score >= 9/10
+
+---
+
 ## Compiled Languages
 
 ### C
@@ -40,12 +114,14 @@ Workflows for C projects using gcc/clang/make/cmake.
 | `build.yaml` | `c_build` | Compile C project with gcc/clang/make/cmake |
 | `test.yaml` | `c_test` | Run C unit tests (Check/CTest/Unity) |
 | `debug_build.yaml` | `c_debug_build` | Debug and fix compilation errors |
+| `validate.yaml` ⭐ | `c_validate` | Full validation: build + test + static analysis |
 
 **Usage:**
 ```bash
 aco workflow execute c_build --input "Build the project"
 aco workflow execute c_test --input "Run all tests"
 aco workflow execute c_debug_build --input "Fix compilation errors"
+aco workflow execute c_validate --input "Full validation pipeline"
 ```
 
 ---
@@ -61,6 +137,7 @@ Workflows for C++ projects using g++/clang++/cmake.
 | `build.yaml` | `cpp_build` | Compile C++ project |
 | `test.yaml` | `cpp_test` | Run tests (Google Test/Catch2/CTest) |
 | `debug_build.yaml` | `cpp_debug_build` | Debug compilation errors |
+| `validate.yaml` ⭐ | `cpp_validate` | Full validation: build + test + static analysis |
 
 **Usage:**
 ```bash
@@ -81,6 +158,7 @@ Workflows for Java projects using Maven/Gradle.
 | `build.yaml` | `java_build` | Build Java project (Maven/Gradle) |
 | `test.yaml` | `java_test` | Run JUnit tests |
 | `debug_build.yaml` | `java_debug_build` | Fix compilation errors |
+| `validate.yaml` ⭐ | `java_validate` | Full validation: build + test + coverage + checkstyle |
 
 **Usage:**
 ```bash
@@ -123,6 +201,7 @@ Comprehensive workflows for Python development.
 | `lint.yaml` | `python_lint` | Lint with ruff/pylint/flake8/mypy |
 | `format.yaml` | `python_format` | Format with black/ruff |
 | `debug_runtime.yaml` | `python_debug_runtime` | Debug runtime errors |
+| `validate.yaml` ⭐ | `python_validate` | **FULL VALIDATION**: lint + typecheck + security + test + build |
 
 **Usage:**
 ```bash
@@ -146,6 +225,7 @@ Workflows for JavaScript projects.
 | `build.yaml` | `javascript_build` | Bundle with Vite/Webpack/Rollup |
 | `test.yaml` | `javascript_test` | Run tests (Jest/Vitest/Mocha) |
 | `lint.yaml` | `javascript_lint` | Lint with ESLint |
+| `validate.yaml` ⭐ | `javascript_validate` | Full validation: lint + test + build |
 
 **Usage:**
 ```bash
@@ -168,6 +248,7 @@ Workflows for TypeScript projects.
 | `test.yaml` | `typescript_test` | Run tests (Jest/Vitest) |
 | `lint.yaml` | `typescript_lint` | Lint with ESLint |
 | `typecheck.yaml` | `typescript_typecheck` | Type checking with tsc --noEmit |
+| `validate.yaml` ⭐ | `typescript_validate` | **FULL VALIDATION**: typecheck + lint + format + test + build |
 
 **Usage:**
 ```bash
@@ -213,6 +294,7 @@ Workflows for React.js applications.
 | `build.yaml` | `reactjs_build` | Build for production |
 | `test.yaml` | `reactjs_test` | Run component tests |
 | `lint.yaml` | `reactjs_lint` | Lint with ESLint + React rules |
+| `validate.yaml` ⭐ | `reactjs_validate` | Full validation: lint + typecheck + test + build + bundle size |
 
 **Usage:**
 ```bash
@@ -234,6 +316,7 @@ Workflows for Angular applications.
 | `build.yaml` | `angular_build` | Build for production |
 | `test.yaml` | `angular_test` | Run tests (Jasmine/Karma) |
 | `lint.yaml` | `angular_lint` | Lint with ESLint |
+| `validate.yaml` ⭐ | `angular_validate` | Full validation: lint + test + build + AOT |
 
 **Usage:**
 ```bash
@@ -255,6 +338,7 @@ Workflows for SvelteKit applications.
 | `build.yaml` | `sveltekit_build` | Build for production |
 | `test.yaml` | `sveltekit_test` | Run tests (Vitest/Playwright) |
 | `check.yaml` | `sveltekit_check` | Type checking with svelte-check |
+| `validate.yaml` ⭐ | `sveltekit_validate` | Full validation: svelte-check + test + build |
 
 **Usage:**
 ```bash
@@ -423,8 +507,20 @@ To add a new language workflow:
 - React, Angular, SvelteKit (Frameworks)
 - HTML, Schema, Shell, SQL (Utilities)
 
-**Total Workflows:** 59+
+**Total Workflows:** 72+
+- Individual workflows: 61
+- **NEW Validation workflows: 11** ⭐
+  - 9 language-specific validation workflows
+  - 2 general validation workflows (pre-commit, CI/CD)
+
 **Workflow Patterns:** 3 (ReAct, Plan-Execute, Reflection)
+
+**Validation Coverage:**
+- ✅ Full validation pipelines for 9 languages/frameworks
+- ✅ Pre-commit hooks (<30s fast validation)
+- ✅ CI/CD pipeline integration (comprehensive validation)
+- ✅ Quality gates with coverage requirements
+- ✅ Security scanning included
 
 ---
 
