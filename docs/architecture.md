@@ -121,9 +121,47 @@ langgraph-prebuilt/
 - Reflection agent: Generate → Critique → Refine
 - Builder patterns for easy customization
 
-### 4. orchestrator
+### 4. langgraph-cli
 
-**Task and workflow coordination.**
+**Command-line development tools.**
+
+```
+langgraph-cli/
+├── main.rs            # CLI entry point
+├── commands/          # Command implementations
+└── utils/             # CLI utilities
+```
+
+**Key Responsibilities:**
+- Development utilities for langgraph
+- Testing and debugging tools
+- Graph visualization
+- Workflow management
+
+### 5. orca
+
+**Standalone orchestrator (primary user tool).**
+
+```
+orca/
+├── bin/
+│   └── orca.rs        # Binary entry point
+├── config.rs          # Configuration management
+├── database.rs        # SQLite database
+├── task_manager.rs    # Direct task execution
+└── direct_tool.rs     # In-process tool execution
+```
+
+**Key Responsibilities:**
+- Direct tool execution (no server needed)
+- SQLite database at `~/.orca/orca.db`
+- Configuration: `~/.orca/orca.toml` or `./.orca/orca.toml`
+- Single-process architecture
+- Primary tool for local development
+
+### 6. orchestrator
+
+**Distributed orchestration engine.**
 
 ```
 orchestrator/
@@ -131,56 +169,65 @@ orchestrator/
 ├── workflow.rs        # Workflow definition
 ├── executor.rs        # Execution orchestration
 ├── manager.rs         # Task/workflow lifecycle
-└── store.rs           # In-memory storage
+├── store.rs           # In-memory storage
+└── migrations/        # Database migrations
 ```
 
 **Key Responsibilities:**
-- Task lifecycle management
+- Multi-machine task coordination
+- WebSocket-based communication
 - Workflow scheduling and execution
 - Dependency resolution
-- Resource allocation
+- Production deployment architecture
 
-### 5. aco
+### 7. aco
 
-**Web UI, TUI, and CLI binaries.**
+**Client application with TUI and CLI.**
 
 ```
 aco/
-├── web/               # Web UI (React/Angular)
 ├── tui/               # Terminal UI (ratatui)
 ├── cli/               # Command-line interface
-└── server.rs          # API server
+└── main.rs            # Binary entry point
 ```
 
 **Key Responsibilities:**
-- Web dashboard
-- Terminal interface
-- Command-line tools
-- REST API implementation
+- Terminal User Interface (TUI)
+- WebSocket client for orchestrator
+- CLI interface for tool execution
+- Real-time execution monitoring
 
-### 6. llm
+### 8. llm
 
-**LLM provider integration.**
+**LLM provider integrations.**
 
 ```
 llm/
-├── provider/
+├── local/
+│   ├── ollama.rs      # Ollama integration
+│   ├── llamacpp.rs    # llama.cpp integration
+│   └── lmstudio.rs    # LM Studio integration
+├── remote/
 │   ├── openai.rs      # OpenAI GPT models
-│   ├── anthropic.rs   # Claude models
-│   └── generic.rs     # Generic HTTP provider
+│   ├── claude.rs      # Anthropic Claude models
+│   ├── gemini.rs      # Google Gemini
+│   ├── grok.rs        # xAI Grok
+│   ├── deepseek.rs    # Deepseek models
+│   └── openrouter.rs  # OpenRouter
 ├── models.rs          # Model definitions
 └── errors.rs          # Provider errors
 ```
 
 **Key Responsibilities:**
-- OpenAI API integration
-- Anthropic API integration
-- Token counting
-- Error handling and retries
+- Local provider support (Ollama, llama.cpp, LM Studio)
+- Remote provider support (Claude, OpenAI, Gemini, Grok, Deepseek, OpenRouter)
+- Thinking model support (o1, R1 series)
+- Unified `ChatModel` trait
+- Token counting and streaming
 
-### 7. tooling
+### 9. tooling
 
-**Utilities and helpers.**
+**Configuration and utilities.**
 
 ```
 tooling/
@@ -196,9 +243,22 @@ tooling/
 - Common utilities
 - Error definitions
 
-### 8. utils
+### 10. utils
 
-**Common utilities shared across crates.**
+**Shared utilities across workspace.**
+
+```
+utils/
+├── http.rs            # HTTP client with retry
+├── config.rs          # Config file loading
+└── auth.rs            # Authentication helpers
+```
+
+**Key Responsibilities:**
+- HTTP client with retry/backoff
+- Environment variable and config file loading
+- Authentication helpers
+- Server and client configuration
 
 ## Data Flow
 

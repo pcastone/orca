@@ -2,6 +2,23 @@
 
 This document provides comprehensive instructions for building acolib components, with a focus on the Orca standalone orchestrator.
 
+## Workspace Overview
+
+acolib is a **standard Cargo workspace** with 10 member crates:
+
+1. **langgraph-core** - Core graph execution engine
+2. **langgraph-checkpoint** - Persistence abstraction
+3. **langgraph-prebuilt** - Pre-built agent patterns
+4. **langgraph-cli** - Development CLI tools
+5. **orca** - Standalone orchestrator (⭐ primary user tool)
+6. **orchestrator** - Distributed orchestration engine
+7. **aco** - Client application with TUI/CLI
+8. **llm** - LLM provider integrations
+9. **tooling** - Configuration and utilities
+10. **utils** - Shared utilities
+
+All crates share workspace-level configuration in the root `Cargo.toml`.
+
 ## Quick Start: Build Orca
 
 The fastest way to build and use Orca:
