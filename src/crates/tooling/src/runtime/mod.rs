@@ -62,6 +62,9 @@ pub struct ToolResponse {
     /// Tool that was executed
     pub tool: String,
 
+    /// Request ID (for correlation with request)
+    pub request_id: Option<String>,
+
     /// Execution status
     pub status: ToolStatus,
 
@@ -95,6 +98,7 @@ impl ToolResponse {
     pub fn success(tool: impl Into<String>, result: serde_json::Value) -> Self {
         Self {
             tool: tool.into(),
+            request_id: None,
             status: ToolStatus::Success,
             ok: true,
             result: Some(result.clone()),
@@ -112,6 +116,7 @@ impl ToolResponse {
         let error_str = error.into();
         Self {
             tool: tool.into(),
+            request_id: None,
             status: ToolStatus::Error,
             ok: false,
             result: None,
