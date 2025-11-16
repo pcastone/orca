@@ -132,15 +132,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Add edges for child graph
     child_graph.add_edge("__start__", "validate");
-    child_graph.add_conditional_edges(
+
+    // Create branches map for conditional routing
+    let mut validate_branches = std::collections::HashMap::new();
+    validate_branches.insert("valid".to_string(), "process".into());
+    validate_branches.insert("invalid".to_string(), "report".into());
+
+    child_graph.add_conditional_edge(
         "validate",
         |state| {
             if state.get("validated") == Some(&json!(true)) {
-                vec!["process"]
+                "valid".into()
             } else {
-                vec!["report"]
+                "invalid".into()
             }
-        }
+        },
+        validate_branches
     );
     child_graph.add_edge("process", "report");
     child_graph.add_edge("report", "__end__");
