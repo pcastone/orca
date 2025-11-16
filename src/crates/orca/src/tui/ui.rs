@@ -1,68 +1,249 @@
-//! UI rendering for the TUI
+//! UI rendering for the TUI - Conversation-centric layout
 
 use ratatui::{
     prelude::*,
     layout::{Alignment, Constraint, Direction, Layout},
-    widgets::Paragraph,
+    widgets::{Block, Borders, List, ListItem, Paragraph, Tabs, Wrap},
 };
-use super::app::App;
-use super::panels::{CommandsPanel, LogsPanel, OutputPanel, StatusPanel};
+use super::app::{App, FocusedArea, SidebarTab};
 
 /// Render the complete UI
 pub fn render_ui(f: &mut Frame, app: &App) {
-    // Create the main layout
+    // Create the main vertical layout: Menu | Main Area | Status
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(0)
-        .constraints(
-            [
-                Constraint::Length(5),    // Status panel (top)
-                Constraint::Min(10),      // Middle section
-                Constraint::Length(8),    // Logs panel (bottom)
-            ]
-            .as_ref(),
-        )
+        .constraints([
+            Constraint::Length(1),     // Menu bar (top)
+            Constraint::Min(10),       // Main content area
+            Constraint::Length(1),     // Status bar (bottom)
+        ])
         .split(f.area());
 
-    // Top: Status panel
-    StatusPanel::render(f, app, chunks[0]);
+    // Render menu bar
+    render_menu(f, app, chunks[0]);
 
-    // Middle: Commands and Output side by side
-    let middle_chunks = Layout::default()
+    // Main content area: Left (conversation + prompts) | Right (sidebar)
+    let main_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints(
-            [
-                Constraint::Percentage(40),  // Commands (left)
-                Constraint::Percentage(60),  // Output (right)
-            ]
-            .as_ref(),
-        )
+        .constraints([
+            Constraint::Percentage(75),  // Left side (conversation + prompts)
+            Constraint::Percentage(25),  // Right side (sidebar)
+        ])
         .split(chunks[1]);
 
-    CommandsPanel::render(f, app, middle_chunks[0]);
-    OutputPanel::render(f, app, middle_chunks[1]);
+    // Left side: conversation and prompts
+    render_left_side(f, app, main_chunks[0]);
 
-    // Bottom: Logs panel
-    LogsPanel::render(f, app, chunks[2]);
+    // Right side: sidebar with tabs
+    render_sidebar(f, app, main_chunks[1]);
 
-    // Footer with help text
-    render_footer(f, app);
+    // Status bar
+    render_status_bar(f, app, chunks[2]);
 }
 
-/// Render footer with help text
-fn render_footer(f: &mut Frame, _app: &App) {
-    let area = f.area();
-    let footer_area = Rect {
-        x: 0,
-        y: area.height.saturating_sub(1),
-        width: area.width,
-        height: 1,
-    };
-
-    let help_text = "q: quit | Tab: next panel | 1-4: jump to panel | j/k: navigate | PgUp/PgDn: scroll logs | Ctrl+C: clear";
-    let footer = Paragraph::new(help_text)
-        .style(Style::default().fg(Color::DarkGray).bg(Color::Black))
+/// Render the menu bar
+fn render_menu(f: &mut Frame, _app: &App, area: Rect) {
+    let menu_text = " File  Edit  View  Help ";
+    let menu = Paragraph::new(menu_text)
+        .style(Style::default().bg(Color::DarkGray).fg(Color::White))
         .alignment(Alignment::Left);
 
-    f.render_widget(footer, footer_area);
+    f.render_widget(menu, area);
+}
+
+/// Render left side (conversation + prompts)
+fn render_left_side(f: &mut Frame, app: &App, area: Rect) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(5),     // Conversation
+            Constraint::Length(3),  // Prompts
+        ])
+        .split(area);
+
+    render_conversation(f, app, chunks[0]);
+    render_prompts(f, app, chunks[1]);
+}
+
+/// Render conversation area
+fn render_conversation(f: &mut Frame, app: &App, area: Rect) {
+    let is_focused = matches!(app.focused, FocusedArea::Conversation);
+
+    let block = Block::default()
+        .title("Main conversation")
+        .borders(Borders::ALL)
+        .style(if is_focused {
+            Style::default().fg(Color::Cyan).bold()
+        } else {
+            Style::default()
+        });
+
+    let messages: Vec<ListItem> = app
+        .conversation
+        .iter()
+        .rev()
+        .skip(app.conversation_scroll as usize)
+        .take(area.height.saturating_sub(2) as usize)
+        .rev()
+        .map(|msg| ListItem::new(msg.clone()).style(Style::default().fg(Color::White)))
+        .collect();
+
+    let list = List::new(messages)
+        .block(block)
+        .style(Style::default());
+
+    f.render_widget(list, area);
+}
+
+/// Render prompts input area
+fn render_prompts(f: &mut Frame, app: &App, area: Rect) {
+    let is_focused = matches!(app.focused, FocusedArea::Prompts);
+
+    let block = Block::default()
+        .title("Prompts")
+        .borders(Borders::ALL)
+        .style(if is_focused {
+            Style::default().fg(Color::Cyan).bold()
+        } else {
+            Style::default()
+        });
+
+    let input_text = if is_focused {
+        format!("{}_", app.prompt_input)  // Show cursor
+    } else {
+        app.prompt_input.clone()
+    };
+
+    let paragraph = Paragraph::new(input_text)
+        .block(block)
+        .style(Style::default().fg(Color::White))
+        .wrap(Wrap { trim: true });
+
+    f.render_widget(paragraph, area);
+}
+
+/// Render sidebar with tabs
+fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
+    let is_focused = matches!(app.focused, FocusedArea::Sidebar);
+
+    // Tabs
+    let tab_titles = vec!["History", "Todo", "Bugs"];
+    let selected = match app.active_tab {
+        SidebarTab::History => 0,
+        SidebarTab::Todo => 1,
+        SidebarTab::Bugs => 2,
+    };
+
+    let tabs = Tabs::new(tab_titles)
+        .select(selected)
+        .style(Style::default().fg(Color::White))
+        .highlight_style(
+            Style::default()
+                .bg(Color::Blue)
+                .fg(Color::White)
+                .bold(),
+        );
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2),  // Tabs
+            Constraint::Min(5),     // Content
+        ])
+        .split(area);
+
+    f.render_widget(tabs, chunks[0]);
+
+    // Sidebar content based on active tab
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .style(if is_focused {
+            Style::default().fg(Color::Cyan).bold()
+        } else {
+            Style::default()
+        });
+
+    let items: Vec<ListItem> = match app.active_tab {
+        SidebarTab::History => {
+            app.history
+                .iter()
+                .rev()
+                .skip(app.sidebar_scroll as usize)
+                .take(chunks[1].height.saturating_sub(2) as usize)
+                .rev()
+                .enumerate()
+                .map(|(i, item)| {
+                    let style = if i == app.sidebar_selected {
+                        Style::default().bg(Color::Blue).fg(Color::White)
+                    } else {
+                        Style::default().fg(Color::Gray)
+                    };
+                    ListItem::new(format!("▸ {}", item)).style(style)
+                })
+                .collect()
+        }
+        SidebarTab::Todo => {
+            app.todo_items
+                .iter()
+                .skip(app.sidebar_scroll as usize)
+                .take(chunks[1].height.saturating_sub(2) as usize)
+                .enumerate()
+                .map(|(i, item)| {
+                    let style = if i == app.sidebar_selected {
+                        Style::default().bg(Color::Blue).fg(Color::White)
+                    } else {
+                        Style::default().fg(Color::Yellow)
+                    };
+                    ListItem::new(format!("☐ {}", item)).style(style)
+                })
+                .collect()
+        }
+        SidebarTab::Bugs => {
+            app.bugs
+                .iter()
+                .skip(app.sidebar_scroll as usize)
+                .take(chunks[1].height.saturating_sub(2) as usize)
+                .enumerate()
+                .map(|(i, bug)| {
+                    let style = if i == app.sidebar_selected {
+                        Style::default().bg(Color::Blue).fg(Color::White)
+                    } else {
+                        Style::default().fg(Color::Red)
+                    };
+                    ListItem::new(format!("✕ {}", bug)).style(style)
+                })
+                .collect()
+        }
+    };
+
+    let list = List::new(items).block(block);
+    f.render_widget(list, chunks[1]);
+}
+
+/// Render status bar
+fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
+    let tokens_str = app.tokens_used.to_string();
+    let status_parts = vec![
+        ("Status", "Ready"),
+        ("Model", app.current_model.as_str()),
+        ("Runtime", app.runtime.as_str()),
+        ("Tokens", tokens_str.as_str()),
+    ];
+
+    let mut status_text = String::new();
+    for (label, value) in status_parts {
+        status_text.push_str(&format!("{}: \"{}\" | ", label, value));
+    }
+    if status_text.ends_with(" | ") {
+        status_text.pop();
+        status_text.pop();
+        status_text.pop();
+    }
+
+    let status = Paragraph::new(status_text)
+        .style(Style::default().bg(Color::Black).fg(Color::DarkGray))
+        .alignment(Alignment::Left);
+
+    f.render_widget(status, area);
 }

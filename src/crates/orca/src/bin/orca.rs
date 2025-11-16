@@ -480,7 +480,7 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
 
-            app.add_log("Orca TUI started".to_string());
+            app.add_message("Welcome to Orca TUI! Type in the prompts section to start.".to_string());
 
             // Run the TUI
             orca::tui::run_tui(&mut app).await?;

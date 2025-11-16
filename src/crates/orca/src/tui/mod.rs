@@ -5,7 +5,6 @@
 pub mod app;
 pub mod handler;
 pub mod ui;
-pub mod panels;
 
 pub use app::{App, AppState};
 pub use handler::InputHandler;

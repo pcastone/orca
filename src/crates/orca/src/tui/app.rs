@@ -3,16 +3,23 @@
 use crate::HealthReport;
 use std::collections::VecDeque;
 
-/// Maximum number of log entries to keep
-const MAX_LOGS: usize = 1000;
+/// Maximum number of conversation/log entries to keep
+const MAX_ENTRIES: usize = 1000;
 
-/// Which panel is currently focused
+/// Which sidebar tab is currently active
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FocusedPanel {
-    Status,
-    Commands,
-    Output,
-    Logs,
+pub enum SidebarTab {
+    History,
+    Todo,
+    Bugs,
+}
+
+/// Which area is currently focused
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FocusedArea {
+    Conversation,
+    Prompts,
+    Sidebar,
 }
 
 /// Application state
@@ -24,12 +31,26 @@ pub struct AppState {
 /// Main application structure
 pub struct App {
     pub state: AppState,
-    pub focused: FocusedPanel,
-    pub selected_command: usize,
+    pub focused: FocusedArea,
+    pub active_tab: SidebarTab,
     pub health_report: Option<HealthReport>,
-    pub command_output: String,
-    pub logs: VecDeque<String>,
-    pub scroll_offset: u16,
+
+    // Left side: conversation and prompts
+    pub conversation: VecDeque<String>,
+    pub prompt_input: String,
+    pub conversation_scroll: u16,
+
+    // Right sidebar content
+    pub history: VecDeque<String>,
+    pub todo_items: VecDeque<String>,
+    pub bugs: VecDeque<String>,
+    pub sidebar_selected: usize,
+    pub sidebar_scroll: u16,
+
+    // Status bar info
+    pub current_model: String,
+    pub tokens_used: u32,
+    pub runtime: String,
 }
 
 impl App {
@@ -39,73 +60,123 @@ impl App {
             state: AppState {
                 should_quit: false,
             },
-            focused: FocusedPanel::Commands,
-            selected_command: 0,
+            focused: FocusedArea::Conversation,
+            active_tab: SidebarTab::History,
             health_report: None,
-            command_output: String::new(),
-            logs: VecDeque::new(),
-            scroll_offset: 0,
+            conversation: VecDeque::new(),
+            prompt_input: String::new(),
+            conversation_scroll: 0,
+            history: VecDeque::new(),
+            todo_items: VecDeque::new(),
+            bugs: VecDeque::new(),
+            sidebar_selected: 0,
+            sidebar_scroll: 0,
+            current_model: "claude-3-5-sonnet".to_string(),
+            tokens_used: 0,
+            runtime: "0ms".to_string(),
         }
     }
 
-    /// Add a log entry
-    pub fn add_log(&mut self, message: String) {
-        self.logs.push_back(message);
-        // Keep only the most recent entries
-        while self.logs.len() > MAX_LOGS {
-            self.logs.pop_front();
+    /// Add a message to conversation
+    pub fn add_message(&mut self, message: String) {
+        self.conversation.push_back(message);
+        while self.conversation.len() > MAX_ENTRIES {
+            self.conversation.pop_front();
         }
     }
 
-    /// Move to next panel
-    pub fn next_panel(&mut self) {
+    /// Add to history
+    pub fn add_history(&mut self, entry: String) {
+        self.history.push_back(entry);
+        while self.history.len() > MAX_ENTRIES {
+            self.history.pop_front();
+        }
+    }
+
+    /// Add todo item
+    pub fn add_todo(&mut self, item: String) {
+        self.todo_items.push_back(item);
+    }
+
+    /// Add bug
+    pub fn add_bug(&mut self, bug: String) {
+        self.bugs.push_back(bug);
+    }
+
+    /// Switch sidebar tab
+    pub fn next_tab(&mut self) {
+        self.active_tab = match self.active_tab {
+            SidebarTab::History => SidebarTab::Todo,
+            SidebarTab::Todo => SidebarTab::Bugs,
+            SidebarTab::Bugs => SidebarTab::History,
+        };
+        self.sidebar_selected = 0;
+        self.sidebar_scroll = 0;
+    }
+
+    /// Switch to previous tab
+    pub fn prev_tab(&mut self) {
+        self.active_tab = match self.active_tab {
+            SidebarTab::History => SidebarTab::Bugs,
+            SidebarTab::Todo => SidebarTab::History,
+            SidebarTab::Bugs => SidebarTab::Todo,
+        };
+        self.sidebar_selected = 0;
+        self.sidebar_scroll = 0;
+    }
+
+    /// Move focus between areas
+    pub fn next_focus(&mut self) {
         self.focused = match self.focused {
-            FocusedPanel::Status => FocusedPanel::Commands,
-            FocusedPanel::Commands => FocusedPanel::Output,
-            FocusedPanel::Output => FocusedPanel::Logs,
-            FocusedPanel::Logs => FocusedPanel::Status,
+            FocusedArea::Conversation => FocusedArea::Prompts,
+            FocusedArea::Prompts => FocusedArea::Sidebar,
+            FocusedArea::Sidebar => FocusedArea::Conversation,
         };
     }
 
-    /// Move to previous panel
-    pub fn prev_panel(&mut self) {
+    /// Move focus to previous area
+    pub fn prev_focus(&mut self) {
         self.focused = match self.focused {
-            FocusedPanel::Status => FocusedPanel::Logs,
-            FocusedPanel::Commands => FocusedPanel::Status,
-            FocusedPanel::Output => FocusedPanel::Commands,
-            FocusedPanel::Logs => FocusedPanel::Output,
+            FocusedArea::Conversation => FocusedArea::Sidebar,
+            FocusedArea::Prompts => FocusedArea::Conversation,
+            FocusedArea::Sidebar => FocusedArea::Prompts,
         };
     }
 
-    /// Select next command in list
-    pub fn next_command(&mut self) {
-        self.selected_command = self.selected_command.saturating_add(1);
+    /// Scroll conversation down
+    pub fn scroll_conversation_down(&mut self) {
+        self.conversation_scroll = self.conversation_scroll.saturating_add(1);
     }
 
-    /// Select previous command in list
-    pub fn prev_command(&mut self) {
-        self.selected_command = self.selected_command.saturating_sub(1);
+    /// Scroll conversation up
+    pub fn scroll_conversation_up(&mut self) {
+        self.conversation_scroll = self.conversation_scroll.saturating_sub(1);
     }
 
-    /// Scroll logs down
-    pub fn scroll_logs_down(&mut self) {
-        self.scroll_offset = self.scroll_offset.saturating_add(1);
+    /// Scroll sidebar down
+    pub fn scroll_sidebar_down(&mut self) {
+        self.sidebar_scroll = self.sidebar_scroll.saturating_add(1);
     }
 
-    /// Scroll logs up
-    pub fn scroll_logs_up(&mut self) {
-        self.scroll_offset = self.scroll_offset.saturating_sub(1);
+    /// Scroll sidebar up
+    pub fn scroll_sidebar_up(&mut self) {
+        self.sidebar_scroll = self.sidebar_scroll.saturating_sub(1);
     }
 
-    /// Clear command output
-    pub fn clear_output(&mut self) {
-        self.command_output.clear();
+    /// Move sidebar selection down
+    pub fn sidebar_next(&mut self) {
+        self.sidebar_selected = self.sidebar_selected.saturating_add(1);
     }
 
-    /// Clear logs
-    pub fn clear_logs(&mut self) {
-        self.logs.clear();
-        self.scroll_offset = 0;
+    /// Move sidebar selection up
+    pub fn sidebar_prev(&mut self) {
+        self.sidebar_selected = self.sidebar_selected.saturating_sub(1);
+    }
+
+    /// Clear conversation
+    pub fn clear_conversation(&mut self) {
+        self.conversation.clear();
+        self.conversation_scroll = 0;
     }
 }
 
