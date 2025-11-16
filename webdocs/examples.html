@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Examples - Orca Documentation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#8b5cf6',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <h1 class="text-2xl font-bold text-gray-900">Orca</h1>
+                    </div>
+                    <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                        <a href="index.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Home</a>
+                        <a href="getting-started.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Getting Started</a>
+                        <a href="orca.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Orca</a>
+                        <a href="orchestrator.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Orchestrator</a>
+                        <a href="aco.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">ACO</a>
+                        <a href="examples.html" class="border-primary text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Examples</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Sidebar and Content -->
+        <div class="flex flex-col lg:flex-row gap-8">
+            <!-- Sidebar -->
+            <aside class="lg:w-64 flex-shrink-0">
+                <div class="bg-white rounded-lg shadow p-4 sticky top-20">
+                    <nav class="space-y-2">
+                        <a href="#orca-examples" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Orca Examples</a>
+                        <a href="#orchestrator-examples" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Orchestrator Examples</a>
+                        <a href="#aco-examples" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">ACO Examples</a>
+                        <a href="#config-examples" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Configuration Examples</a>
+                        <a href="#workflow-examples" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Workflow Examples</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="flex-1">
+                <div class="px-4 py-6 sm:px-0">
+                    <!-- Header -->
+                    <div class="mb-8">
+                        <h1 class="text-4xl font-bold text-gray-900">Examples</h1>
+                        <p class="mt-2 text-xl text-gray-600">Real-world usage examples for Orca, Orchestrator, and ACO</p>
+                    </div>
+
+                    <!-- Orca Examples -->
+                    <section id="orca-examples" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Orca Examples</h2>
+
+                                <div class="space-y-6">
+                                    <!-- Example 1: Basic Task -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">1. Create and Run a Simple Task</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash"># Initialize Orca
+orca init
+
+# Create a simple Q&A task
+orca task create "What is the capital of France?"
+
+# List all tasks
+orca task list
+
+# Run the task (replace &lt;task-id&gt; with actual ID from list)
+orca task run 1
+
+# View task details
+orca task get 1</code></pre>
+                                        </div>
+                                    </div>
+
+                                    <!-- Example 2: Code Analysis -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">2. Code Analysis Task</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash"># Create a code analysis task using ReAct pattern (default)
+orca task create "Analyze the src/ directory and list all Rust files"
+
+# Run the task
+orca task run 2
+
+# Create a more complex analysis with Plan-Execute pattern
+# First create the task, then set metadata
+orca task create "Analyze the codebase structure and identify areas needing tests"
+# Set pattern via metadata: {"pattern": "plan_execute"}</code></pre>
+                                        </div>
+                                    </div>
+
+                                    <!-- Example 3: Reflection Pattern -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">3. Code Generation with Reflection</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash"># Create a code generation task with Reflection pattern
+# for high-quality output
+orca task create "Write a well-tested Rust function to parse JSON config files"
+# Set pattern via metadata: {"pattern": "reflection"}
+
+# The reflection pattern will:
+# 1. Generate initial code
+# 2. Critique the code
+# 3. Refine based on critique
+# 4. Repeat until quality threshold met</code></pre>
+                                        </div>
+                                    </div>
+
+                                    <!-- Example 4: Streaming -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">4. Enable Token Streaming</h3>
+                                        <p class="text-gray-700 mb-3">Edit <code class="bg-gray-100 px-1 rounded">~/.orca/orca.toml</code>:</p>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-toml">[llm]
+provider = "anthropic"
+model = "claude-3-sonnet"
+api_key = "${ANTHROPIC_API_KEY}"
+
+[execution]
+streaming = true  # Enable real-time token streaming</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Orchestrator Examples -->
+                    <section id="orchestrator-examples" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Orchestrator Examples</h2>
+
+                                <div class="space-y-6">
+                                    <!-- Example 1: Setup -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">1. Setup and Start Orchestrator</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash"># Navigate to orchestrator directory
+cd src/crates/orchestrator
+
+# Set up database
+export DATABASE_URL="sqlite:orchestrator.db"
+sqlx database create
+sqlx migrate run
+
+# Start the orchestrator server
+cargo run --release
+
+# Server will listen on http://localhost:50051</code></pre>
+                                        </div>
+                                    </div>
+
+                                    <!-- Example 2: Docker Deployment -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">2. Docker Deployment</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash"># Build Docker image
+docker build -t orchestrator:latest .
+
+# Run with environment variables
+docker run -d \
+  --name orchestrator \
+  -p 50051:50051 \
+  -e DATABASE_URL=sqlite:/data/orchestrator.db \
+  -e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} \
+  -v orchestrator-data:/data \
+  orchestrator:latest
+
+# Check logs
+docker logs -f orchestrator</code></pre>
+                                        </div>
+                                    </div>
+
+                                    <!-- Example 3: Multi-machine Setup -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">3. Multi-Machine Production Setup</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash"># Machine 1: Orchestrator Server
+export ORCHESTRATOR_HOST="0.0.0.0"
+export ORCHESTRATOR_PORT="50051"
+export DATABASE_URL="sqlite:/var/lib/orchestrator/db.sqlite"
+cargo run -p orchestrator --release
+
+# Machine 2: ACO Client
+export ACO_SERVER="http://orchestrator-machine:50051"
+aco tui
+
+# Machine 3: Another ACO Client
+export ACO_SERVER="http://orchestrator-machine:50051"
+aco --connect admin:password tui</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ACO Examples -->
+                    <section id="aco-examples" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">ACO Examples</h2>
+
+                                <div class="space-y-6">
+                                    <!-- Example 1: Local Connection -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">1. Connect to Local Orchestrator</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash"># Start local orchestrator first
+cd src/crates/orchestrator
+cargo run --release &
+
+# In another terminal, start ACO TUI
+aco tui
+
+# Or specify server explicitly
+aco --server http://localhost:50051 tui</code></pre>
+                                        </div>
+                                    </div>
+
+                                    <!-- Example 2: Remote Connection -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">2. Connect to Remote Orchestrator</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash"># Connect to production server
+aco --server https://orchestrator.example.com:50051 tui
+
+# With authentication
+aco --server https://orchestrator.example.com:50051 \
+    --connect admin:password \
+    tui
+
+# Or use environment variables
+export ACO_SERVER="https://orchestrator.example.com:50051"
+export ACO_CONNECT="admin:password"
+aco tui</code></pre>
+                                        </div>
+                                    </div>
+
+                                    <!-- Example 3: SSH Tunnel -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">3. Secure Access via SSH Tunnel</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash"># Create SSH tunnel to remote server
+ssh -L 50051:localhost:50051 user@remote-server &
+
+# Connect ACO to local port (tunneled to remote)
+aco --server http://localhost:50051 tui
+
+# Now you have secure access to remote orchestrator</code></pre>
+                                        </div>
+                                    </div>
+
+                                    <!-- Example 4: Workflow -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">4. Complete TUI Workflow</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash"># Start ACO TUI
+aco tui
+
+# Inside TUI:
+# 1. Press '1' to view Tasks List
+# 2. Use ↓/↑ or j/k to navigate tasks
+# 3. Press Enter to view task details
+# 4. Press 'e' to execute selected task
+# 5. Press '3' to view Execution Stream
+# 6. Watch real-time execution events
+# 7. Press 'r' to refresh data
+# 8. Press '?' for help
+# 9. Press 'q' to quit</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Configuration Examples -->
+                    <section id="config-examples" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Configuration Examples</h2>
+
+                                <div class="space-y-6">
+                                    <!-- Anthropic Config -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Anthropic Claude Configuration</h3>
+                                        <p class="text-gray-700 mb-3"><code class="bg-gray-100 px-1 rounded">~/.orca/orca.toml</code></p>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-toml">[llm]
+provider = "anthropic"
+model = "claude-3-sonnet-20240229"
+api_key = "${ANTHROPIC_API_KEY}"
+
+[execution]
+streaming = true
+max_tokens = 4096</code></pre>
+                                        </div>
+                                    </div>
+
+                                    <!-- OpenAI Config -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">OpenAI Configuration</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-toml">[llm]
+provider = "openai"
+model = "gpt-4"
+api_key = "${OPENAI_API_KEY}"
+
+[execution]
+streaming = true
+temperature = 0.7
+max_tokens = 2048</code></pre>
+                                        </div>
+                                    </div>
+
+                                    <!-- Ollama Local Config -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Ollama (Local) Configuration</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-toml">[llm]
+provider = "ollama"
+model = "llama2"
+base_url = "http://localhost:11434"
+
+[execution]
+streaming = true</code></pre>
+                                        </div>
+                                    </div>
+
+                                    <!-- Project-level Config -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Project-Level Configuration</h3>
+                                        <p class="text-gray-700 mb-3"><code class="bg-gray-100 px-1 rounded">./.orca/orca.toml</code> (overrides user config)</p>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-toml"># Project-specific settings
+[llm]
+provider = "anthropic"
+model = "claude-3-opus-20240229"  # Use more powerful model for this project
+api_key = "${ANTHROPIC_API_KEY}"
+
+[execution]
+streaming = true
+max_retries = 3
+
+[project]
+workspace = "./workspace"</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Workflow Examples -->
+                    <section id="workflow-examples" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Workflow Examples</h2>
+
+                                <div class="space-y-6">
+                                    <!-- Example 1: Simple Workflow -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">1. Multi-Task Workflow</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash"># Create multiple related tasks
+orca task create "List all Python files in the project"
+orca task create "Analyze test coverage for Python files"
+orca task create "Generate test report"
+
+# Create workflow linking these tasks
+orca workflow create "Python Analysis Pipeline"
+
+# Add tasks to workflow (implementation depends on CLI)
+# Run workflow
+orca workflow run 1</code></pre>
+                                        </div>
+                                    </div>
+
+                                    <!-- Example 2: Code Review Workflow -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">2. Code Review Workflow</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash"># Task 1: Analyze code quality
+orca task create "Review src/main.rs for code quality issues"
+
+# Task 2: Check for security vulnerabilities
+orca task create "Scan codebase for security vulnerabilities"
+
+# Task 3: Generate review report
+orca task create "Compile code review findings into markdown report"
+
+# Create and run workflow
+orca workflow create "Code Review Pipeline"
+orca workflow run &lt;workflow-id&gt;</code></pre>
+                                        </div>
+                                    </div>
+
+                                    <!-- Example 3: Documentation Workflow -->
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">3. Documentation Generation Workflow</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash"># Using Reflection pattern for quality
+orca task create "Analyze API endpoints and generate documentation"
+# Set metadata: {"pattern": "reflection"}
+
+orca task create "Review documentation for completeness"
+# Set metadata: {"pattern": "reflection"}
+
+orca task create "Generate final API documentation in markdown"
+# Set metadata: {"pattern": "reflection"}
+
+# Run as workflow
+orca workflow create "API Documentation Generator"</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Complete End-to-End Example -->
+                    <section id="complete-example" class="mb-12">
+                        <div class="bg-gradient-to-r from-blue-50 to-purple-50 shadow overflow-hidden sm:rounded-lg border-2 border-blue-200">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Complete End-to-End Example</h2>
+                                <p class="text-gray-700 mb-4">Here's a complete example from setup to execution:</p>
+
+                                <div class="bg-gray-900 rounded-lg p-4">
+                                    <pre class="text-gray-100"><code class="language-bash"># 1. Setup Orca
+orca init
+
+# 2. Configure LLM (edit ~/.orca/orca.toml)
+cat > ~/.orca/orca.toml &lt;&lt;EOF
+[llm]
+provider = "anthropic"
+model = "claude-3-sonnet"
+api_key = "\${ANTHROPIC_API_KEY}"
+
+[execution]
+streaming = true
+EOF
+
+# 3. Set API key
+export ANTHROPIC_API_KEY="your-api-key-here"
+
+# 4. Create a task
+orca task create "Analyze this Rust project and suggest improvements"
+
+# 5. Run the task
+orca task run 1
+
+# 6. View results
+orca task get 1
+
+# 7. For distributed setup, start orchestrator
+cd src/crates/orchestrator
+cargo run --release &
+
+# 8. Connect ACO TUI to monitor
+aco tui
+
+# 9. Execute task from TUI
+# Press '1' for tasks, navigate with j/k, press 'e' to execute
+
+# 10. View execution stream
+# Press '3' to watch real-time execution events</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-white mt-12">
+        <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+            <div class="border-t border-gray-200 pt-8">
+                <p class="text-base text-gray-400 text-center">
+                    &copy; 2025 Orca Project. Built with Rust and love.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script>hljs.highlightAll();</script>
+</body>
+</html>

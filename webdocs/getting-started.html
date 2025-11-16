@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Getting Started - Orca Documentation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#8b5cf6',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <h1 class="text-2xl font-bold text-gray-900">Orca</h1>
+                    </div>
+                    <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                        <a href="index.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Home</a>
+                        <a href="getting-started.html" class="border-primary text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Getting Started</a>
+                        <a href="orca.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Orca</a>
+                        <a href="orchestrator.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Orchestrator</a>
+                        <a href="aco.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">ACO</a>
+                        <a href="examples.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Examples</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div class="px-4 py-6 sm:px-0">
+            <!-- Header -->
+            <div class="mb-8">
+                <h1 class="text-4xl font-bold text-gray-900">Getting Started</h1>
+                <p class="mt-2 text-lg text-gray-600">Set up your development environment and build your first AI agent workflow</p>
+            </div>
+
+            <!-- Prerequisites -->
+            <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
+                <div class="px-4 py-5 sm:p-6">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4">Prerequisites</h2>
+
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3">Required Software</h3>
+
+                    <div class="mb-6">
+                        <h4 class="font-medium text-gray-700 mb-2">Rust 1.75.0 or higher</h4>
+                        <div class="bg-gray-900 rounded-lg p-4">
+                            <pre class="text-gray-100"><code class="language-bash"># Install via rustup
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Verify installation
+rustc --version
+cargo --version</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="mb-6">
+                        <h4 class="font-medium text-gray-700 mb-2">Git (for version control)</h4>
+                        <div class="bg-gray-900 rounded-lg p-4">
+                            <pre class="text-gray-100"><code class="language-bash"># Verify git is installed
+git --version</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="bg-blue-50 border-l-4 border-blue-400 p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm text-blue-700">
+                                    <strong>Optional:</strong> Install cargo-watch for auto-rebuild and cargo-nextest for faster test execution
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Installation -->
+            <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
+                <div class="px-4 py-5 sm:p-6">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4">Installation</h2>
+
+                    <div class="mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Step 1: Clone the Repository</h3>
+                        <div class="bg-gray-900 rounded-lg p-4">
+                            <pre class="text-gray-100"><code class="language-bash">git clone &lt;repository-url&gt;
+cd orca</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Step 2: Build Orca</h3>
+                        <p class="text-gray-600 mb-3">Orca is the standalone orchestrator and the best starting point for new users.</p>
+                        <div class="bg-gray-900 rounded-lg p-4">
+                            <pre class="text-gray-100"><code class="language-bash"># Option 1: Using the build script (recommended)
+./scripts/build-orca.sh --install
+
+# Option 2: Using cargo directly
+cargo build -p orca --release
+
+# Option 3: Install globally
+cargo install --path src/crates/orca</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Step 3: Initialize Orca</h3>
+                        <div class="bg-gray-900 rounded-lg p-4">
+                            <pre class="text-gray-100"><code class="language-bash"># Initialize Orca (creates ~/.orca/ directory)
+orca init</code></pre>
+                        </div>
+                        <p class="text-sm text-gray-600 mt-2">This creates:</p>
+                        <ul class="list-disc list-inside text-sm text-gray-600 mt-2">
+                            <li><code class="bg-gray-100 px-1 rounded">~/.orca/</code> directory</li>
+                            <li><code class="bg-gray-100 px-1 rounded">~/.orca/orca.db</code> SQLite database</li>
+                            <li><code class="bg-gray-100 px-1 rounded">~/.orca/orca.toml</code> configuration file</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration -->
+            <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
+                <div class="px-4 py-5 sm:p-6">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4">Configuration</h2>
+
+                    <div class="mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Configure LLM Provider</h3>
+                        <p class="text-gray-600 mb-3">Edit <code class="bg-gray-100 px-1 rounded">~/.orca/orca.toml</code>:</p>
+                        <div class="bg-gray-900 rounded-lg p-4">
+                            <pre class="text-gray-100"><code class="language-toml">[llm]
+provider = "anthropic"          # Options: anthropic, openai, ollama, gemini, etc.
+model = "claude-3-sonnet"       # Model name for your provider
+api_key = "${ANTHROPIC_API_KEY}" # Reads from environment variable
+
+[execution]
+streaming = true                 # Enable real-time token streaming</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Set Environment Variable</h3>
+                        <div class="bg-gray-900 rounded-lg p-4">
+                            <pre class="text-gray-100"><code class="language-bash"># For Anthropic Claude
+export ANTHROPIC_API_KEY="your-api-key-here"
+
+# For OpenAI
+export OPENAI_API_KEY="your-api-key-here"
+
+# For Google Gemini
+export GOOGLE_API_KEY="your-api-key-here"
+
+# Make permanent (add to ~/.bashrc or ~/.zshrc)
+echo 'export ANTHROPIC_API_KEY="your-key"' >> ~/.bashrc
+source ~/.bashrc</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm text-yellow-700">
+                                    Never commit API keys to version control. Always use environment variables.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Your First Task -->
+            <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
+                <div class="px-4 py-5 sm:p-6">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4">Your First Task</h2>
+
+                    <div class="mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Create a Simple Task</h3>
+                        <div class="bg-gray-900 rounded-lg p-4">
+                            <pre class="text-gray-100"><code class="language-bash"># Create a task
+orca task create "What is 2+2?"
+
+# List all tasks
+orca task list
+
+# Run a specific task
+orca task run &lt;task-id&gt;
+
+# View task details
+orca task get &lt;task-id&gt;</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Using Different Agent Patterns</h3>
+                        <p class="text-gray-600 mb-3">Orca supports three agent patterns:</p>
+
+                        <div class="space-y-4">
+                            <div class="border-l-4 border-blue-500 pl-4">
+                                <h4 class="font-semibold text-gray-900">ReAct (Default) - Best for Most Tasks (90%)</h4>
+                                <p class="text-sm text-gray-600 mt-1">Quick responses for general Q&A and tool-using tasks</p>
+                                <div class="bg-gray-900 rounded-lg p-4 mt-2">
+                                    <pre class="text-gray-100"><code class="language-bash"># Uses ReAct by default
+orca task create "List all Python files in src/"</code></pre>
+                                </div>
+                            </div>
+
+                            <div class="border-l-4 border-purple-500 pl-4">
+                                <h4 class="font-semibold text-gray-900">Plan-Execute - For Complex Multi-Step Tasks</h4>
+                                <p class="text-sm text-gray-600 mt-1">Creates explicit plan before execution, ideal for research and analysis</p>
+                                <div class="bg-gray-900 rounded-lg p-4 mt-2">
+                                    <pre class="text-gray-100"><code class="language-bash"># Create task with plan_execute pattern
+orca task create "Analyze codebase and identify test coverage gaps"
+# Set metadata: {"pattern": "plan_execute"}</code></pre>
+                                </div>
+                            </div>
+
+                            <div class="border-l-4 border-green-500 pl-4">
+                                <h4 class="font-semibold text-gray-900">Reflection - For Quality-Critical Output</h4>
+                                <p class="text-sm text-gray-600 mt-1">Generate → critique → refine loop for high-quality results</p>
+                                <div class="bg-gray-900 rounded-lg p-4 mt-2">
+                                    <pre class="text-gray-100"><code class="language-bash"># Create task with reflection pattern
+orca task create "Write production-ready sorting function with tests"
+# Set metadata: {"pattern": "reflection"}</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Next Steps -->
+            <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
+                <div class="px-4 py-5 sm:p-6">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4">Next Steps</h2>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="border border-gray-200 rounded-lg p-4 hover:border-primary transition-colors">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-2">Explore Orca</h3>
+                            <p class="text-gray-600 text-sm mb-3">Learn about Orca's features, CLI commands, and configuration options</p>
+                            <a href="orca.html" class="text-primary hover:text-primary/80 font-medium text-sm">View Orca docs →</a>
+                        </div>
+
+                        <div class="border border-gray-200 rounded-lg p-4 hover:border-secondary transition-colors">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-2">Try Examples</h3>
+                            <p class="text-gray-600 text-sm mb-3">See real-world examples of agent workflows and patterns</p>
+                            <a href="examples.html" class="text-secondary hover:text-secondary/80 font-medium text-sm">View examples →</a>
+                        </div>
+
+                        <div class="border border-gray-200 rounded-lg p-4 hover:border-purple-600 transition-colors">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-2">Production Deployment</h3>
+                            <p class="text-gray-600 text-sm mb-3">Learn about Orchestrator for distributed, production-ready deployments</p>
+                            <a href="orchestrator.html" class="text-purple-600 hover:text-purple-700 font-medium text-sm">View Orchestrator docs →</a>
+                        </div>
+
+                        <div class="border border-gray-200 rounded-lg p-4 hover:border-green-600 transition-colors">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-2">Terminal UI</h3>
+                            <p class="text-gray-600 text-sm mb-3">Monitor and execute workflows with the beautiful ACO TUI</p>
+                            <a href="aco.html" class="text-green-600 hover:text-green-700 font-medium text-sm">View ACO docs →</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Troubleshooting -->
+            <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
+                <div class="px-4 py-5 sm:p-6">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-4">Troubleshooting</h2>
+
+                    <div class="space-y-4">
+                        <details class="border border-gray-200 rounded-lg">
+                            <summary class="px-4 py-3 cursor-pointer hover:bg-gray-50 font-medium">
+                                "command not found: cargo"
+                            </summary>
+                            <div class="px-4 py-3 border-t border-gray-200 bg-gray-50">
+                                <p class="text-gray-600 mb-2">Install Rust via rustup:</p>
+                                <div class="bg-gray-900 rounded-lg p-4">
+                                    <pre class="text-gray-100"><code class="language-bash">curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env</code></pre>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="border border-gray-200 rounded-lg">
+                            <summary class="px-4 py-3 cursor-pointer hover:bg-gray-50 font-medium">
+                                Build fails with linking errors
+                            </summary>
+                            <div class="px-4 py-3 border-t border-gray-200 bg-gray-50">
+                                <p class="text-gray-600 mb-2">Install build tools:</p>
+                                <div class="bg-gray-900 rounded-lg p-4">
+                                    <pre class="text-gray-100"><code class="language-bash"># macOS
+xcode-select --install
+
+# Linux
+sudo apt-get install build-essential</code></pre>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="border border-gray-200 rounded-lg">
+                            <summary class="px-4 py-3 cursor-pointer hover:bg-gray-50 font-medium">
+                                Slow compilation times
+                            </summary>
+                            <div class="px-4 py-3 border-t border-gray-200 bg-gray-50">
+                                <p class="text-gray-600 mb-2">Use more parallel jobs:</p>
+                                <div class="bg-gray-900 rounded-lg p-4">
+                                    <pre class="text-gray-100"><code class="language-bash">export CARGO_BUILD_JOBS=8
+cargo build --release</code></pre>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-white mt-12">
+        <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+            <div class="border-t border-gray-200 pt-8">
+                <p class="text-base text-gray-400 text-center">
+                    &copy; 2025 Orca Project. Built with Rust and love.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script>hljs.highlightAll();</script>
+</body>
+</html>

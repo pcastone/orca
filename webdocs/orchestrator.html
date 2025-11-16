@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orchestrator - Distributed Orchestration Engine - Orca Documentation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#8b5cf6',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <h1 class="text-2xl font-bold text-gray-900">Orca</h1>
+                    </div>
+                    <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                        <a href="index.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Home</a>
+                        <a href="getting-started.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Getting Started</a>
+                        <a href="orca.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Orca</a>
+                        <a href="orchestrator.html" class="border-secondary text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Orchestrator</a>
+                        <a href="aco.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">ACO</a>
+                        <a href="examples.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Examples</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Sidebar and Content -->
+        <div class="flex flex-col lg:flex-row gap-8">
+            <!-- Sidebar -->
+            <aside class="lg:w-64 flex-shrink-0">
+                <div class="bg-white rounded-lg shadow p-4 sticky top-20">
+                    <nav class="space-y-2">
+                        <a href="#overview" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Overview</a>
+                        <a href="#features" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Features</a>
+                        <a href="#architecture" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Architecture</a>
+                        <a href="#installation" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Installation</a>
+                        <a href="#database" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Database</a>
+                        <a href="#configuration" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Configuration</a>
+                        <a href="#deployment" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Deployment</a>
+                        <a href="#api" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">API</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="flex-1">
+                <div class="px-4 py-6 sm:px-0">
+                    <!-- Header -->
+                    <div class="mb-8">
+                        <h1 class="text-4xl font-bold text-gray-900">Orchestrator</h1>
+                        <p class="mt-2 text-xl text-gray-600">Distributed Orchestration Engine for Production</p>
+                    </div>
+
+                    <!-- Overview -->
+                    <section id="overview" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Overview</h2>
+                                <p class="text-gray-700 mb-4">
+                                    Orchestrator is a distributed orchestration engine designed for production deployments. It provides multi-machine capability
+                                    with WebSocket-based communication, making it ideal for scalable, distributed AI agent workflows.
+                                </p>
+                                <p class="text-gray-700">
+                                    Unlike Orca's standalone architecture, Orchestrator is designed for complex deployments where tasks need to be distributed
+                                    across multiple machines, with comprehensive workflow scheduling and dependency resolution.
+                                </p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Features -->
+                    <section id="features" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Features</h2>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-purple-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">Multi-Machine Support</h3>
+                                            <p class="text-sm text-gray-600">Distribute tasks across multiple machines for scalability</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-purple-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">WebSocket Communication</h3>
+                                            <p class="text-sm text-gray-600">Real-time bidirectional communication with clients</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-purple-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">Workflow Scheduling</h3>
+                                            <p class="text-sm text-gray-600">Advanced scheduling and task orchestration</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-purple-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">Dependency Resolution</h3>
+                                            <p class="text-sm text-gray-600">Automatic task dependency management</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-purple-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">Production Ready</h3>
+                                            <p class="text-sm text-gray-600">Built for high availability and reliability</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-purple-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">Remote Tool Execution</h3>
+                                            <p class="text-sm text-gray-600">Execute tools via ACO server remotely</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Architecture -->
+                    <section id="architecture" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Architecture</h2>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Component Structure</h3>
+                                <div class="bg-gray-900 rounded-lg p-6 mb-6">
+                                    <pre class="text-gray-100 text-sm"><code>orchestrator/
+├── task.rs            # Task definition
+├── workflow.rs        # Workflow definition
+├── executor.rs        # Execution orchestration
+├── manager.rs         # Task/workflow lifecycle
+├── store.rs           # In-memory storage
+└── migrations/        # Database migrations</code></pre>
+                                </div>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Key Components</h3>
+                                <div class="space-y-3">
+                                    <div class="border-l-4 border-purple-500 pl-4">
+                                        <h4 class="font-semibold">Task Manager</h4>
+                                        <p class="text-sm text-gray-600">Handles task lifecycle from creation to completion</p>
+                                    </div>
+                                    <div class="border-l-4 border-purple-500 pl-4">
+                                        <h4 class="font-semibold">Workflow Scheduler</h4>
+                                        <p class="text-sm text-gray-600">Schedules and coordinates complex workflows</p>
+                                    </div>
+                                    <div class="border-l-4 border-purple-500 pl-4">
+                                        <h4 class="font-semibold">Executor</h4>
+                                        <p class="text-sm text-gray-600">Executes tasks using the Pregel execution model</p>
+                                    </div>
+                                    <div class="border-l-4 border-purple-500 pl-4">
+                                        <h4 class="font-semibold">Store</h4>
+                                        <p class="text-sm text-gray-600">In-memory and persistent storage management</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Installation -->
+                    <section id="installation" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Installation</h2>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Build from Source</h3>
+                                <div class="bg-gray-900 rounded-lg p-4 mb-6">
+                                    <pre class="text-gray-100"><code class="language-bash"># Clone repository
+git clone &lt;repository-url&gt;
+cd orca
+
+# Build orchestrator
+cargo build -p orchestrator --release
+
+# Binary location
+target/release/orchestrator</code></pre>
+                                </div>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Install Globally</h3>
+                                <div class="bg-gray-900 rounded-lg p-4">
+                                    <pre class="text-gray-100"><code class="language-bash">cargo install --path src/crates/orchestrator</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Database -->
+                    <section id="database" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Database</h2>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Schema</h3>
+                                <p class="text-gray-700 mb-4">Orchestrator uses SQLite with 6 main tables:</p>
+
+                                <div class="space-y-3 mb-6">
+                                    <div class="border border-gray-200 rounded p-3">
+                                        <h4 class="font-medium">tasks</h4>
+                                        <p class="text-sm text-gray-600">Core task management (13 columns, 4 indexes, auto-timestamp trigger)</p>
+                                    </div>
+                                    <div class="border border-gray-200 rounded p-3">
+                                        <h4 class="font-medium">workflows</h4>
+                                        <p class="text-sm text-gray-600">Workflow definitions (7 columns, 3 indexes)</p>
+                                    </div>
+                                    <div class="border border-gray-200 rounded p-3">
+                                        <h4 class="font-medium">workflow_tasks</h4>
+                                        <p class="text-sm text-gray-600">Many-to-many junction with CASCADE delete</p>
+                                    </div>
+                                    <div class="border border-gray-200 rounded p-3">
+                                        <h4 class="font-medium">tool_executions</h4>
+                                        <p class="text-sm text-gray-600">Audit log (11 columns, execution tracking)</p>
+                                    </div>
+                                    <div class="border border-gray-200 rounded p-3">
+                                        <h4 class="font-medium">sessions</h4>
+                                        <p class="text-sm text-gray-600">WebSocket connection tracking</p>
+                                    </div>
+                                    <div class="border border-gray-200 rounded p-3">
+                                        <h4 class="font-medium">configurations</h4>
+                                        <p class="text-sm text-gray-600">Key-value config store</p>
+                                    </div>
+                                </div>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Running Migrations</h3>
+                                <div class="bg-gray-900 rounded-lg p-4">
+                                    <pre class="text-gray-100"><code class="language-bash">cd src/crates/orchestrator
+export DATABASE_URL="sqlite:orchestrator.db"
+sqlx database create
+sqlx migrate run</code></pre>
+                                </div>
+
+                                <div class="mt-4 bg-blue-50 border-l-4 border-blue-400 p-4">
+                                    <p class="text-sm text-blue-700">
+                                        Migrations are located in <code class="bg-blue-100 px-1 rounded">src/crates/orchestrator/migrations/</code> using sqlx format.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Configuration -->
+                    <section id="configuration" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Configuration</h2>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Example Configuration</h3>
+                                <p class="text-gray-700 mb-3">See <code class="bg-gray-100 px-1 rounded">executor_config.example.yaml</code>:</p>
+
+                                <div class="bg-gray-900 rounded-lg p-4 mb-6">
+                                    <pre class="text-gray-100"><code class="language-yaml">server:
+  host: "0.0.0.0"
+  port: 50051
+
+database:
+  url: "sqlite:orchestrator.db"
+  max_connections: 10
+
+llm:
+  provider: "anthropic"
+  model: "claude-3-sonnet"
+  api_key: "${ANTHROPIC_API_KEY}"
+
+execution:
+  max_parallel_tasks: 10
+  timeout_seconds: 3600
+  streaming: true</code></pre>
+                                </div>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Environment Variables</h3>
+                                <div class="bg-gray-900 rounded-lg p-4">
+                                    <pre class="text-gray-100"><code class="language-bash"># Database
+export DATABASE_URL="sqlite:orchestrator.db"
+
+# LLM Provider
+export ANTHROPIC_API_KEY="your-api-key"
+
+# Server
+export ORCHESTRATOR_HOST="0.0.0.0"
+export ORCHESTRATOR_PORT="50051"</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Deployment -->
+                    <section id="deployment" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Deployment</h2>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Local Development</h3>
+                                <div class="bg-gray-900 rounded-lg p-4 mb-6">
+                                    <pre class="text-gray-100"><code class="language-bash"># Start orchestrator
+cd src/crates/orchestrator
+cargo run --release
+
+# Server will listen on http://localhost:50051</code></pre>
+                                </div>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Docker Deployment</h3>
+                                <div class="bg-gray-900 rounded-lg p-4 mb-6">
+                                    <pre class="text-gray-100"><code class="language-bash"># Build Docker image
+docker build -t orchestrator:latest .
+
+# Run container
+docker run -d \
+  -p 50051:50051 \
+  -e DATABASE_URL=sqlite:/data/orchestrator.db \
+  -e ANTHROPIC_API_KEY=your-key \
+  -v orchestrator-data:/data \
+  orchestrator:latest</code></pre>
+                                </div>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Production Considerations</h3>
+                                <ul class="list-disc list-inside text-gray-700 space-y-2">
+                                    <li>Use TLS/SSL for secure WebSocket connections</li>
+                                    <li>Configure authentication for client connections</li>
+                                    <li>Set up monitoring and health checks</li>
+                                    <li>Regular database backups</li>
+                                    <li>Configure resource limits (CPU, memory)</li>
+                                    <li>Use a reverse proxy (nginx, Caddy) for load balancing</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- API -->
+                    <section id="api" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">API</h2>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">WebSocket Connection</h3>
+                                <p class="text-gray-700 mb-3">Clients connect via WebSocket for real-time communication:</p>
+                                <div class="bg-gray-900 rounded-lg p-4 mb-6">
+                                    <pre class="text-gray-100"><code class="language-text">ws://localhost:50051/ws</code></pre>
+                                </div>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Message Types</h3>
+                                <div class="space-y-3">
+                                    <div class="border-l-4 border-green-500 pl-4">
+                                        <h4 class="font-semibold">Task Creation</h4>
+                                        <p class="text-sm text-gray-600">Create new tasks for execution</p>
+                                    </div>
+                                    <div class="border-l-4 border-blue-500 pl-4">
+                                        <h4 class="font-semibold">Task Status</h4>
+                                        <p class="text-sm text-gray-600">Query task execution status</p>
+                                    </div>
+                                    <div class="border-l-4 border-purple-500 pl-4">
+                                        <h4 class="font-semibold">Workflow Management</h4>
+                                        <p class="text-sm text-gray-600">Create and manage complex workflows</p>
+                                    </div>
+                                    <div class="border-l-4 border-yellow-500 pl-4">
+                                        <h4 class="font-semibold">Tool Execution</h4>
+                                        <p class="text-sm text-gray-600">Remote tool execution requests</p>
+                                    </div>
+                                    <div class="border-l-4 border-red-500 pl-4">
+                                        <h4 class="font-semibold">Streaming Events</h4>
+                                        <p class="text-sm text-gray-600">Real-time execution events and token streaming</p>
+                                    </div>
+                                </div>
+
+                                <div class="mt-6 bg-blue-50 border-l-4 border-blue-400 p-4">
+                                    <p class="text-sm text-blue-700">
+                                        For complete API reference, see <a href="../docs/endpoints.md" class="font-medium underline">endpoints.md</a> in the docs directory.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Client Integration -->
+                    <section id="client" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Client Integration</h2>
+                                <p class="text-gray-700 mb-4">
+                                    Use the ACO client to interact with Orchestrator:
+                                </p>
+                                <div class="bg-gray-900 rounded-lg p-4 mb-4">
+                                    <pre class="text-gray-100"><code class="language-bash"># Connect ACO to orchestrator
+aco --server http://localhost:50051 tui
+
+# Or set environment variable
+export ACO_SERVER=http://localhost:50051
+aco tui</code></pre>
+                                </div>
+                                <a href="aco.html" class="text-purple-600 hover:text-purple-700 font-medium">
+                                    Learn more about ACO →
+                                </a>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-white mt-12">
+        <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+            <div class="border-t border-gray-200 pt-8">
+                <p class="text-base text-gray-400 text-center">
+                    &copy; 2025 Orca Project. Built with Rust and love.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script>hljs.highlightAll();</script>
+</body>
+</html>

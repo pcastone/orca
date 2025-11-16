@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orca Documentation - AI Agent Orchestration Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#8b5cf6',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <h1 class="text-2xl font-bold text-gray-900">Orca</h1>
+                    </div>
+                    <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                        <a href="index.html" class="border-primary text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Home</a>
+                        <a href="getting-started.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Getting Started</a>
+                        <a href="orca.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Orca</a>
+                        <a href="orchestrator.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Orchestrator</a>
+                        <a href="aco.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">ACO</a>
+                        <a href="examples.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Examples</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <div class="gradient-bg text-white">
+        <div class="max-w-7xl mx-auto py-16 px-4 sm:py-24 sm:px-6 lg:px-8">
+            <div class="text-center">
+                <h1 class="text-4xl font-extrabold sm:text-5xl md:text-6xl">
+                    AI Agent Orchestration Platform
+                </h1>
+                <p class="mt-3 max-w-md mx-auto text-base text-gray-100 sm:text-lg md:mt-5 md:text-xl md:max-w-3xl">
+                    Build and execute stateful AI agent workflows with Rust-powered reliability and performance
+                </p>
+                <div class="mt-5 max-w-md mx-auto sm:flex sm:justify-center md:mt-8">
+                    <div class="rounded-md shadow">
+                        <a href="getting-started.html" class="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-primary bg-white hover:bg-gray-50 md:py-4 md:text-lg md:px-10">
+                            Get Started
+                        </a>
+                    </div>
+                    <div class="mt-3 rounded-md shadow sm:mt-0 sm:ml-3">
+                        <a href="examples.html" class="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-primary bg-opacity-20 hover:bg-opacity-30 md:py-4 md:text-lg md:px-10">
+                            View Examples
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Components -->
+    <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-12">
+            <h2 class="text-3xl font-extrabold text-gray-900 sm:text-4xl">
+                Three Powerful Tools
+            </h2>
+            <p class="mt-3 max-w-2xl mx-auto text-xl text-gray-500 sm:mt-4">
+                Choose the right tool for your use case
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+            <!-- Orca Card -->
+            <div class="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-shadow duration-300">
+                <div class="px-4 py-5 sm:p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 bg-primary rounded-md p-3">
+                            <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <h3 class="text-lg font-medium text-gray-900">Orca</h3>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <p class="text-sm text-gray-500">
+                            Standalone orchestrator for local development. Simple, fast, and powerful with no server dependency.
+                        </p>
+                        <ul class="mt-4 space-y-2 text-sm text-gray-600">
+                            <li>✓ Single-process architecture</li>
+                            <li>✓ Direct tool execution</li>
+                            <li>✓ SQLite database</li>
+                            <li>✓ Perfect for local dev</li>
+                        </ul>
+                        <div class="mt-6">
+                            <a href="orca.html" class="text-primary hover:text-primary/80 font-medium">
+                                Learn more →
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Orchestrator Card -->
+            <div class="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-shadow duration-300">
+                <div class="px-4 py-5 sm:p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 bg-secondary rounded-md p-3">
+                            <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                            </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <h3 class="text-lg font-medium text-gray-900">Orchestrator</h3>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <p class="text-sm text-gray-500">
+                            Distributed orchestration engine for production. Multi-machine capable with WebSocket communication.
+                        </p>
+                        <ul class="mt-4 space-y-2 text-sm text-gray-600">
+                            <li>✓ Multi-machine support</li>
+                            <li>✓ WebSocket-based</li>
+                            <li>✓ Workflow scheduling</li>
+                            <li>✓ Production-ready</li>
+                        </ul>
+                        <div class="mt-6">
+                            <a href="orchestrator.html" class="text-secondary hover:text-secondary/80 font-medium">
+                                Learn more →
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ACO Card -->
+            <div class="bg-white overflow-hidden shadow-lg rounded-lg hover:shadow-xl transition-shadow duration-300">
+                <div class="px-4 py-5 sm:p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 bg-green-600 rounded-md p-3">
+                            <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <h3 class="text-lg font-medium text-gray-900">ACO</h3>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <p class="text-sm text-gray-500">
+                            Terminal UI and CLI client for orchestrator. Monitor and execute workflows in real-time.
+                        </p>
+                        <ul class="mt-4 space-y-2 text-sm text-gray-600">
+                            <li>✓ Beautiful TUI interface</li>
+                            <li>✓ Real-time monitoring</li>
+                            <li>✓ Remote execution</li>
+                            <li>✓ CLI interface</li>
+                        </ul>
+                        <div class="mt-6">
+                            <a href="aco.html" class="text-green-600 hover:text-green-700 font-medium">
+                                Learn more →
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features Section -->
+    <div class="bg-white">
+        <div class="max-w-7xl mx-auto py-16 px-4 sm:px-6 lg:py-20 lg:px-8">
+            <div class="lg:grid lg:grid-cols-2 lg:gap-8 lg:items-center">
+                <div>
+                    <h2 class="text-3xl font-extrabold text-gray-900 sm:text-4xl">
+                        Built with Modern Rust
+                    </h2>
+                    <p class="mt-3 max-w-3xl text-lg text-gray-500">
+                        Leverages the Pregel execution model adapted for LLM-driven applications, providing a comprehensive framework for orchestrating AI agents.
+                    </p>
+                    <div class="mt-8 sm:flex">
+                        <div class="rounded-md shadow">
+                            <a href="getting-started.html" class="flex items-center justify-center px-5 py-3 border border-transparent text-base font-medium rounded-md text-white bg-primary hover:bg-primary/90">
+                                Get Started
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-10 lg:mt-0">
+                    <dl class="space-y-10">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <div class="flex items-center justify-center h-12 w-12 rounded-md bg-primary text-white">
+                                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <dt class="text-lg leading-6 font-medium text-gray-900">
+                                    Streaming-First Architecture
+                                </dt>
+                                <dd class="mt-2 text-base text-gray-500">
+                                    Real-time event emission and token streaming for responsive LLM interactions
+                                </dd>
+                            </div>
+                        </div>
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <div class="flex items-center justify-center h-12 w-12 rounded-md bg-primary text-white">
+                                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <dt class="text-lg leading-6 font-medium text-gray-900">
+                                    Checkpoint-Based Resilience
+                                </dt>
+                                <dd class="mt-2 text-base text-gray-500">
+                                    Automatic persistence at each step with resume capability from any checkpoint
+                                </dd>
+                            </div>
+                        </div>
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <div class="flex items-center justify-center h-12 w-12 rounded-md bg-primary text-white">
+                                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="ml-4">
+                                <dt class="text-lg leading-6 font-medium text-gray-900">
+                                    Pre-built Agent Patterns
+                                </dt>
+                                <dd class="mt-2 text-base text-gray-500">
+                                    ReAct, Plan-Execute, and Reflection patterns ready to use out of the box
+                                </dd>
+                            </div>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Start -->
+    <div class="bg-gray-100">
+        <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:py-16 lg:px-8">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-extrabold text-gray-900">Quick Start</h2>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-6">
+                <pre class="text-gray-100 overflow-x-auto"><code class="language-bash"># Install Orca
+cargo install --path src/crates/orca
+
+# Initialize
+orca init
+
+# Configure LLM provider in ~/.orca/orca.toml
+# [llm]
+# provider = "anthropic"
+# model = "claude-3-sonnet"
+# api_key = "${ANTHROPIC_API_KEY}"
+
+# Create and run a task
+orca task create "Analyze project structure"
+orca task run &lt;task-id&gt;</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-white">
+        <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+            <div class="border-t border-gray-200 pt-8">
+                <p class="text-base text-gray-400 text-center">
+                    &copy; 2025 Orca Project. Built with Rust and love.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orca - Standalone Orchestrator - Orca Documentation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#8b5cf6',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <h1 class="text-2xl font-bold text-gray-900">Orca</h1>
+                    </div>
+                    <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                        <a href="index.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Home</a>
+                        <a href="getting-started.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Getting Started</a>
+                        <a href="orca.html" class="border-primary text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Orca</a>
+                        <a href="orchestrator.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Orchestrator</a>
+                        <a href="aco.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">ACO</a>
+                        <a href="examples.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Examples</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Sidebar and Content -->
+        <div class="flex flex-col lg:flex-row gap-8">
+            <!-- Sidebar -->
+            <aside class="lg:w-64 flex-shrink-0">
+                <div class="bg-white rounded-lg shadow p-4 sticky top-20">
+                    <nav class="space-y-2">
+                        <a href="#overview" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Overview</a>
+                        <a href="#features" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Features</a>
+                        <a href="#architecture" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Architecture</a>
+                        <a href="#installation" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Installation</a>
+                        <a href="#configuration" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Configuration</a>
+                        <a href="#usage" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Usage</a>
+                        <a href="#agent-patterns" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Agent Patterns</a>
+                        <a href="#cli-commands" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">CLI Commands</a>
+                        <a href="#comparison" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">vs Orchestrator</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="flex-1">
+                <div class="px-4 py-6 sm:px-0">
+                    <!-- Header -->
+                    <div class="mb-8">
+                        <h1 class="text-4xl font-bold text-gray-900">Orca</h1>
+                        <p class="mt-2 text-xl text-gray-600">Standalone Orchestrator for AI Agent Workflows</p>
+                    </div>
+
+                    <!-- Overview -->
+                    <section id="overview" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Overview</h2>
+                                <p class="text-gray-700 mb-4">
+                                    Orca is a simplified, standalone orchestrator for AI agent workflows that operates without requiring a separate server.
+                                    It uses direct tool execution for a streamlined, single-process architecture.
+                                </p>
+                                <p class="text-gray-700">
+                                    Designed for local development and single-machine deployments where simplicity is preferred over distributed architecture.
+                                    Orca provides the full power of the acolib orchestration system without the complexity of WebSocket servers and network communication.
+                                </p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Features -->
+                    <section id="features" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Features</h2>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">Standalone Operation</h3>
+                                            <p class="text-sm text-gray-600">No server dependency, runs as a single process</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">Direct Tool Execution</h3>
+                                            <p class="text-sm text-gray-600">Tools execute in-process without network overhead</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">SQLite Database</h3>
+                                            <p class="text-sm text-gray-600">Persistent state stored in ~/.orca/orca.db</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">Dual-Location Config</h3>
+                                            <p class="text-sm text-gray-600">User-level (~/.orca/) and project-level (./.orca/)</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">Full CLI Interface</h3>
+                                            <p class="text-sm text-gray-600">Comprehensive command-line tools for task management</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">LLM Integration</h3>
+                                            <p class="text-sm text-gray-600">Support for OpenAI, Claude, Gemini, Ollama, and more</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Architecture -->
+                    <section id="architecture" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Architecture</h2>
+                                <div class="bg-gray-900 rounded-lg p-6">
+                                    <pre class="text-gray-100 text-sm"><code>┌─────────────────┐
+│      Orca       │
+│   Standalone    │
+│                 │
+│  ┌───────────┐  │
+│  │ Patterns  │  │
+│  └─────┬─────┘  │
+│        │        │
+│  ┌─────▼──────┐ │
+│  │ DirectTool │ │
+│  │  Bridge    │ │
+│  └─────┬──────┘ │
+│        │        │
+│  ┌─────▼──────┐ │
+│  │   Tools    │ │
+│  │  (direct)  │ │
+│  └────────────┘ │
+│                 │
+│  ┌───────────┐  │
+│  │~/.orca/   │  │
+│  │  orca.db  │  │
+│  └───────────┘  │
+└─────────────────┘</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Installation -->
+                    <section id="installation" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Installation</h2>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Install from Source</h3>
+                                <div class="bg-gray-900 rounded-lg p-4 mb-6">
+                                    <pre class="text-gray-100"><code class="language-bash"># Clone repository
+git clone &lt;repository-url&gt;
+cd orca
+
+# Build and install
+cargo install --path src/crates/orca
+
+# Or use the build script
+./scripts/build-orca.sh --install</code></pre>
+                                </div>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Verify Installation</h3>
+                                <div class="bg-gray-900 rounded-lg p-4">
+                                    <pre class="text-gray-100"><code class="language-bash">orca --version
+orca --help</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Configuration -->
+                    <section id="configuration" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Configuration</h2>
+
+                                <p class="text-gray-700 mb-4">
+                                    Orca looks for configuration files in two locations (in priority order):
+                                </p>
+                                <ol class="list-decimal list-inside text-gray-700 mb-6 space-y-1">
+                                    <li><code class="bg-gray-100 px-1 rounded">./.orca/orca.toml</code> (project-level)</li>
+                                    <li><code class="bg-gray-100 px-1 rounded">~/.orca/orca.toml</code> (user-level)</li>
+                                </ol>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Example Configuration</h3>
+                                <div class="bg-gray-900 rounded-lg p-4 mb-6">
+                                    <pre class="text-gray-100"><code class="language-toml">[llm]
+provider = "anthropic"  # Options: anthropic, openai, ollama, gemini, etc.
+model = "claude-3-sonnet"
+api_key = "${ANTHROPIC_API_KEY}"  # Environment variable expansion
+
+[execution]
+streaming = true  # Enable token-by-token streaming</code></pre>
+                                </div>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Supported LLM Providers</h3>
+                                <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                    <div class="border border-gray-200 rounded p-3">
+                                        <h4 class="font-medium">Anthropic</h4>
+                                        <p class="text-sm text-gray-600">Claude models</p>
+                                    </div>
+                                    <div class="border border-gray-200 rounded p-3">
+                                        <h4 class="font-medium">OpenAI</h4>
+                                        <p class="text-sm text-gray-600">GPT models</p>
+                                    </div>
+                                    <div class="border border-gray-200 rounded p-3">
+                                        <h4 class="font-medium">Google</h4>
+                                        <p class="text-sm text-gray-600">Gemini models</p>
+                                    </div>
+                                    <div class="border border-gray-200 rounded p-3">
+                                        <h4 class="font-medium">Ollama</h4>
+                                        <p class="text-sm text-gray-600">Local models</p>
+                                    </div>
+                                    <div class="border border-gray-200 rounded p-3">
+                                        <h4 class="font-medium">xAI</h4>
+                                        <p class="text-sm text-gray-600">Grok models</p>
+                                    </div>
+                                    <div class="border border-gray-200 rounded p-3">
+                                        <h4 class="font-medium">Deepseek</h4>
+                                        <p class="text-sm text-gray-600">Deepseek models</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Usage -->
+                    <section id="usage" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Usage</h2>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Quick Start</h3>
+                                <div class="bg-gray-900 rounded-lg p-4 mb-6">
+                                    <pre class="text-gray-100"><code class="language-bash"># 1. Initialize orca
+orca init
+
+# 2. Configure your LLM provider in ~/.orca/orca.toml
+
+# 3. Create and run a task
+orca task create "Analyze project structure"
+orca task run &lt;task-id&gt;</code></pre>
+                                </div>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Streaming Output</h3>
+                                <p class="text-gray-700 mb-3">Enable real-time streaming of LLM responses in your config:</p>
+                                <div class="bg-gray-900 rounded-lg p-4">
+                                    <pre class="text-gray-100"><code class="language-toml">[execution]
+streaming = true  # Enable token-by-token streaming</code></pre>
+                                </div>
+                                <p class="text-sm text-gray-600 mt-2">When enabled, you'll see:</p>
+                                <ul class="list-disc list-inside text-sm text-gray-600 mt-2 ml-4">
+                                    <li>LLM responses in real-time (token streaming)</li>
+                                    <li>Progress indicators for long-running tasks</li>
+                                    <li>Better visibility into agent reasoning</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Agent Patterns -->
+                    <section id="agent-patterns" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Agent Patterns</h2>
+                                <p class="text-gray-700 mb-6">Orca supports three agent patterns from langgraph-prebuilt:</p>
+
+                                <div class="space-y-6">
+                                    <!-- ReAct Pattern -->
+                                    <div class="border-l-4 border-blue-500 pl-4 bg-blue-50 p-4 rounded-r-lg">
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-2">ReAct (Default) - Best for Most Tasks (90%)</h3>
+                                        <p class="text-gray-700 mb-3">
+                                            The ReAct pattern alternates between reasoning and acting, making it ideal for:
+                                        </p>
+                                        <ul class="list-disc list-inside text-gray-700 mb-3 space-y-1">
+                                            <li>General Q&A and conversational tasks</li>
+                                            <li>Tool-using assistants</li>
+                                            <li>Tasks requiring quick responses</li>
+                                            <li>Simple to moderate complexity</li>
+                                        </ul>
+                                        <p class="text-sm text-gray-600 mb-3"><strong>Advantages:</strong> Low latency, token efficient, reliable</p>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash"># Uses ReAct by default
+orca task create "List all Python files in src/"</code></pre>
+                                        </div>
+                                    </div>
+
+                                    <!-- Plan-Execute Pattern -->
+                                    <div class="border-l-4 border-purple-500 pl-4 bg-purple-50 p-4 rounded-r-lg">
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-2">Plan-Execute - For Complex Multi-Step Tasks</h3>
+                                        <p class="text-gray-700 mb-3">
+                                            Creates an explicit plan before execution, ideal for:
+                                        </p>
+                                        <ul class="list-disc list-inside text-gray-700 mb-3 space-y-1">
+                                            <li>Multi-step research and analysis</li>
+                                            <li>Complex problem decomposition</li>
+                                            <li>Tasks requiring upfront planning</li>
+                                        </ul>
+                                        <p class="text-sm text-gray-600 mb-3"><strong>Advantages:</strong> Clear execution steps, can replan on failures</p>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash"># Create task with plan_execute pattern
+orca task create "Analyze codebase and identify test coverage gaps"
+# Then set metadata: {"pattern": "plan_execute"}</code></pre>
+                                        </div>
+                                    </div>
+
+                                    <!-- Reflection Pattern -->
+                                    <div class="border-l-4 border-green-500 pl-4 bg-green-50 p-4 rounded-r-lg">
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-2">Reflection - For Quality-Critical Output</h3>
+                                        <p class="text-gray-700 mb-3">
+                                            Generate → critique → refine loop for high-quality results:
+                                        </p>
+                                        <ul class="list-disc list-inside text-gray-700 mb-3 space-y-1">
+                                            <li>Code generation and refactoring</li>
+                                            <li>Technical writing</li>
+                                            <li>Output requiring multiple iterations</li>
+                                        </ul>
+                                        <p class="text-sm text-gray-600 mb-3"><strong>Advantages:</strong> Self-critique, iterative improvement, quality threshold support</p>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash"># Create task with reflection pattern
+orca task create "Write production-ready sorting function with tests"
+# Then set metadata: {"pattern": "reflection"}</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-6 bg-blue-50 border-l-4 border-blue-400 p-4">
+                                    <h4 class="font-semibold text-blue-900 mb-2">Setting Patterns</h4>
+                                    <p class="text-sm text-blue-700 mb-2">Patterns are selected via task metadata:</p>
+                                    <div class="bg-gray-900 rounded-lg p-4">
+                                        <pre class="text-gray-100"><code class="language-json">{"pattern": "react"}        // Default
+{"pattern": "plan_execute"} // For complex tasks
+{"pattern": "reflection"}   // For quality-critical output</code></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- CLI Commands -->
+                    <section id="cli-commands" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">CLI Commands</h2>
+
+                                <div class="space-y-4">
+                                    <div>
+                                        <h3 class="font-semibold text-gray-900 mb-2">Task Management</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash">orca task create &lt;description&gt;   # Create a new task
+orca task list                     # List all tasks
+orca task get &lt;task-id&gt;           # Get task details
+orca task run &lt;task-id&gt;           # Run a task
+orca task delete &lt;task-id&gt;        # Delete a task</code></pre>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <h3 class="font-semibold text-gray-900 mb-2">Workflow Management</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash">orca workflow create &lt;name&gt;       # Create a workflow
+orca workflow list                 # List all workflows
+orca workflow run &lt;workflow-id&gt;   # Run a workflow</code></pre>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <h3 class="font-semibold text-gray-900 mb-2">Initialization & Health</h3>
+                                        <div class="bg-gray-900 rounded-lg p-4">
+                                            <pre class="text-gray-100"><code class="language-bash">orca init      # Initialize Orca
+orca health    # Check system health</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Comparison -->
+                    <section id="comparison" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Orca vs Orchestrator</h2>
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead class="bg-gray-50">
+                                            <tr>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Feature</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Orca</th>
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Orchestrator</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white divide-y divide-gray-200">
+                                            <tr>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Architecture</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Standalone</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Distributed</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Tool Execution</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Direct (in-process)</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Remote (via aco server)</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Database</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">SQLite (~/.orca/)</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">SQLite (configurable)</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Network</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">None</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">WebSocket</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Use Case</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Local development</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Production, multi-machine</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Complexity</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Low</td>
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Higher</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-white mt-12">
+        <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+            <div class="border-t border-gray-200 pt-8">
+                <p class="text-base text-gray-400 text-center">
+                    &copy; 2025 Orca Project. Built with Rust and love.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACO - Terminal UI Client - Orca Documentation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#8b5cf6',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <h1 class="text-2xl font-bold text-gray-900">Orca</h1>
+                    </div>
+                    <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                        <a href="index.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Home</a>
+                        <a href="getting-started.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Getting Started</a>
+                        <a href="orca.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Orca</a>
+                        <a href="orchestrator.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Orchestrator</a>
+                        <a href="aco.html" class="border-green-600 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">ACO</a>
+                        <a href="examples.html" class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Examples</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- Sidebar and Content -->
+        <div class="flex flex-col lg:flex-row gap-8">
+            <!-- Sidebar -->
+            <aside class="lg:w-64 flex-shrink-0">
+                <div class="bg-white rounded-lg shadow p-4 sticky top-20">
+                    <nav class="space-y-2">
+                        <a href="#overview" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Overview</a>
+                        <a href="#features" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Features</a>
+                        <a href="#installation" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Installation</a>
+                        <a href="#usage" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Usage</a>
+                        <a href="#keyboard" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Keyboard Shortcuts</a>
+                        <a href="#views" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Views</a>
+                        <a href="#deployment" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Deployment</a>
+                        <a href="#configuration" class="block px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">Configuration</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="flex-1">
+                <div class="px-4 py-6 sm:px-0">
+                    <!-- Header -->
+                    <div class="mb-8">
+                        <h1 class="text-4xl font-bold text-gray-900">ACO</h1>
+                        <p class="mt-2 text-xl text-gray-600">Terminal UI Client for Orchestrator</p>
+                    </div>
+
+                    <!-- Overview -->
+                    <section id="overview" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Overview</h2>
+                                <p class="text-gray-700 mb-4">
+                                    ACO is a powerful terminal user interface (TUI) for managing tasks and workflows in the Orca orchestration system.
+                                    Built with Ratatui and Crossterm, it provides a responsive, feature-rich terminal experience for monitoring and executing
+                                    AI agent workflows.
+                                </p>
+                                <p class="text-gray-700">
+                                    ACO connects to the Orchestrator via WebSocket for real-time task execution and monitoring, making it perfect for
+                                    both local development and production environments.
+                                </p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Features -->
+                    <section id="features" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Features</h2>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">Beautiful TUI Interface</h3>
+                                            <p class="text-sm text-gray-600">Responsive terminal interface built with Ratatui</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">Real-time Monitoring</h3>
+                                            <p class="text-sm text-gray-600">Live execution streaming with color-coded events</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">Comprehensive Keyboard Navigation</h3>
+                                            <p class="text-sm text-gray-600">Vim-style keys and intuitive shortcuts</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">Status Indicators</h3>
+                                            <p class="text-sm text-gray-600">Color-coded icons and badges for instant recognition</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">Auto-refresh</h3>
+                                            <p class="text-sm text-gray-600">Automatic data updates every 10 seconds</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start">
+                                        <svg class="h-6 w-6 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <div>
+                                            <h3 class="font-semibold">Remote Execution</h3>
+                                            <p class="text-sm text-gray-600">Execute tasks on remote orchestrator servers</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Installation -->
+                    <section id="installation" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Installation</h2>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Build from Source</h3>
+                                <div class="bg-gray-900 rounded-lg p-4 mb-6">
+                                    <pre class="text-gray-100"><code class="language-bash"># Clone repository
+git clone &lt;repository-url&gt;
+cd orca
+
+# Build release binary
+cargo build -p aco --release
+
+# Binary location
+target/release/aco</code></pre>
+                                </div>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Install Globally</h3>
+                                <div class="bg-gray-900 rounded-lg p-4 mb-6">
+                                    <pre class="text-gray-100"><code class="language-bash"># Install for current user
+mkdir -p ~/.local/bin
+cp target/release/aco ~/.local/bin/
+export PATH="$HOME/.local/bin:$PATH"
+
+# Or install globally (Linux/macOS)
+sudo cp target/release/aco /usr/local/bin/</code></pre>
+                                </div>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Verify Installation</h3>
+                                <div class="bg-gray-900 rounded-lg p-4">
+                                    <pre class="text-gray-100"><code class="language-bash">aco --version
+aco --help</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Usage -->
+                    <section id="usage" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Usage</h2>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Starting the TUI</h3>
+                                <div class="bg-gray-900 rounded-lg p-4 mb-6">
+                                    <pre class="text-gray-100"><code class="language-bash"># Use default server (localhost:50051)
+aco tui
+
+# Connect to specific server
+aco --server http://example.com:50051 tui
+
+# With authentication
+aco --connect user:password tui
+
+# Verbose mode
+aco -v tui</code></pre>
+                                </div>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Environment Variables</h3>
+                                <div class="bg-gray-900 rounded-lg p-4">
+                                    <pre class="text-gray-100"><code class="language-bash"># Default server URL
+export ACO_SERVER=http://localhost:50051
+
+# Authentication string
+export ACO_CONNECT=user:password
+
+# Logging level
+export RUST_LOG=info  # Options: debug, info, warn, error</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Keyboard Shortcuts -->
+                    <section id="keyboard" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Keyboard Shortcuts</h2>
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Navigation</h3>
+                                        <table class="min-w-full divide-y divide-gray-200">
+                                            <thead class="bg-gray-50">
+                                                <tr>
+                                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Key</th>
+                                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="bg-white divide-y divide-gray-200">
+                                                <tr>
+                                                    <td class="px-4 py-2 text-sm font-mono">↑ / k</td>
+                                                    <td class="px-4 py-2 text-sm">Navigate up</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="px-4 py-2 text-sm font-mono">↓ / j</td>
+                                                    <td class="px-4 py-2 text-sm">Navigate down</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="px-4 py-2 text-sm font-mono">Home / g</td>
+                                                    <td class="px-4 py-2 text-sm">Jump to first</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="px-4 py-2 text-sm font-mono">End / G</td>
+                                                    <td class="px-4 py-2 text-sm">Jump to last</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="px-4 py-2 text-sm font-mono">PgUp</td>
+                                                    <td class="px-4 py-2 text-sm">Scroll up one page</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="px-4 py-2 text-sm font-mono">PgDn</td>
+                                                    <td class="px-4 py-2 text-sm">Scroll down one page</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="px-4 py-2 text-sm font-mono">Enter</td>
+                                                    <td class="px-4 py-2 text-sm">View details</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="px-4 py-2 text-sm font-mono">Esc</td>
+                                                    <td class="px-4 py-2 text-sm">Back / Quit</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3">View Switching</h3>
+                                        <table class="min-w-full divide-y divide-gray-200">
+                                            <thead class="bg-gray-50">
+                                                <tr>
+                                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Key</th>
+                                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="bg-white divide-y divide-gray-200">
+                                                <tr>
+                                                    <td class="px-4 py-2 text-sm font-mono">Tab</td>
+                                                    <td class="px-4 py-2 text-sm">Next view</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="px-4 py-2 text-sm font-mono">Shift+Tab</td>
+                                                    <td class="px-4 py-2 text-sm">Previous view</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="px-4 py-2 text-sm font-mono">1</td>
+                                                    <td class="px-4 py-2 text-sm">Tasks List</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="px-4 py-2 text-sm font-mono">2</td>
+                                                    <td class="px-4 py-2 text-sm">Workflows List</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="px-4 py-2 text-sm font-mono">3</td>
+                                                    <td class="px-4 py-2 text-sm">Execution Stream</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="px-4 py-2 text-sm font-mono">4 / ?</td>
+                                                    <td class="px-4 py-2 text-sm">Help</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-3 mt-6">Actions</h3>
+                                        <table class="min-w-full divide-y divide-gray-200">
+                                            <thead class="bg-gray-50">
+                                                <tr>
+                                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Key</th>
+                                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="bg-white divide-y divide-gray-200">
+                                                <tr>
+                                                    <td class="px-4 py-2 text-sm font-mono">e</td>
+                                                    <td class="px-4 py-2 text-sm">Execute</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="px-4 py-2 text-sm font-mono">r</td>
+                                                    <td class="px-4 py-2 text-sm">Refresh data</td>
+                                                </tr>
+                                                <tr>
+                                                    <td class="px-4 py-2 text-sm font-mono">q</td>
+                                                    <td class="px-4 py-2 text-sm">Quit</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Views -->
+                    <section id="views" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Views</h2>
+
+                                <div class="space-y-6">
+                                    <!-- Task List -->
+                                    <div class="border-l-4 border-blue-500 pl-4 bg-blue-50 p-4 rounded-r-lg">
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-2">1. Task List</h3>
+                                        <p class="text-gray-700 mb-3">Displays all tasks with color-coded status indicators:</p>
+                                        <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                                            <div><span class="font-mono">⏸</span> (yellow) - Pending</div>
+                                            <div><span class="font-mono">▶</span> (cyan) - Running</div>
+                                            <div><span class="font-mono">✔</span> (green) - Completed</div>
+                                            <div><span class="font-mono">✗</span> (red) - Failed</div>
+                                            <div><span class="font-mono">⊗</span> (gray) - Cancelled</div>
+                                        </div>
+                                        <p class="text-sm text-gray-600 mt-3">Type badges: <code>[EXEC]</code> <code>[FLOW]</code> <code>[VALD]</code></p>
+                                    </div>
+
+                                    <!-- Workflow List -->
+                                    <div class="border-l-4 border-purple-500 pl-4 bg-purple-50 p-4 rounded-r-lg">
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-2">2. Workflow List</h3>
+                                        <p class="text-gray-700 mb-3">Displays all workflows with status indicators:</p>
+                                        <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                                            <div><span class="font-mono">◯</span> (gray) - Draft</div>
+                                            <div><span class="font-mono">◉</span> (green) - Active</div>
+                                            <div><span class="font-mono">▶</span> (cyan) - Running</div>
+                                            <div><span class="font-mono">⏸</span> (yellow) - Paused</div>
+                                            <div><span class="font-mono">✔</span> (green) - Completed</div>
+                                            <div><span class="font-mono">✗</span> (red) - Failed</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Execution Stream -->
+                                    <div class="border-l-4 border-green-500 pl-4 bg-green-50 p-4 rounded-r-lg">
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-2">3. Execution Stream</h3>
+                                        <p class="text-gray-700 mb-3">Real-time execution event display with color-coded event types:</p>
+                                        <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                                            <div><span class="font-mono">▶</span> (green) - Started</div>
+                                            <div><span class="font-mono">⋯</span> (cyan) - Progress</div>
+                                            <div><span class="font-mono">◉</span> (yellow) - Output</div>
+                                            <div><span class="font-mono">🔧</span> (magenta) - Tool calls</div>
+                                            <div><span class="font-mono">✓</span> (blue) - Tool results</div>
+                                            <div><span class="font-mono">✔</span> (green) - Completed</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Help -->
+                                    <div class="border-l-4 border-gray-500 pl-4 bg-gray-50 p-4 rounded-r-lg">
+                                        <h3 class="text-lg font-semibold text-gray-900 mb-2">4. Help</h3>
+                                        <p class="text-gray-700">Interactive help screen with complete keyboard reference, status legend, and server info.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Deployment -->
+                    <section id="deployment" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Deployment</h2>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Docker Deployment</h3>
+                                <div class="bg-gray-900 rounded-lg p-4 mb-6">
+                                    <pre class="text-gray-100"><code class="language-bash"># Build image
+docker build -t aco-tui:latest .
+
+# Run with server connection
+docker run -it --rm \
+  -e ACO_SERVER=http://orchestrator:50051 \
+  -e RUST_LOG=info \
+  aco-tui:latest
+
+# Run with authentication
+docker run -it --rm \
+  -e ACO_SERVER=http://orchestrator:50051 \
+  -e ACO_CONNECT=user:password \
+  aco-tui:latest</code></pre>
+                                </div>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Systemd Service</h3>
+                                <p class="text-gray-700 mb-3">Create <code class="bg-gray-100 px-1 rounded">/etc/systemd/system/aco-tui.service</code>:</p>
+                                <div class="bg-gray-900 rounded-lg p-4 mb-4">
+                                    <pre class="text-gray-100"><code class="language-ini">[Unit]
+Description=ACO TUI Service
+After=network.target orchestrator.service
+Requires=orchestrator.service
+
+[Service]
+Type=forking
+User=aco
+Group=aco
+Environment="ACO_SERVER=http://localhost:50051"
+Environment="RUST_LOG=info"
+
+# Start TUI in tmux session
+ExecStart=/usr/bin/tmux new-session -d -s aco-tui '/usr/local/bin/aco tui'
+ExecStop=/usr/bin/tmux kill-session -t aco-tui
+
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+                                </div>
+
+                                <div class="bg-gray-900 rounded-lg p-4">
+                                    <pre class="text-gray-100"><code class="language-bash"># Enable and start
+sudo systemctl daemon-reload
+sudo systemctl enable aco-tui
+sudo systemctl start aco-tui
+
+# Attach to TUI
+sudo -u aco tmux attach -t aco-tui</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Configuration -->
+                    <section id="configuration" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Configuration</h2>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Server Connection</h3>
+                                <p class="text-gray-700 mb-3">ACO connects to the orchestrator server via WebSocket. Ensure orchestrator is running:</p>
+                                <div class="bg-gray-900 rounded-lg p-4 mb-6">
+                                    <pre class="text-gray-100"><code class="language-bash"># Start orchestrator
+cargo run -p orchestrator --release
+
+# In another terminal, start ACO
+aco --server http://localhost:50051 tui</code></pre>
+                                </div>
+
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">Security</h3>
+                                <div class="space-y-3">
+                                    <div class="border-l-4 border-yellow-500 pl-4 bg-yellow-50 p-4 rounded-r-lg">
+                                        <h4 class="font-semibold">Use TLS for production</h4>
+                                        <div class="bg-gray-900 rounded-lg p-4 mt-2">
+                                            <pre class="text-gray-100"><code class="language-bash">export ACO_SERVER=https://orchestrator.example.com:50051</code></pre>
+                                        </div>
+                                    </div>
+                                    <div class="border-l-4 border-blue-500 pl-4 bg-blue-50 p-4 rounded-r-lg">
+                                        <h4 class="font-semibold">Use SSH tunnel for remote access</h4>
+                                        <div class="bg-gray-900 rounded-lg p-4 mt-2">
+                                            <pre class="text-gray-100"><code class="language-bash">ssh -L 50051:localhost:50051 user@remote-server &
+aco --server http://localhost:50051 tui</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Performance -->
+                    <section id="performance" class="mb-12">
+                        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+                            <div class="px-4 py-5 sm:p-6">
+                                <h2 class="text-2xl font-bold text-gray-900 mb-4">Performance</h2>
+                                <p class="text-gray-700 mb-4">ACO is highly optimized for terminal performance:</p>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div class="text-center p-4 bg-gray-50 rounded">
+                                        <div class="text-2xl font-bold text-primary">~10 bytes</div>
+                                        <div class="text-sm text-gray-600">Per task/workflow</div>
+                                    </div>
+                                    <div class="text-center p-4 bg-gray-50 rounded">
+                                        <div class="text-2xl font-bold text-primary">&lt;1%</div>
+                                        <div class="text-sm text-gray-600">CPU idle</div>
+                                    </div>
+                                    <div class="text-center p-4 bg-gray-50 rounded">
+                                        <div class="text-2xl font-bold text-primary">&lt;1ms</div>
+                                        <div class="text-sm text-gray-600">Operation latency</div>
+                                    </div>
+                                    <div class="text-center p-4 bg-gray-50 rounded">
+                                        <div class="text-2xl font-bold text-primary">50,000+</div>
+                                        <div class="text-sm text-gray-600">Tasks supported</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-white mt-12">
+        <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+            <div class="border-t border-gray-200 pt-8">
+                <p class="text-base text-gray-400 text-center">
+                    &copy; 2025 Orca Project. Built with Rust and love.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script>hljs.highlightAll();</script>
+</body>
+</html>
