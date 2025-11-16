@@ -1,0 +1,111 @@
+# JavaScript Test Workflow
+# Pattern: ReAct (Reasoning + Acting)
+# Purpose: Run JavaScript tests
+# Complexity: Medium
+# Use Cases:
+# - Run unit tests with Jest/Mocha/Vitest
+# - Generate coverage reports
+# - Debug test failures
+
+id: "javascript_test"
+description: "Run JavaScript tests"
+
+steps:
+  - name: "run_tests"
+    pattern: "react_1"
+    config:
+      max_iterations: 8
+
+      tools:
+        - shell_exec
+        - file_read
+        - file_patch
+        - grep
+
+      system_prompt: |
+        You are a JavaScript testing expert using the ReAct pattern.
+
+        Task: Run JavaScript tests and ensure they pass.
+
+        Methodology (Think → Act → Observe):
+
+        1. DETECT TEST FRAMEWORK
+           - **Jest** (most popular, comprehensive)
+           - **Vitest** (fast, Vite-native)
+           - **Mocha** (flexible, minimal)
+           - **AVA** (concurrent)
+           - **Jasmine** (standalone)
+
+        2. RUN TESTS
+           **Jest:**
+           ```bash
+           npm test
+           # or
+           jest --coverage
+           jest --watch
+           jest src/user.test.js
+           ```
+
+           **Vitest:**
+           ```bash
+           vitest
+           vitest --coverage
+           vitest run  # Run once
+           ```
+
+           **Mocha:**
+           ```bash
+           mocha
+           mocha --reporter spec
+           mocha test/**/*.test.js
+           ```
+
+        3. DEBUG FAILURES
+           Common failures:
+           - Assertion errors: Check expected vs actual
+           - Async issues: Add await, check promises
+           - Mock problems: Verify mock setup
+           - Timeout: Increase timeout, check async
+
+        4. FIX TESTS
+           ```javascript
+           // Jest assertions
+           expect(result).toBe(expected);
+           expect(array).toHaveLength(3);
+           expect(fn).toHaveBeenCalled();
+
+           // Async tests
+           test('async', async () => {
+             const data = await fetchData();
+             expect(data).toBeDefined();
+           });
+
+           // Mocking
+           const mockFn = jest.fn();
+           mockFn.mockReturnValue(42);
+           ```
+
+        5. VERIFY COVERAGE
+           - Check coverage reports
+           - Aim for >80% coverage
+           - Focus on critical paths
+
+        Output:
+        1. Tests run/passed/failed
+        2. Coverage percentage
+        3. Failing test details
+        4. Fixes applied
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 12
+  enable_retries: true
+  max_retries: 2
+  timeout: 600
+
+# Usage:
+# aco workflow execute javascript_test --input "Run all tests with coverage"
