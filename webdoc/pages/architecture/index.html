@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="rLangGraph Architecture - System design, components, and execution model">
+  <meta name="keywords" content="rlangraph, architecture, pregel, state management, execution model">
+  <title>Architecture - rLangGraph Documentation</title>
+
+  <link rel="stylesheet" href="../../dist/css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body class="font-sans antialiased" data-category="Architecture">
+  <!-- Header (same as homepage) -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center">
+          <a href="../../" class="flex items-center space-x-2">
+            <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+              <span class="text-white font-bold text-lg">r</span>
+            </div>
+            <span class="text-xl font-bold text-gray-900">rLangGraph</span>
+          </a>
+        </div>
+
+        <div class="hidden md:flex items-center space-x-8">
+          <a href="../../" class="nav-link">Home</a>
+          <a href="../getting-started/" class="nav-link">Getting Started</a>
+          <a href="../architecture/" class="nav-link nav-link-active">Architecture</a>
+          <a href="../api/" class="nav-link">API Reference</a>
+          <a href="../guides/" class="nav-link">Guides</a>
+          <a href="../examples/" class="nav-link">Examples</a>
+        </div>
+
+        <div class="hidden md:flex items-center space-x-4">
+          <div class="relative">
+            <input type="search" id="search-input" placeholder="Search docs..." class="search-input w-64 text-sm">
+            <div id="search-results" class="hidden absolute top-full mt-2 w-96 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto scrollbar-thin"></div>
+          </div>
+          <a href="https://github.com/pcastone/orca" target="_blank" rel="noopener" class="text-gray-700 hover:text-primary-600 transition-colors">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+            </svg>
+          </a>
+        </div>
+
+        <button id="mobile-menu-button" class="md:hidden p-2 rounded-lg text-gray-700 hover:bg-gray-100">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+    </nav>
+
+    <div id="mobile-menu" class="hidden md:hidden border-t border-gray-200 bg-white">
+      <div class="px-4 py-3 space-y-1">
+        <input type="search" placeholder="Search docs..." class="search-input w-full text-sm mb-3">
+        <a href="../../" class="nav-link">Home</a>
+        <a href="../getting-started/" class="nav-link">Getting Started</a>
+        <a href="../architecture/" class="nav-link nav-link-active">Architecture</a>
+        <a href="../api/" class="nav-link">API Reference</a>
+        <a href="../guides/" class="nav-link">Guides</a>
+        <a href="../examples/" class="nav-link">Examples</a>
+      </div>
+    </div>
+  </header>
+
+  <div id="search-overlay" class="hidden fixed inset-0 bg-black bg-opacity-25 z-40"></div>
+
+  <!-- Main Content with Sidebar -->
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex flex-col lg:flex-row gap-8">
+      <!-- Sidebar -->
+      <aside class="lg:w-64 flex-shrink-0">
+        <div class="sticky top-24">
+          <nav class="bg-white rounded-lg border border-gray-200 p-4">
+            <h2 class="font-semibold text-gray-900 mb-3">On This Page</h2>
+            <ul class="space-y-1 text-sm">
+              <li><a href="#system-overview" class="toc-link">System Overview</a></li>
+              <li><a href="#components" class="toc-link">Component Architecture</a></li>
+              <li><a href="#data-flow" class="toc-link">Data Flow</a></li>
+              <li><a href="#execution-model" class="toc-link">Execution Model</a></li>
+              <li><a href="#state-management" class="toc-link">State Management</a></li>
+              <li><a href="#design-decisions" class="toc-link">Design Decisions</a></li>
+              <li><a href="#tech-stack" class="toc-link">Technology Stack</a></li>
+            </ul>
+          </nav>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="flex-1 min-w-0">
+        <!-- Breadcrumb -->
+        <div class="breadcrumb">
+          <a href="../../" class="hover:text-primary-600">Home</a>
+          <span class="breadcrumb-separator">/</span>
+          <span class="text-gray-900">Architecture</span>
+        </div>
+
+        <article class="prose prose-lg max-w-none">
+          <h1>Architecture Documentation</h1>
+          <p class="text-xl text-gray-600">High-level overview of rLangGraph system design, components, and data flow.</p>
+
+          <!-- System Overview -->
+          <section id="system-overview">
+            <h2>System Overview</h2>
+            <p>rLangGraph (acolib) is a Rust-based platform for building and executing stateful AI agent workflows. It implements the Pregel execution model adapted for LLM-driven applications.</p>
+
+            <h3>Core Principles</h3>
+            <div class="grid md:grid-cols-2 gap-4 not-prose my-6">
+              <div class="card">
+                <h4 class="text-lg font-semibold text-primary-700 mb-2">Explicit State Management</h4>
+                <p class="text-gray-600 text-sm">All state changes are explicit and trackable</p>
+              </div>
+              <div class="card">
+                <h4 class="text-lg font-semibold text-primary-700 mb-2">Checkpoint-Based Resilience</h4>
+                <p class="text-gray-600 text-sm">Automatic persistence at each step</p>
+              </div>
+              <div class="card">
+                <h4 class="text-lg font-semibold text-primary-700 mb-2">Streaming-First</h4>
+                <p class="text-gray-600 text-sm">Real-time event emission during execution</p>
+              </div>
+              <div class="card">
+                <h4 class="text-lg font-semibold text-primary-700 mb-2">Composability</h4>
+                <p class="text-gray-600 text-sm">Reusable components at all levels</p>
+              </div>
+              <div class="card">
+                <h4 class="text-lg font-semibold text-primary-700 mb-2">Type Safety</h4>
+                <p class="text-gray-600 text-sm">Rust's type system prevents many classes of errors</p>
+              </div>
+            </div>
+
+            <h3>Architecture Layers</h3>
+            <div class="code-block">
+              <pre><code class="language-plaintext">┌─────────────────────────────────────────────────┐
+│  User Interfaces (Web UI, TUI, CLI)             │
+├─────────────────────────────────────────────────┤
+│  API Layer (REST, WebSocket)                     │
+├─────────────────────────────────────────────────┤
+│  Orchestration Layer (Task/Workflow Management)  │
+├─────────────────────────────────────────────────┤
+│  Execution Engine (Pregel, Streaming)            │
+├─────────────────────────────────────────────────┤
+│  State Management (Reducers, Messages)           │
+├─────────────────────────────────────────────────┤
+│  Persistence Layer (Checkpoints, Database)       │
+├─────────────────────────────────────────────────┤
+│  Integration Layer (LLM, Tools, External APIs)   │
+└─────────────────────────────────────────────────┘</code></pre>
+            </div>
+          </section>
+
+          <!-- Component Architecture -->
+          <section id="components">
+            <h2>Component Architecture</h2>
+            <p>rLangGraph consists of 10 core crates, each with specific responsibilities:</p>
+
+            <!-- langgraph-core -->
+            <div class="card my-6">
+              <h3 class="text-2xl font-semibold text-primary-700 mb-3">1. langgraph-core</h3>
+              <p class="text-gray-700 mb-4"><strong>Core graph execution engine.</strong> Implements the Pregel model with streaming support.</p>
+
+              <div class="code-block">
+                <pre><code class="language-plaintext">langgraph-core/
+├── builder.rs         # StateGraph builder
+├── graph.rs           # Compiled graph execution
+├── pregel/            # Pregel execution model
+│   ├── executor.rs    # Superstep-based executor
+│   ├── channel.rs     # Message channels
+│   └── barrier.rs     # Synchronization points
+├── state.rs           # State definition and reducers
+├── messages.rs        # Message types and handling
+├── tool.rs            # Tool registry and execution
+├── interrupt.rs       # Human-in-the-loop
+├── stream.rs          # Streaming infrastructure
+└── send.rs            # Dynamic parallelism</code></pre>
+              </div>
+
+              <h4 class="text-lg font-semibold mt-4 mb-2">Key Responsibilities:</h4>
+              <ul class="list-disc pl-6 text-gray-700 space-y-1">
+                <li>Graph construction and compilation</li>
+                <li>Node and edge management</li>
+                <li>Pregel-based execution</li>
+                <li>State reduction and merging</li>
+                <li>Streaming event emission</li>
+                <li>Checkpoint coordination</li>
+              </ul>
+            </div>
+
+            <!-- langgraph-checkpoint -->
+            <div class="card my-6">
+              <h3 class="text-2xl font-semibold text-primary-700 mb-3">2. langgraph-checkpoint</h3>
+              <p class="text-gray-700 mb-4"><strong>Persistence abstraction layer.</strong></p>
+
+              <div class="code-block">
+                <pre><code class="language-plaintext">langgraph-checkpoint/
+├── traits.rs          # CheckpointSaver trait
+├── channel/           # Channel types
+│   ├── last_value.rs  # Last write wins
+│   ├── append.rs      # Append mode
+│   ├── merge.rs       # Deep merge
+│   └── sum.rs         # Accumulation
+└── saver/
+    ├── memory.rs      # In-memory (testing)
+    ├── sqlite.rs      # SQLite backend
+    └── postgres.rs    # PostgreSQL backend</code></pre>
+              </div>
+
+              <h4 class="text-lg font-semibold mt-4 mb-2">Key Responsibilities:</h4>
+              <ul class="list-disc pl-6 text-gray-700 space-y-1">
+                <li>Trait definitions for checkpoint saving</li>
+                <li>Channel type implementations</li>
+                <li>State serialization/deserialization</li>
+                <li>Checkpoint metadata management</li>
+              </ul>
+            </div>
+
+            <!-- langgraph-prebuilt -->
+            <div class="card my-6">
+              <h3 class="text-2xl font-semibold text-primary-700 mb-3">3. langgraph-prebuilt</h3>
+              <p class="text-gray-700 mb-4"><strong>Pre-built agent patterns.</strong></p>
+
+              <div class="code-block">
+                <pre><code class="language-plaintext">langgraph-prebuilt/
+├── agents/
+│   ├── react.rs           # ReAct pattern
+│   ├── plan_execute.rs    # Plan-Execute pattern
+│   └── reflection.rs      # Reflection pattern
+├── builders/
+│   ├── agent_builder.rs   # Common builder
+│   └── router_builder.rs  # Routing builder
+└── models/
+    └── agent_config.rs    # Agent configuration</code></pre>
+              </div>
+
+              <h4 class="text-lg font-semibold mt-4 mb-2">Agent Patterns:</h4>
+              <ul class="list-disc pl-6 text-gray-700 space-y-1">
+                <li><strong>ReAct</strong>: Think → Act → Observe</li>
+                <li><strong>Plan-Execute</strong>: Plan → Execute → Replan</li>
+                <li><strong>Reflection</strong>: Generate → Critique → Refine</li>
+              </ul>
+            </div>
+
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-4 my-6">
+              <p class="text-sm text-blue-900">
+                <strong>Note:</strong> For details on other crates (orca, orchestrator, llm, tooling, utils, aco, langgraph-cli),
+                see the <a href="../api/" class="text-blue-700 underline">API Reference</a> section.
+              </p>
+            </div>
+          </section>
+
+          <!-- Execution Model -->
+          <section id="execution-model">
+            <h2>Execution Model</h2>
+            <p>rLangGraph implements Google's Pregel BSP (Bulk Synchronous Parallel) model:</p>
+
+            <div class="card bg-gray-50 my-6">
+              <h3 class="text-xl font-semibold mb-4">Pregel Superstep Loop</h3>
+              <div class="code-block">
+                <pre><code class="language-plaintext">Initialization:
+  - All nodes start as "active"
+  - State initialized with input
+
+Loop while active nodes exist:
+  Superstep S:
+    1. Each active node receives messages
+    2. Nodes execute in parallel
+    3. Nodes emit messages to next nodes
+    4. Barrier synchronization
+    5. Checkpoint created
+    6. Stream events emitted
+    7. Mark nodes for next superstep
+    8. Check for halting condition
+
+Termination:
+  - All nodes inactive
+  - No pending messages
+  - Final state = result</code></pre>
+              </div>
+            </div>
+
+            <h3>Key Implications</h3>
+            <ul class="list-disc pl-6 space-y-2">
+              <li><strong>Within superstep</strong>: Parallel execution of nodes</li>
+              <li><strong>Between supersteps</strong>: Barrier synchronization, state reduction must complete</li>
+              <li><strong>Checkpoints</strong>: Created after each superstep</li>
+              <li><strong>Execution</strong>: Deterministic and testable</li>
+            </ul>
+
+            <h3>Parallelism Boundaries</h3>
+            <div class="grid md:grid-cols-2 gap-4 not-prose my-6">
+              <div class="card bg-green-50">
+                <h4 class="text-lg font-semibold text-green-800 mb-2">✓ Within Superstep</h4>
+                <ul class="text-sm text-green-900 space-y-1">
+                  <li>Parallel node execution</li>
+                  <li>Parallel tool calls</li>
+                  <li>Parallel message processing</li>
+                </ul>
+              </div>
+              <div class="card bg-red-50">
+                <h4 class="text-lg font-semibold text-red-800 mb-2">✗ Between Supersteps</h4>
+                <ul class="text-sm text-red-900 space-y-1">
+                  <li>Barrier synchronization</li>
+                  <li>State reduction must complete</li>
+                  <li>Checkpoint must persist</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <!-- State Management -->
+          <section id="state-management">
+            <h2>State Management</h2>
+            <p>State uses the reducer pattern to handle concurrent updates from parallel nodes:</p>
+
+            <h3>Reducer Types</h3>
+            <div class="overflow-x-auto my-6">
+              <table class="min-w-full border border-gray-300">
+                <thead class="bg-gray-100">
+                  <tr>
+                    <th class="border border-gray-300 px-4 py-2 text-left">Reducer</th>
+                    <th class="border border-gray-300 px-4 py-2 text-left">Operation</th>
+                    <th class="border border-gray-300 px-4 py-2 text-left">Use Case</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="border border-gray-300 px-4 py-2"><code>AppendReducer</code></td>
+                    <td class="border border-gray-300 px-4 py-2"><code>[...a] + [...b]</code></td>
+                    <td class="border border-gray-300 px-4 py-2">Message history</td>
+                  </tr>
+                  <tr class="bg-gray-50">
+                    <td class="border border-gray-300 px-4 py-2"><code>OverwriteReducer</code></td>
+                    <td class="border border-gray-300 px-4 py-2"><code>b</code></td>
+                    <td class="border border-gray-300 px-4 py-2">Current status</td>
+                  </tr>
+                  <tr>
+                    <td class="border border-gray-300 px-4 py-2"><code>MergeReducer</code></td>
+                    <td class="border border-gray-300 px-4 py-2"><code>deep_merge(a, b)</code></td>
+                    <td class="border border-gray-300 px-4 py-2">Nested objects</td>
+                  </tr>
+                  <tr class="bg-gray-50">
+                    <td class="border border-gray-300 px-4 py-2"><code>SumReducer</code></td>
+                    <td class="border border-gray-300 px-4 py-2"><code>a + b</code></td>
+                    <td class="border border-gray-300 px-4 py-2">Counters</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3>Message System</h3>
+            <div class="card my-6">
+              <h4 class="text-lg font-semibold mb-3">Message Types</h4>
+              <ul class="list-disc pl-6 space-y-1">
+                <li><code>SystemMessage</code>: Instructions to LLM</li>
+                <li><code>HumanMessage</code>: User input</li>
+                <li><code>AssistantMessage</code>: LLM response</li>
+                <li><code>ToolMessage</code>: Tool result</li>
+                <li><code>ToolCallMessage</code>: Tool invocation</li>
+              </ul>
+            </div>
+          </section>
+
+          <!-- Data Flow -->
+          <section id="data-flow">
+            <h2>Data Flow</h2>
+
+            <h3>Execution Flow</h3>
+            <div class="code-block">
+              <pre><code class="language-plaintext">1. User Request
+   ├─ Task Creation → Database
+   ├─ Workflow Definition → Database
+   └─ Execution Start Request
+
+2. Graph Compilation
+   ├─ Validate structure (start → nodes → end)
+   ├─ Create execution context
+   └─ Initialize channels
+
+3. Pregel Execution (Superstep Loop)
+   ├─ Superstep S:
+   │  ├─ Activate eligible nodes
+   │  ├─ Execute in parallel
+   │  ├─ Collect outputs
+   │  ├─ Reduce state changes
+   │  ├─ Create checkpoint
+   │  └─ Emit stream events
+   └─ Repeat until all nodes inactive
+
+4. Stream Emissions
+   ├─ Values: Full state snapshots
+   ├─ Updates: Incremental changes
+   ├─ Checkpoints: Persistence events
+   ├─ Tokens: LLM token streaming
+   ├─ Debug: Execution trace
+   └─ Custom: User-defined events
+
+5. Result Storage
+   ├─ Final state → Database
+   ├─ Messages → Database
+   ├─ Checkpoints → Checkpoint Store
+   └─ Metrics → Analytics</code></pre>
+            </div>
+          </section>
+
+          <!-- Design Decisions -->
+          <section id="design-decisions">
+            <h2>Design Decisions</h2>
+
+            <div class="space-y-6">
+              <div class="card">
+                <h3 class="text-xl font-semibold text-primary-700 mb-3">Why Pregel Model?</h3>
+                <ul class="list-disc pl-6 space-y-1">
+                  <li><strong>Explicit Synchronization</strong> - Clear execution boundaries</li>
+                  <li><strong>Checkpoint Friendly</strong> - Natural points to persist state</li>
+                  <li><strong>Streaming Support</strong> - Events emitted at superstep end</li>
+                  <li><strong>Testability</strong> - Deterministic execution</li>
+                  <li><strong>Distributed Ready</strong> - Design scales to multi-machine</li>
+                </ul>
+              </div>
+
+              <div class="card">
+                <h3 class="text-xl font-semibold text-primary-700 mb-3">Why Async-First?</h3>
+                <ul class="list-disc pl-6 space-y-1">
+                  <li><strong>Token Streaming</strong> - Real-time LLM output</li>
+                  <li><strong>Parallel Execution</strong> - Within supersteps</li>
+                  <li><strong>I/O Efficiency</strong> - Non-blocking network calls</li>
+                  <li><strong>UI Responsiveness</strong> - Non-blocking server</li>
+                </ul>
+              </div>
+
+              <div class="card">
+                <h3 class="text-xl font-semibold text-primary-700 mb-3">Why Type Safety?</h3>
+                <ul class="list-disc pl-6 space-y-1">
+                  <li><strong>Compile-time Checks</strong> - Catch errors early</li>
+                  <li><strong>Refactoring Safety</strong> - Compiler validates changes</li>
+                  <li><strong>Documentation</strong> - Types are explicit contracts</li>
+                  <li><strong>Performance</strong> - Optimization opportunities</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <!-- Technology Stack -->
+          <section id="tech-stack">
+            <h2>Technology Stack</h2>
+
+            <div class="grid md:grid-cols-2 gap-6 my-6 not-prose">
+              <div class="card">
+                <h3 class="text-lg font-semibold text-primary-700 mb-3">Core Runtime</h3>
+                <ul class="text-sm space-y-1">
+                  <li><strong>Async runtime:</strong> tokio 1.35+</li>
+                  <li><strong>Executor:</strong> tokio task spawning</li>
+                  <li><strong>Sync:</strong> tokio channels and mutexes</li>
+                </ul>
+              </div>
+
+              <div class="card">
+                <h3 class="text-lg font-semibold text-primary-700 mb-3">Serialization</h3>
+                <ul class="text-sm space-y-1">
+                  <li><strong>JSON:</strong> serde_json</li>
+                  <li><strong>YAML:</strong> serde_yaml</li>
+                  <li><strong>Binary:</strong> bincode</li>
+                </ul>
+              </div>
+
+              <div class="card">
+                <h3 class="text-lg font-semibold text-primary-700 mb-3">Web</h3>
+                <ul class="text-sm space-y-1">
+                  <li><strong>HTTP:</strong> reqwest (client), actix/axum (server)</li>
+                  <li><strong>WebSocket:</strong> tokio-tungstenite</li>
+                  <li><strong>TUI:</strong> ratatui</li>
+                </ul>
+              </div>
+
+              <div class="card">
+                <h3 class="text-lg font-semibold text-primary-700 mb-3">Database</h3>
+                <ul class="text-sm space-y-1">
+                  <li><strong>PostgreSQL:</strong> sqlx async driver</li>
+                  <li><strong>SQLite:</strong> rusqlite or sqlx</li>
+                  <li><strong>Migrations:</strong> sqlx migrations</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <!-- Next Steps -->
+          <div class="bg-gradient-to-r from-primary-50 to-blue-50 rounded-lg p-6 my-8 not-prose">
+            <h3 class="text-xl font-semibold text-gray-900 mb-4">Next Steps</h3>
+            <div class="flex flex-col sm:flex-row gap-4">
+              <a href="../api/" class="btn btn-primary">
+                Explore API Reference →
+              </a>
+              <a href="../guides/" class="btn btn-outline">
+                Read Guides
+              </a>
+            </div>
+          </div>
+        </article>
+      </main>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="bg-gray-900 text-gray-400 py-12 mt-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid md:grid-cols-4 gap-8 mb-8">
+        <div>
+          <h3 class="text-white font-semibold mb-4">rLangGraph</h3>
+          <p class="text-sm">A Rust port of LangGraph for building stateful AI agent workflows.</p>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Documentation</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="../getting-started/" class="hover:text-white transition-colors">Getting Started</a></li>
+            <li><a href="../architecture/" class="hover:text-white transition-colors">Architecture</a></li>
+            <li><a href="../api/" class="hover:text-white transition-colors">API Reference</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Resources</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="../examples/" class="hover:text-white transition-colors">Examples</a></li>
+            <li><a href="https://github.com/pcastone/orca" target="_blank" rel="noopener" class="hover:text-white transition-colors">GitHub</a></li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold mb-4">Project</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href="https://github.com/pcastone/orca/blob/main/LICENSE" target="_blank" rel="noopener" class="hover:text-white transition-colors">License</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-gray-800 pt-8 text-center text-sm">
+        <p>&copy; 2025 acolib. Built with Rust and Tailwind CSS.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+  <script src="../../src/js/navigation.js"></script>
+  <script src="../../src/js/search.js"></script>
+</body>
+</html>
