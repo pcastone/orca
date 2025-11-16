@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tooling Crate - acolib Documentation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#6366f1',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .sidebar-link {
+            @apply block py-2 px-4 text-sm text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded;
+        }
+        .sidebar-link.active {
+            @apply bg-indigo-50 text-indigo-600 font-medium;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center">
+                    <h1 class="text-2xl font-bold text-gray-900">acolib</h1>
+                    <span class="ml-3 px-2 py-1 text-xs font-semibold text-indigo-600 bg-indigo-100 rounded">Tooling</span>
+                </div>
+                <nav class="hidden md:flex space-x-8">
+                    <a href="index.html" class="text-gray-600 hover:text-gray-900">Home</a>
+                    <a href="llm.html" class="text-gray-600 hover:text-gray-900">LLM</a>
+                    <a href="tooling.html" class="text-indigo-600 font-medium hover:text-indigo-800">Tooling</a>
+                    <a href="https://github.com/pcastone/orca" class="text-gray-600 hover:text-gray-900">GitHub</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="flex gap-8">
+            <!-- Sidebar -->
+            <aside class="hidden lg:block w-64 flex-shrink-0">
+                <div class="sticky top-24">
+                    <nav class="space-y-1">
+                        <a href="#overview" class="sidebar-link">Overview</a>
+                        <div class="mt-4">
+                            <p class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Modules</p>
+                            <a href="#config" class="sidebar-link">Configuration</a>
+                            <a href="#error" class="sidebar-link">Error Handling</a>
+                            <a href="#async" class="sidebar-link">Async Utilities</a>
+                            <a href="#validation" class="sidebar-link">Validation</a>
+                            <a href="#serialization" class="sidebar-link">Serialization</a>
+                            <a href="#rate-limit" class="sidebar-link">Rate Limiting</a>
+                            <a href="#logging" class="sidebar-link">Logging</a>
+                        </div>
+                        <div class="mt-4">
+                            <p class="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Reference</p>
+                            <a href="#module-overview" class="sidebar-link">Module Overview</a>
+                            <a href="#design-principles" class="sidebar-link">Design Principles</a>
+                        </div>
+                    </nav>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="flex-1 min-w-0">
+                <!-- Overview Section -->
+                <section id="overview" class="mb-16">
+                    <h2 class="text-3xl font-bold text-gray-900 mb-4">Tooling Crate</h2>
+                    <p class="text-lg text-gray-600 mb-6">
+                        Common utilities and helpers for the acolib workspace. This crate provides reusable patterns
+                        for configuration management, error handling, async operations, validation, serialization,
+                        rate limiting, and logging.
+                    </p>
+
+                    <div class="bg-indigo-50 border-l-4 border-indigo-500 p-4 mb-6">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-indigo-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm text-indigo-700">
+                                    <strong>Production-Ready:</strong> All utilities are battle-tested with comprehensive
+                                    test coverage and designed for production use.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid md:grid-cols-3 gap-6">
+                        <div class="bg-white p-6 rounded-lg border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-2 text-gray-900">7 Modules</h3>
+                            <p class="text-gray-600 text-sm">Comprehensive utilities covering all common needs</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-2 text-gray-900">Type-Safe</h3>
+                            <p class="text-gray-600 text-sm">Leverages Rust's type system for safety</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-2 text-gray-900">Composable</h3>
+                            <p class="text-gray-600 text-sm">Mix and match utilities as needed</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Configuration Module -->
+                <section id="config" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Configuration Management</h2>
+                    <p class="text-gray-600 mb-6">
+                        Consistent patterns for loading and managing configuration from environment variables and config files.
+                    </p>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4">Basic Usage</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-rust">use tooling::config::{ConfigBuilder, get_env_parse, get_env_bool};
+
+#[derive(Clone, Default)]
+struct AppConfig {
+    pub port: u16,
+    pub debug: bool,
+}
+
+impl ConfigBuilder for AppConfig {
+    fn from_env(prefix: &str) -> tooling::Result<Self> {
+        use tooling::config::{get_env_parse_or, get_env_bool};
+
+        Ok(Self {
+            port: get_env_parse_or(&format!("{}PORT", prefix), 8080)?,
+            debug: get_env_bool(&format!("{}DEBUG", prefix))?.unwrap_or(false),
+        })
+    }
+}
+
+// Load config from environment with defaults
+let config = AppConfig::from_env_with_defaults("APP_")?;</code></pre>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4 mt-8">Features</h3>
+                    <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Function</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">get_env_parse</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Parse environment variable to any type</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">get_env_parse_or</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Parse with default value</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">get_env_bool</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Parse boolean environment variables</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">ConfigBuilder</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Trait for implementing config builders</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Error Handling Module -->
+                <section id="error" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Error Handling</h2>
+                    <p class="text-gray-600 mb-6">
+                        Add context to errors and format error chains for better debugging.
+                    </p>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4">Adding Context</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-rust">use tooling::error::{ErrorContext, format_error_chain};
+
+fn read_config() -> Result<String, Box<dyn std::error::Error>> {
+    let contents = std::fs::read_to_string("config.json")
+        .context("Failed to read configuration file")?;
+    Ok(contents)
+}
+
+// Format error chains for display
+match operation() {
+    Err(e) => eprintln!("{}", format_error_chain(&*e)),
+    Ok(_) => {}
+}</code></pre>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4 mt-8">Error Chain Formatting</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-rust">// Output example:
+// Error: Failed to read configuration file
+// Caused by: No such file or directory (os error 2)</code></pre>
+                </section>
+
+                <!-- Async Utilities Module -->
+                <section id="async" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Async Utilities</h2>
+                    <p class="text-gray-600 mb-6">
+                        Retry policies with exponential backoff and timeout utilities for async operations.
+                    </p>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4">Retry with Exponential Backoff</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-rust">use tooling::async_utils::retry::{RetryPolicy, with_retry};
+use std::time::Duration;
+
+// Configure retry policy
+let policy = RetryPolicy::new(3)
+    .with_initial_interval(1.0)
+    .with_backoff_factor(2.0);
+
+// Retry operation on failure
+let result = with_retry(&policy, || async {
+    call_external_api().await
+}).await?;</code></pre>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4 mt-8">Timeouts</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-rust">use tooling::async_utils::timeout::{with_timeout, TimeoutGuard};
+use std::time::Duration;
+
+// Simple timeout
+let result = with_timeout(
+    Duration::from_secs(30),
+    slow_operation()
+).await?;
+
+// RAII timeout guard
+let guard = TimeoutGuard::new(Duration::from_secs(60));
+guard.execute(async {
+    // Operation with timeout
+    Ok("done")
+}).await?;</code></pre>
+
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4">
+                        <p class="text-sm text-blue-700">
+                            <strong>Exponential Backoff:</strong> Retry intervals increase exponentially (1s, 2s, 4s, 8s...)
+                            with optional jitter to prevent thundering herd problems.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- Validation Module -->
+                <section id="validation" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Validation</h2>
+                    <p class="text-gray-600 mb-6">
+                        Fluent validation API with chainable rules for validating data.
+                    </p>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4">Number Validation</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-rust">use tooling::validation::Validator;
+
+let age = 25;
+Validator::new(age, "age")
+    .min(0)
+    .max(120)
+    .validate()?;</code></pre>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4 mt-8">String Validation</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-rust">let email = "user@example.com";
+Validator::new(email, "email")
+    .not_empty()
+    .min_length(3)
+    .max_length(100)
+    .matches(r"^[^@]+@[^@]+\.[^@]+$")
+    .validate()?;</code></pre>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4 mt-8">Custom Validation</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-rust">Validator::new(value, "value")
+    .custom(|v| {
+        if v % 2 == 0 {
+            Ok(())
+        } else {
+            Err("Value must be even".to_string())
+        }
+    })
+    .validate()?;</code></pre>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4 mt-8">Collect All Errors</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-rust">match Validator::new(value, "value")
+    .min(0)
+    .max(100)
+    .validate_all() {
+    Ok(v) => println!("Valid: {}", v),
+    Err(errors) => {
+        for error in errors {
+            eprintln!("Error: {}", error);
+        }
+    }
+}</code></pre>
+                </section>
+
+                <!-- Serialization Module -->
+                <section id="serialization" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Serialization</h2>
+                    <p class="text-gray-600 mb-6">
+                        Stable JSON serialization and hashing utilities for cache keys and consistent output.
+                    </p>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4">Stable JSON Serialization</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-rust">use tooling::serialization::{
+    generate_hash, generate_json_hash, stable_json_string,
+    truncate_json, pretty_json
+};
+use serde_json::json;
+
+// Stable serialization with sorted keys
+let val = json!({"b": 2, "a": 1});
+let stable = stable_json_string(&val)?;
+// Output: {"a":1,"b":2}</code></pre>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4 mt-8">Generate Cache Keys</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-rust">// Generate hash from JSON for cache keys
+let hash = generate_json_hash(&json_value);
+println!("Cache key: {}", hash);</code></pre>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4 mt-8">Truncate for Logging</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-rust">let large_json = "...very long JSON string...";
+let truncated = truncate_json(large_json, 100);
+println!("Response: {}", truncated);</code></pre>
+                </section>
+
+                <!-- Rate Limiting Module -->
+                <section id="rate-limit" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Rate Limiting</h2>
+                    <p class="text-gray-600 mb-6">
+                        Token bucket and sliding window rate limiters for controlling request rates.
+                    </p>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4">Token Bucket Rate Limiter</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-rust">use tooling::rate_limit::RateLimiter;
+use std::time::Duration;
+
+// 100 requests per minute
+let limiter = RateLimiter::new(100, Duration::from_secs(60));
+
+if limiter.check().await {
+    // Perform operation
+} else {
+    // Rate limited - deny request
+}
+
+// Wait until allowed (blocking)
+limiter.acquire().await;
+// Now perform operation</code></pre>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4 mt-8">Sliding Window Limiter</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-rust">use tooling::rate_limit::SlidingWindowLimiter;
+
+// 1000 requests per minute with sliding window
+let limiter = SlidingWindowLimiter::new(1000, Duration::from_secs(60));
+
+if limiter.check().await {
+    // Operation allowed
+} else {
+    // Too many requests
+}</code></pre>
+
+                    <div class="bg-green-50 border-l-4 border-green-500 p-4">
+                        <p class="text-sm text-green-700">
+                            <strong>Token Bucket vs Sliding Window:</strong> Token bucket allows bursts up to the limit,
+                            while sliding window provides more even distribution over time.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- Logging Module -->
+                <section id="logging" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Logging</h2>
+                    <p class="text-gray-600 mb-6">
+                        Structured logging helpers and formatters for better observability.
+                    </p>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4">RAII Logging Guard</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-rust">use tooling::logging::LogGuard;
+
+fn process() {
+    let _guard = LogGuard::new("process");
+    // Logs entry and exit automatically
+    // "Entering process"
+    // ... function body ...
+    // "Exiting process"
+}</code></pre>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4 mt-8">Time Async Operations</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-rust">use tooling::logging::timed;
+
+let result = timed("api_call", async {
+    call_api().await
+}).await;
+// Logs: "api_call completed in 1.23s"</code></pre>
+
+                    <h3 class="text-xl font-semibold text-gray-900 mb-4 mt-8">Format Helpers</h3>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6"><code class="language-rust">use tooling::logging::{format_duration, format_bytes, sanitize_for_logging};
+use std::time::Duration;
+
+let duration_str = format_duration(Duration::from_millis(1500));
+// Output: "1.50s"
+
+let size_str = format_bytes(1024 * 1024);
+// Output: "1.00 MB"
+
+let log = "API key: sk-abc123";
+let safe = sanitize_for_logging(&log);
+// Output: "API key: [REDACTED]"</code></pre>
+                </section>
+
+                <!-- Module Overview -->
+                <section id="module-overview" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Module Overview</h2>
+                    <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Module</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purpose</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Key Features</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">config</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Configuration management</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Env var loading, builder pattern, validation</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">error</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Error handling</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Context chains, formatting, root cause</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">async_utils</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Async operations</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Retry policies, timeouts, exponential backoff</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">validation</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Data validation</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Fluent API, chainable rules, custom validators</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">serialization</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">JSON utilities</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Stable hashing, truncation, pretty printing</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">rate_limit</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Rate limiting</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Token bucket, sliding window</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">logging</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Structured logging</td>
+                                    <td class="px-6 py-4 text-sm text-gray-600">Timing, formatting, sanitization</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Design Principles -->
+                <section id="design-principles" class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Design Principles</h2>
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-lg border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-3 text-gray-900">1. Ergonomic APIs</h3>
+                            <p class="text-gray-600 text-sm">Fluent, chainable interfaces that are easy to use and understand.</p>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-lg border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-3 text-gray-900">2. Type Safety</h3>
+                            <p class="text-gray-600 text-sm">Leverage Rust's type system to catch errors at compile time.</p>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-lg border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-3 text-gray-900">3. Composability</h3>
+                            <p class="text-gray-600 text-sm">Mix and match utilities to build exactly what you need.</p>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-lg border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-3 text-gray-900">4. Performance</h3>
+                            <p class="text-gray-600 text-sm">Zero-cost abstractions where possible, efficient implementations.</p>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-lg border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-3 text-gray-900">5. Testing</h3>
+                            <p class="text-gray-600 text-sm">Comprehensive test coverage for all modules and features.</p>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-lg border border-gray-200">
+                            <h3 class="text-lg font-semibold mb-3 text-gray-900">6. Documentation</h3>
+                            <p class="text-gray-600 text-sm">Clear examples and use cases for every feature.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Testing Section -->
+                <section class="mb-16">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">Testing</h2>
+                    <p class="text-gray-600 mb-6">
+                        All modules have comprehensive test coverage. Run tests to verify functionality:
+                    </p>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-bash"># Run all tests
+cargo test -p tooling
+
+# Run specific module tests
+cargo test -p tooling config::
+cargo test -p tooling validation::
+cargo test -p tooling async_utils::</code></pre>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-gray-300 py-8 mt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center">
+                <p class="text-sm">&copy; 2024 acolib. Licensed under Apache 2.0 or MIT.</p>
+                <div class="flex space-x-6 text-sm">
+                    <a href="index.html" class="hover:text-white">Home</a>
+                    <a href="llm.html" class="hover:text-white">LLM</a>
+                    <a href="tooling.html" class="hover:text-white">Tooling</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="assets/js/main.js"></script>
+</body>
+</html>

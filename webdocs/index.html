@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>acolib Documentation - Rust AI Agent Workflows</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#6366f1',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center">
+                    <h1 class="text-2xl font-bold text-gray-900">acolib</h1>
+                    <span class="ml-3 px-2 py-1 text-xs font-semibold text-blue-600 bg-blue-100 rounded">v0.1.0</span>
+                </div>
+                <nav class="hidden md:flex space-x-8">
+                    <a href="index.html" class="text-blue-600 font-medium hover:text-blue-800">Home</a>
+                    <a href="llm.html" class="text-gray-600 hover:text-gray-900">LLM</a>
+                    <a href="tooling.html" class="text-gray-600 hover:text-gray-900">Tooling</a>
+                    <a href="https://github.com/pcastone/orca" class="text-gray-600 hover:text-gray-900">GitHub</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h2 class="text-4xl md:text-5xl font-bold mb-6">Build Stateful AI Agent Workflows</h2>
+            <p class="text-xl md:text-2xl mb-8 text-blue-100">A Rust-based platform implementing the Pregel execution model for LLM-driven applications</p>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <a href="#getting-started" class="bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition">Get Started</a>
+                <a href="llm.html" class="bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-800 transition border-2 border-white">View Documentation</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="py-16 bg-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h3 class="text-3xl font-bold text-center mb-12 text-gray-900">Core Features</h3>
+            <div class="grid md:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div class="bg-gray-50 p-6 rounded-lg border border-gray-200 hover:border-blue-500 transition">
+                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <h4 class="text-xl font-semibold mb-2 text-gray-900">Pregel Execution Model</h4>
+                    <p class="text-gray-600">Bulk Synchronous Parallel execution with deterministic, testable workflows and checkpoint-based resilience.</p>
+                </div>
+
+                <!-- Feature 2 -->
+                <div class="bg-gray-50 p-6 rounded-lg border border-gray-200 hover:border-blue-500 transition">
+                    <div class="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+                        </svg>
+                    </div>
+                    <h4 class="text-xl font-semibold mb-2 text-gray-900">Multi-Provider LLM Support</h4>
+                    <p class="text-gray-600">Unified interface for local (Ollama, llama.cpp) and remote providers (Claude, OpenAI, Gemini, and more).</p>
+                </div>
+
+                <!-- Feature 3 -->
+                <div class="bg-gray-50 p-6 rounded-lg border border-gray-200 hover:border-blue-500 transition">
+                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </div>
+                    <h4 class="text-xl font-semibold mb-2 text-gray-900">Production-Ready Utilities</h4>
+                    <p class="text-gray-600">Comprehensive tooling for config management, validation, rate limiting, retry logic, and more.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Documentation Quick Links -->
+    <section class="py-16 bg-gray-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h3 class="text-3xl font-bold text-center mb-12 text-gray-900">Documentation</h3>
+            <div class="grid md:grid-cols-2 gap-8">
+                <!-- LLM Documentation -->
+                <a href="llm.html" class="block bg-white p-8 rounded-lg border-2 border-gray-200 hover:border-blue-500 transition">
+                    <h4 class="text-2xl font-bold mb-3 text-gray-900">LLM Crate</h4>
+                    <p class="text-gray-600 mb-4">Multi-provider LLM integrations with unified ChatModel interface.</p>
+                    <ul class="space-y-2 text-sm text-gray-700">
+                        <li class="flex items-center">
+                            <svg class="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                            </svg>
+                            Local providers: Ollama, llama.cpp, LM Studio
+                        </li>
+                        <li class="flex items-center">
+                            <svg class="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                            </svg>
+                            Remote providers: Claude, OpenAI, Gemini, Grok, Deepseek
+                        </li>
+                        <li class="flex items-center">
+                            <svg class="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                            </svg>
+                            Thinking models with reasoning extraction
+                        </li>
+                    </ul>
+                    <div class="mt-6 text-blue-600 font-semibold flex items-center">
+                        Read Documentation
+                        <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </div>
+                </a>
+
+                <!-- Tooling Documentation -->
+                <a href="tooling.html" class="block bg-white p-8 rounded-lg border-2 border-gray-200 hover:border-indigo-500 transition">
+                    <h4 class="text-2xl font-bold mb-3 text-gray-900">Tooling Crate</h4>
+                    <p class="text-gray-600 mb-4">Production-ready utilities and helpers for building robust applications.</p>
+                    <ul class="space-y-2 text-sm text-gray-700">
+                        <li class="flex items-center">
+                            <svg class="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                            </svg>
+                            Configuration management with env var support
+                        </li>
+                        <li class="flex items-center">
+                            <svg class="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                            </svg>
+                            Retry policies with exponential backoff
+                        </li>
+                        <li class="flex items-center">
+                            <svg class="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                            </svg>
+                            Validation, rate limiting, and logging utilities
+                        </li>
+                    </ul>
+                    <div class="mt-6 text-indigo-600 font-semibold flex items-center">
+                        Read Documentation
+                        <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Getting Started Section -->
+    <section id="getting-started" class="py-16 bg-white">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h3 class="text-3xl font-bold text-center mb-12 text-gray-900">Getting Started</h3>
+
+            <div class="space-y-8">
+                <!-- Installation -->
+                <div>
+                    <h4 class="text-xl font-semibold mb-4 text-gray-900">Installation</h4>
+                    <p class="text-gray-600 mb-4">Add acolib crates to your <code class="bg-gray-100 px-2 py-1 rounded text-sm">Cargo.toml</code>:</p>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-toml">[dependencies]
+llm = { path = "src/crates/llm" }
+tooling = { path = "src/crates/tooling" }
+langgraph-core = { path = "src/crates/langgraph-core" }</code></pre>
+                </div>
+
+                <!-- Quick Example -->
+                <div>
+                    <h4 class="text-xl font-semibold mb-4 text-gray-900">Quick Example</h4>
+                    <p class="text-gray-600 mb-4">Create a simple LLM chat application:</p>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-rust">use llm::remote::OpenAiClient;
+use llm::config::RemoteLlmConfig;
+use langgraph_core::llm::{ChatModel, ChatRequest};
+use langgraph_core::Message;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = RemoteLlmConfig::from_env(
+        "OPENAI_API_KEY",
+        "https://api.openai.com/v1",
+        "gpt-4"
+    )?;
+    let client = OpenAiClient::new(config);
+
+    let request = ChatRequest::new(vec![
+        Message::human("What is Rust?")
+    ]);
+
+    let response = client.chat(request).await?;
+    println!("{}", response.message.text().unwrap());
+
+    Ok(())
+}</code></pre>
+                </div>
+
+                <!-- Build Commands -->
+                <div>
+                    <h4 class="text-xl font-semibold mb-4 text-gray-900">Build Commands</h4>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-bash"># Build all workspace crates
+cargo build --release
+
+# Build specific crate
+cargo build -p llm --release
+cargo build -p tooling --release
+
+# Run tests
+cargo test -p llm
+cargo test -p tooling</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-gray-300 py-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid md:grid-cols-3 gap-8">
+                <div>
+                    <h5 class="font-semibold text-white mb-3">acolib</h5>
+                    <p class="text-sm">Rust-based platform for building stateful AI agent workflows.</p>
+                </div>
+                <div>
+                    <h5 class="font-semibold text-white mb-3">Documentation</h5>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="llm.html" class="hover:text-white">LLM Crate</a></li>
+                        <li><a href="tooling.html" class="hover:text-white">Tooling Crate</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h5 class="font-semibold text-white mb-3">Links</h5>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="https://github.com/pcastone/orca" class="hover:text-white">GitHub</a></li>
+                        <li><a href="https://doc.rust-lang.org/" class="hover:text-white">Rust Docs</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-t border-gray-800 mt-8 pt-8 text-center text-sm">
+                <p>&copy; 2024 acolib. Licensed under Apache 2.0 or MIT.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+</body>
+</html>
