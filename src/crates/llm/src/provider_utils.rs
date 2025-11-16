@@ -1,6 +1,6 @@
 //! Provider utility functions for connection testing and model management.
 
-use crate::error::{LlmError, Result};
+use crate::error::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
