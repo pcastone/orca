@@ -113,7 +113,7 @@ impl WorkflowExecutionEngine {
     }
 
     /// Parse workflow definition from JSON string
-    fn parse_definition(definition: &str) -> Result<(Vec<WorkflowNode>, Vec<WorkflowEdge>)> {
+    pub fn parse_definition(definition: &str) -> Result<(Vec<WorkflowNode>, Vec<WorkflowEdge>)> {
         let def: Value = serde_json::from_str(definition)
             .map_err(|e| OrchestratorError::ExecutionFailed(format!("Invalid workflow JSON: {}", e)))?;
 
@@ -179,7 +179,7 @@ impl WorkflowExecutionEngine {
     }
 
     /// Find next nodes given current node
-    fn find_next_nodes(
+    pub fn find_next_nodes(
         current: Option<&str>,
         edges: &[WorkflowEdge],
         state: &WorkflowExecutionState,

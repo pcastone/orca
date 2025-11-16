@@ -15,6 +15,9 @@ pub struct ToolRequest {
     /// Tool arguments
     pub args: HashMap<String, serde_json::Value>,
 
+    /// Request ID for tracking
+    pub request_id: Option<String>,
+
     /// Session ID for context
     pub session_id: Option<String>,
 
@@ -28,6 +31,7 @@ impl ToolRequest {
         Self {
             tool: tool.into(),
             args: HashMap::new(),
+            request_id: None,
             session_id: None,
             metadata: HashMap::new(),
         }
@@ -61,11 +65,26 @@ pub struct ToolResponse {
     /// Execution status
     pub status: ToolStatus,
 
+    /// Success flag (true if tool executed successfully)
+    pub ok: bool,
+
     /// Result data (if successful)
     pub result: Option<serde_json::Value>,
 
+    /// Data field (alias for result for compatibility)
+    pub data: Option<serde_json::Value>,
+
     /// Error message (if failed)
     pub error: Option<String>,
+
+    /// Error messages (list format for compatibility)
+    pub errors: Vec<String>,
+
+    /// Warnings generated during execution
+    pub warnings: Vec<String>,
+
+    /// Execution duration in milliseconds
+    pub duration_ms: Option<u64>,
 
     /// Response metadata
     pub metadata: HashMap<String, String>,
@@ -77,19 +96,30 @@ impl ToolResponse {
         Self {
             tool: tool.into(),
             status: ToolStatus::Success,
-            result: Some(result),
+            ok: true,
+            result: Some(result.clone()),
+            data: Some(result),
             error: None,
+            errors: Vec::new(),
+            warnings: Vec::new(),
+            duration_ms: None,
             metadata: HashMap::new(),
         }
     }
 
     /// Create an error response
     pub fn error(tool: impl Into<String>, error: impl Into<String>) -> Self {
+        let error_str = error.into();
         Self {
             tool: tool.into(),
             status: ToolStatus::Error,
+            ok: false,
             result: None,
-            error: Some(error.into()),
+            data: None,
+            error: Some(error_str.clone()),
+            errors: vec![error_str],
+            warnings: Vec::new(),
+            duration_ms: None,
             metadata: HashMap::new(),
         }
     }
