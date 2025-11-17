@@ -165,7 +165,7 @@ fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2),  // Tabs
+            Constraint::Length(1),  // Tabs
             Constraint::Min(5),     // Content
         ])
         .split(area);
