@@ -4,17 +4,18 @@ mod common;
 
 use orca::models::{Budget, BudgetEnforcement};
 use orca::services::BudgetService;
+use std::sync::Arc;
 
 #[tokio::test]
 async fn test_budget_status_ok() {
     let (_temp, db) = common::setup_test_db().await;
-    let service = BudgetService::new(db.clone());
+    let repo = orca::repositories::BudgetRepository::new(db.clone());
+    let service = BudgetService::new(std::sync::Arc::new(repo.clone()));
 
-    let budget = Budget::new_credit("b1".to_string(), "Test".to_string(), 1000.0, None, BudgetEnforcement::Warn);
+    let budget_input = Budget::new_credit("b1".to_string(), "Test".to_string(), 1000.0, None, BudgetEnforcement::Warn);
 
     // Create budget
-    let repo = orca::repositories::BudgetRepository::new(db);
-    repo.create(budget.clone())
+    let budget = repo.create(budget_input)
         .await
         .expect("Failed to create budget");
 
@@ -37,12 +38,11 @@ async fn test_budget_status_ok() {
 #[tokio::test]
 async fn test_budget_status_warn_threshold() {
     let (_temp, db) = common::setup_test_db().await;
-    let service = BudgetService::new(db.clone());
+    let repo = orca::repositories::BudgetRepository::new(db.clone());
+    let service = BudgetService::new(std::sync::Arc::new(repo.clone()));
 
-    let budget = Budget::new_credit("b1".to_string(), "Test".to_string(), 1000.0, None, BudgetEnforcement::Warn);
-
-    let repo = orca::repositories::BudgetRepository::new(db);
-    repo.create(budget.clone())
+    let budget_input = Budget::new_credit("b1".to_string(), "Test".to_string(), 1000.0, None, BudgetEnforcement::Warn);
+    let budget = repo.create(budget_input)
         .await
         .expect("Failed to create budget");
 
@@ -64,12 +64,11 @@ async fn test_budget_status_warn_threshold() {
 #[tokio::test]
 async fn test_budget_status_exceeded() {
     let (_temp, db) = common::setup_test_db().await;
-    let service = BudgetService::new(db.clone());
+    let repo = orca::repositories::BudgetRepository::new(db.clone());
+    let service = BudgetService::new(std::sync::Arc::new(repo.clone()));
 
-    let budget = Budget::new_credit("b1".to_string(), "Test".to_string(), 1000.0, None, BudgetEnforcement::Block);
-
-    let repo = orca::repositories::BudgetRepository::new(db);
-    repo.create(budget.clone())
+    let budget_input = Budget::new_credit("b1".to_string(), "Test".to_string(), 1000.0, None, BudgetEnforcement::Block);
+    let budget = repo.create(budget_input)
         .await
         .expect("Failed to create budget");
 
@@ -90,7 +89,7 @@ async fn test_budget_status_exceeded() {
 
 #[tokio::test]
 async fn test_enforcement_mode_warn() {
-    let (_temp, db) = common::setup_test_db().await;
+    let (_temp, _db) = common::setup_test_db().await;
 
     let budget = Budget::new_credit("b1".to_string(), "Warn Test".to_string(), 1000.0, None, BudgetEnforcement::Warn);
 
@@ -99,7 +98,7 @@ async fn test_enforcement_mode_warn() {
 
 #[tokio::test]
 async fn test_enforcement_mode_block() {
-    let (_temp, db) = common::setup_test_db().await;
+    let (_temp, _db) = common::setup_test_db().await;
 
     let budget = Budget::new_credit("b1".to_string(), "Block Test".to_string(), 1000.0, None, BudgetEnforcement::Block);
 
@@ -108,7 +107,7 @@ async fn test_enforcement_mode_block() {
 
 #[tokio::test]
 async fn test_budget_remaining_calculation() {
-    let (_temp, db) = common::setup_test_db().await;
+    let (_temp, _db) = common::setup_test_db().await;
 
     let mut budget = Budget::new_credit("b1".to_string(), "Calc".to_string(), 1000.0, None, BudgetEnforcement::Warn);
 
@@ -121,7 +120,7 @@ async fn test_budget_remaining_calculation() {
 
 #[tokio::test]
 async fn test_budget_usage_percentage() {
-    let (_temp, db) = common::setup_test_db().await;
+    let (_temp, _db) = common::setup_test_db().await;
 
     let mut budget = Budget::new_credit("b1".to_string(), "Perc".to_string(), 500.0, None, BudgetEnforcement::Warn);
 
@@ -135,12 +134,11 @@ async fn test_budget_usage_percentage() {
 #[tokio::test]
 async fn test_allow_request_under_limit() {
     let (_temp, db) = common::setup_test_db().await;
-    let service = BudgetService::new(db.clone());
+    let repo = orca::repositories::BudgetRepository::new(db.clone());
+    let service = BudgetService::new(std::sync::Arc::new(repo.clone()));
 
-    let budget = Budget::new_credit("b1".to_string(), "Test".to_string(), 1000.0, None, BudgetEnforcement::Block);
-
-    let repo = orca::repositories::BudgetRepository::new(db);
-    repo.create(budget.clone())
+    let budget_input = Budget::new_credit("b1".to_string(), "Test".to_string(), 1000.0, None, BudgetEnforcement::Block);
+    let budget = repo.create(budget_input)
         .await
         .expect("Failed to create budget");
 
@@ -159,12 +157,11 @@ async fn test_allow_request_under_limit() {
 #[tokio::test]
 async fn test_block_request_over_limit() {
     let (_temp, db) = common::setup_test_db().await;
-    let service = BudgetService::new(db.clone());
+    let repo = orca::repositories::BudgetRepository::new(db.clone());
+    let service = BudgetService::new(std::sync::Arc::new(repo.clone()));
 
-    let budget = Budget::new_credit("b1".to_string(), "Test".to_string(), 1000.0, None, BudgetEnforcement::Block);
-
-    let repo = orca::repositories::BudgetRepository::new(db);
-    repo.create(budget.clone())
+    let budget_input = Budget::new_credit("b1".to_string(), "Test".to_string(), 1000.0, None, BudgetEnforcement::Block);
+    let budget = repo.create(budget_input)
         .await
         .expect("Failed to create budget");
 

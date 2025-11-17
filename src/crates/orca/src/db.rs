@@ -175,6 +175,22 @@ impl Database {
         db.run_migrations().await?;
         Ok(db)
     }
+
+    /// Create an in-memory test database with migrations applied
+    pub async fn test_in_memory() -> Result<Self> {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(5)
+            .connect("sqlite::memory:")
+            .await
+            .map_err(|e| OrcaError::Database(format!("Failed to connect to in-memory database: {}", e)))?;
+
+        let db = Self {
+            pool: Arc::new(pool),
+        };
+
+        db.run_migrations().await?;
+        Ok(db)
+    }
 }
 
 #[cfg(test)]

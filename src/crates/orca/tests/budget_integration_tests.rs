@@ -4,7 +4,6 @@ mod common;
 
 use orca::models::{Budget, BudgetEnforcement, BudgetType, RenewalInterval};
 use orca::repositories::BudgetRepository;
-use std::sync::Arc;
 
 #[tokio::test]
 async fn test_budget_create_and_retrieve() {
@@ -12,9 +11,9 @@ async fn test_budget_create_and_retrieve() {
     let repo = BudgetRepository::new(db);
 
     // Create a new credit budget
-    let budget = Budget::new_credit("budget-1".to_string(), "Test Budget".to_string(), 1000.0, None, BudgetEnforcement::Warn);
+    let budget_input = Budget::new_credit("budget-1".to_string(), "Test Budget".to_string(), 1000.0, None, BudgetEnforcement::Warn);
 
-    repo.create(budget.clone())
+    let budget = repo.create(budget_input)
         .await
         .expect("Failed to create budget");
 
@@ -35,9 +34,9 @@ async fn test_budget_get_by_name() {
     let (_temp, db) = common::setup_test_db().await;
     let repo = BudgetRepository::new(db);
 
-    let budget = Budget::new_credit("budget-1".to_string(), "Api Budget".to_string(), 500.0, None, BudgetEnforcement::Block);
+    let budget_input = Budget::new_credit("budget-1".to_string(), "Api Budget".to_string(), 500.0, None, BudgetEnforcement::Block);
 
-    repo.create(budget.clone())
+    let budget = repo.create(budget_input)
         .await
         .expect("Failed to create budget");
 
@@ -77,9 +76,9 @@ async fn test_budget_update() {
     let (_temp, db) = common::setup_test_db().await;
     let repo = BudgetRepository::new(db);
 
-    let mut budget = Budget::new_credit("b1".to_string(), "Original".to_string(), 1000.0, None, BudgetEnforcement::Warn);
+    let budget_input = Budget::new_credit("b1".to_string(), "Original".to_string(), 1000.0, None, BudgetEnforcement::Warn);
 
-    repo.create(budget.clone())
+    let mut budget = repo.create(budget_input)
         .await
         .expect("Failed to create budget");
 
@@ -107,9 +106,9 @@ async fn test_budget_delete() {
     let (_temp, db) = common::setup_test_db().await;
     let repo = BudgetRepository::new(db);
 
-    let budget = Budget::new_credit("b1".to_string(), "ToDelete".to_string(), 100.0, None, BudgetEnforcement::Warn);
+    let budget_input = Budget::new_credit("b1".to_string(), "ToDelete".to_string(), 100.0, None, BudgetEnforcement::Warn);
 
-    repo.create(budget.clone())
+    let budget = repo.create(budget_input)
         .await
         .expect("Failed to create budget");
 
@@ -132,9 +131,9 @@ async fn test_budget_activate() {
     let (_temp, db) = common::setup_test_db().await;
     let repo = BudgetRepository::new(db);
 
-    let budget = Budget::new_credit("b1".to_string(), "ToActivate".to_string(), 100.0, None, BudgetEnforcement::Warn);
+    let budget_input = Budget::new_credit("b1".to_string(), "ToActivate".to_string(), 100.0, None, BudgetEnforcement::Warn);
 
-    repo.create(budget.clone())
+    let budget = repo.create(budget_input)
         .await
         .expect("Failed to create budget");
 
@@ -159,7 +158,7 @@ async fn test_recurring_budget_creation() {
     let (_temp, db) = common::setup_test_db().await;
     let repo = BudgetRepository::new(db);
 
-    let budget = Budget::new_recurring(
+    let budget_input = Budget::new_recurring(
         "recurring-1".to_string(),
         "Monthly Budget".to_string(),
         RenewalInterval::Months,
@@ -167,7 +166,7 @@ async fn test_recurring_budget_creation() {
         BudgetEnforcement::Warn,
     );
 
-    repo.create(budget.clone())
+    let budget = repo.create(budget_input)
         .await
         .expect("Failed to create recurring budget");
 
@@ -187,9 +186,9 @@ async fn test_budget_track_usage() {
     let (_temp, db) = common::setup_test_db().await;
     let repo = BudgetRepository::new(db);
 
-    let budget = Budget::new_credit("b1".to_string(), "Usage Test".to_string(), 100.0, None, BudgetEnforcement::Warn);
+    let budget_input = Budget::new_credit("b1".to_string(), "Usage Test".to_string(), 100.0, None, BudgetEnforcement::Warn);
 
-    repo.create(budget.clone())
+    let budget = repo.create(budget_input)
         .await
         .expect("Failed to create budget");
 
@@ -218,9 +217,9 @@ async fn test_budget_remaining_calculation() {
     let (_temp, db) = common::setup_test_db().await;
     let repo = BudgetRepository::new(db);
 
-    let mut budget = Budget::new_credit("b1".to_string(), "Calc Test".to_string(), 100.0, None, BudgetEnforcement::Warn);
+    let budget_input = Budget::new_credit("b1".to_string(), "Calc Test".to_string(), 100.0, None, BudgetEnforcement::Warn);
 
-    repo.create(budget.clone())
+    let budget = repo.create(budget_input)
         .await
         .expect("Failed to create budget");
 
@@ -243,9 +242,9 @@ async fn test_budget_reset_usage() {
     let (_temp, db) = common::setup_test_db().await;
     let repo = BudgetRepository::new(db);
 
-    let budget = Budget::new_credit("b1".to_string(), "Reset Test".to_string(), 100.0, None, BudgetEnforcement::Warn);
+    let budget_input = Budget::new_credit("b1".to_string(), "Reset Test".to_string(), 100.0, None, BudgetEnforcement::Warn);
 
-    repo.create(budget.clone())
+    let budget = repo.create(budget_input)
         .await
         .expect("Failed to create budget");
 

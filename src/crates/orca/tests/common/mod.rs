@@ -3,28 +3,20 @@
 use orca::db::Database;
 use orca::DatabaseManager;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use tempfile::TempDir;
 
-static TEST_DB_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-/// Create a test database with a unique name
+/// Create a test database with a unique in-memory instance
 pub async fn setup_test_db() -> (TempDir, Arc<Database>) {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
 
-    // Create a unique database name to avoid conflicts
-    let counter = TEST_DB_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let db_name = format!("test_{}.db", counter);
-    let db_path = temp_dir.path().join(&db_name);
+    // Use in-memory database for testing - much simpler and more reliable
+    let db = Arc::new(
+        Database::test_in_memory()
+            .await
+            .expect("Failed to create test database"),
+    );
 
-    // Create parent directory
-    std::fs::create_dir_all(temp_dir.path()).expect("Failed to create temp dir");
-
-    let db = Database::new(db_path.to_str().unwrap())
-        .await
-        .expect("Failed to create test database");
-
-    (temp_dir, Arc::new(db))
+    (temp_dir, db)
 }
 
 /// Create a test DatabaseManager with a unique directory
