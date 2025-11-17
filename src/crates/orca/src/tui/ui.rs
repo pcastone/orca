@@ -241,25 +241,56 @@ fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
 /// Render status bar
 fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let tokens_str = app.tokens_used.to_string();
-    let status_parts = vec![
-        ("Status", "Ready"),
-        ("Model", app.current_model.as_str()),
-        ("Runtime", app.runtime.as_str()),
-        ("Tokens", tokens_str.as_str()),
+    let mut status_parts: Vec<(&str, String)> = vec![
+        ("Status", "Ready".to_string()),
+        ("Model", app.current_model.clone()),
+        ("Runtime", app.runtime.clone()),
+        ("Tokens", tokens_str),
     ];
 
-    let mut status_text = String::new();
-    for (label, value) in status_parts {
-        status_text.push_str(&format!("{}: \"{}\" | ", label, value));
-    }
-    if status_text.ends_with(" | ") {
-        status_text.pop();
-        status_text.pop();
-        status_text.pop();
+    // Add budget information if active
+    if let Some(ref budget) = app.active_budget {
+        let budget_info = if let Some(remaining) = app.budget_remaining {
+            format!("{} ({:.1}% used, ${:.2} left)", budget, app.budget_usage, remaining)
+        } else {
+            format!("{} ({:.1}% used)", budget, app.budget_usage)
+        };
+        status_parts.push(("Budget", budget_info));
     }
 
+    // Add LLM profile information if configured
+    if let Some(ref profile) = app.llm_profile {
+        let llm_info = if let (Some(ref planner), Some(ref worker)) = (&app.planner_llm, &app.worker_llm) {
+            format!("{} (P:{} W:{})", profile,
+                planner.split(':').nth(1).unwrap_or("?"),
+                worker.split(':').nth(1).unwrap_or("?"))
+        } else {
+            profile.clone()
+        };
+        status_parts.push(("LLM Profile", llm_info));
+    }
+
+    let mut status_text = String::new();
+    for (i, (label, value)) in status_parts.iter().enumerate() {
+        status_text.push_str(&format!("{}: \"{}\"", label, value));
+        if i < status_parts.len() - 1 {
+            status_text.push_str(" | ");
+        }
+    }
+
+    // Color code the status bar based on budget status
+    let bar_style = if app.active_budget.is_some() {
+        match app.budget_status.as_str() {
+            "Budget exceeded" => Style::default().bg(Color::Red).fg(Color::White).bold(),
+            "Budget near limit" => Style::default().bg(Color::Yellow).fg(Color::Black).bold(),
+            _ => Style::default().bg(Color::Black).fg(Color::DarkGray),
+        }
+    } else {
+        Style::default().bg(Color::Black).fg(Color::DarkGray)
+    };
+
     let status = Paragraph::new(status_text)
-        .style(Style::default().bg(Color::Black).fg(Color::DarkGray))
+        .style(bar_style)
         .alignment(Alignment::Left);
 
     f.render_widget(status, area);
