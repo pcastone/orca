@@ -144,7 +144,7 @@ pub fn render_dialog(f: &mut Frame, dialog: &Dialog) {
     // Calculate dialog size based on content
     let title_len = dialog.title.len();
     let message_len = dialog.message.len();
-    let max_option_len = dialog.options.iter().map(|s| s.len()).max().unwrap_or(5);
+    let _max_option_len = dialog.options.iter().map(|s| s.len()).max().unwrap_or(5);
     let buttons_width = dialog.options.iter().map(|s| s.len() + 2).sum::<usize>() + (dialog.options.len() - 1) * 3;
 
     let width = std::cmp::max(
@@ -173,11 +173,19 @@ pub fn render_dialog(f: &mut Frame, dialog: &Dialog) {
     // Clear background
     f.render_widget(Clear, dialog_area);
 
-    // Render dialog box
+    // Render dialog box with color-coded border
+    let (border_color, icon) = match dialog.dialog_type {
+        DialogType::Information => (Color::Green, "ℹ"),
+        DialogType::Confirmation => (Color::Yellow, "?"),
+        DialogType::TextInput => (Color::Cyan, "✎"),
+        DialogType::SelectList => (Color::Blue, "◆"),
+    };
+
+    let title_with_icon = format!("{} {}", icon, dialog.title);
     let block = Block::default()
-        .title(dialog.title.as_str())
+        .title(title_with_icon)
         .borders(Borders::ALL)
-        .style(Style::default().fg(Color::Cyan));
+        .style(Style::default().fg(border_color).bold());
 
     f.render_widget(block, dialog_area);
 
@@ -213,9 +221,10 @@ fn render_info_dialog(f: &mut Frame, dialog: &Dialog, area: Rect) {
         .wrap(Wrap { trim: true });
     f.render_widget(message, chunks[0]);
 
-    // OK button
-    let ok_button = Paragraph::new("  [OK]  ")
-        .style(Style::default().bg(Color::Blue).fg(Color::White));
+    // OK button with styling
+    let ok_button = Paragraph::new("  [ OK ]  ")
+        .style(Style::default().bg(Color::Green).fg(Color::Black).bold())
+        .alignment(Alignment::Center);
     f.render_widget(ok_button, chunks[1]);
 }
 
@@ -235,21 +244,26 @@ fn render_confirmation_dialog(f: &mut Frame, dialog: &Dialog, area: Rect) {
         .wrap(Wrap { trim: true });
     f.render_widget(message, chunks[0]);
 
-    // Buttons
-    let mut button_text = String::new();
+    // Buttons with color-coded selected state
+    let mut spans = Vec::new();
     for (idx, option) in dialog.options.iter().enumerate() {
         if idx > 0 {
-            button_text.push_str("   ");
+            spans.push(Span::raw("   "));
         }
         if idx == dialog.selected_index {
-            button_text.push_str(&format!("[{}]", option));
+            spans.push(Span::styled(
+                format!("[{}]", option),
+                Style::default().bg(Color::Yellow).fg(Color::Black).bold(),
+            ));
         } else {
-            button_text.push_str(&format!(" {} ", option));
+            spans.push(Span::styled(
+                format!(" {} ", option),
+                Style::default().fg(Color::White),
+            ));
         }
     }
 
-    let buttons = Paragraph::new(button_text)
-        .style(Style::default().fg(Color::White))
+    let buttons = Paragraph::new(Line::from(spans))
         .alignment(Alignment::Center);
     f.render_widget(buttons, chunks[1]);
 }
@@ -291,21 +305,26 @@ fn render_text_input_dialog(f: &mut Frame, dialog: &Dialog, area: Rect) {
     // Spacer
     f.render_widget(Paragraph::new(""), chunks[2]);
 
-    // Buttons
-    let mut button_text = String::new();
+    // Buttons with color-coded selected state
+    let mut spans = Vec::new();
     for (idx, option) in dialog.options.iter().enumerate() {
         if idx > 0 {
-            button_text.push_str("   ");
+            spans.push(Span::raw("   "));
         }
         if idx == dialog.selected_index {
-            button_text.push_str(&format!("[{}]", option));
+            spans.push(Span::styled(
+                format!("[{}]", option),
+                Style::default().bg(Color::Cyan).fg(Color::Black).bold(),
+            ));
         } else {
-            button_text.push_str(&format!(" {} ", option));
+            spans.push(Span::styled(
+                format!(" {} ", option),
+                Style::default().fg(Color::White),
+            ));
         }
     }
 
-    let buttons = Paragraph::new(button_text)
-        .style(Style::default().fg(Color::White))
+    let buttons = Paragraph::new(Line::from(spans))
         .alignment(Alignment::Center);
     f.render_widget(buttons, chunks[3]);
 }

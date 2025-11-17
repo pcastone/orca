@@ -302,12 +302,38 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
         status_parts.push(("LLM Profile", llm_info));
     }
 
-    let mut status_text = String::new();
+    // Build status bar with colored spans
+    let mut spans = Vec::new();
+
     for (i, (label, value)) in status_parts.iter().enumerate() {
-        status_text.push_str(&format!("{}: \"{}\"", label, value));
-        if i < status_parts.len() - 1 {
-            status_text.push_str(" | ");
+        if i > 0 {
+            spans.push(Span::raw(" | "));
         }
+
+        // Color code labels based on content
+        let label_color = match *label {
+            "Status" => Color::Cyan,
+            "Model" => Color::Magenta,
+            "Runtime" => Color::Blue,
+            "Tokens" => Color::Green,
+            "Budget" => {
+                if app.budget_status.as_str() == "Budget exceeded" {
+                    Color::Red
+                } else if app.budget_status.as_str() == "Budget near limit" {
+                    Color::Yellow
+                } else {
+                    Color::Green
+                }
+            }
+            "LLM Profile" => Color::Cyan,
+            _ => Color::White,
+        };
+
+        spans.push(Span::styled(
+            format!("{}: ", label),
+            Style::default().fg(label_color).bold(),
+        ));
+        spans.push(Span::raw(format!("\"{}\"", value)));
     }
 
     // Color code the status bar based on budget status
@@ -321,7 +347,7 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
         Style::default().bg(Color::Black).fg(Color::DarkGray)
     };
 
-    let status = Paragraph::new(status_text)
+    let status = Paragraph::new(Line::from(spans))
         .style(bar_style)
         .alignment(Alignment::Left);
 
