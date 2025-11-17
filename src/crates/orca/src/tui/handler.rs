@@ -323,7 +323,23 @@ fn execute_menu_action(action: &str, app: &mut App) {
             app.close_menu();
         }
         "config_editor" => {
-            let dialog = super::dialog::Dialog::info("Editor", "External editor coming soon...");
+            // Check for EDITOR environment variable
+            let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
+            let config_file = if std::path::Path::new("./.orca/orca.toml").exists() {
+                "./.orca/orca.toml (project)"
+            } else {
+                "~/.orca/orca.toml (user)"
+            };
+
+            let msg = format!(
+                "Open configuration file in external editor:\n\n\
+                Editor: {}\n\
+                Config file: {}\n\n\
+                Close editor to return to Orca.",
+                editor,
+                config_file
+            );
+            let dialog = super::dialog::Dialog::info("Open Editor", msg);
             app.show_dialog(dialog);
             app.close_menu();
         }
