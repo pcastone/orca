@@ -56,6 +56,7 @@ pub mod models;
 pub mod pattern;
 pub mod repositories;
 pub mod router;
+pub mod services;
 pub mod shutdown;
 pub mod tools;
 pub mod version;

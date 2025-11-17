@@ -14,8 +14,12 @@ mod adapter;
 mod llm_provider;
 mod task_executor;
 pub mod retry;
+pub mod budget_tracked_llm;
+pub mod multi_llm_provider;
 
 pub use adapter::ToolAdapter;
 pub use llm_provider::{LlmProvider, create_llm_function};
 pub use task_executor::{TaskExecutor, ExecutionResult};
 pub use retry::{RetryConfig, with_retry};
+pub use budget_tracked_llm::BudgetTrackedLlm;
+pub use multi_llm_provider::{MultiLlmProvider, BudgetTrackedMultiLlmProvider};

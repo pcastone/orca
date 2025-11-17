@@ -34,6 +34,15 @@ pub enum OrcaError {
     /// Feature not yet implemented
     NotImplemented(String),
 
+    /// Not found error
+    NotFound(String),
+
+    /// Budget exceeded error
+    BudgetExceeded(String),
+
+    /// LLM error
+    LlmError(String),
+
     /// IO error
     Io(std::io::Error),
 
@@ -60,6 +69,9 @@ impl fmt::Display for OrcaError {
                 write!(f, "Task {} timed out after {} seconds", task_id, duration_secs)
             }
             Self::NotImplemented(msg) => write!(f, "Not implemented: {}", msg),
+            Self::NotFound(msg) => write!(f, "Not found: {}", msg),
+            Self::BudgetExceeded(msg) => write!(f, "Budget exceeded: {}", msg),
+            Self::LlmError(msg) => write!(f, "LLM error: {}", msg),
             Self::Io(err) => write!(f, "IO error: {}", err),
             Self::Serde(err) => write!(f, "Serialization error: {}", err),
             Self::Sqlx(err) => write!(f, "SQL error: {}", err),
