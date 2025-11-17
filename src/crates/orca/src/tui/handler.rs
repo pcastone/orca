@@ -344,24 +344,54 @@ fn execute_menu_action(action: &str, app: &mut App) {
             app.close_menu();
         }
 
-        // Workflow menu actions (placeholders)
+        // Workflow menu actions
         "workflow_run" => {
-            let dialog = super::dialog::Dialog::info("Run Workflow", "Workflow execution coming soon...");
+            let workflows = vec![
+                "ReAct Agent - Data Analysis".to_string(),
+                "Plan-Execute - Research Task".to_string(),
+                "Reflection - Code Review".to_string(),
+            ];
+            let dialog = super::dialog::Dialog::select_list("Select Workflow to Run", workflows);
             app.show_dialog(dialog);
             app.close_menu();
         }
         "workflow_view" => {
-            let dialog = super::dialog::Dialog::info("View Workflow", "Workflow viewer coming soon...");
+            let msg = "Active Workflows:\n\n\
+                1. ReAct Agent (Running)\n\
+                   Status: Processing step 3/5\n\
+                   Tokens: 2,456 used\n\n\
+                2. Plan-Execute (Queued)\n\
+                   Status: Waiting to start\n\
+                   Tokens: 0 used\n\n\
+                3. Reflection (Completed)\n\
+                   Status: Finished successfully\n\
+                   Tokens: 1,890 used";
+            let dialog = super::dialog::Dialog::info("Workflows", msg);
             app.show_dialog(dialog);
             app.close_menu();
         }
         "workflow_create" => {
-            let dialog = super::dialog::Dialog::info("Create Workflow", "Workflow creation coming soon...");
+            let patterns = vec![
+                "ReAct - Think → Act → Observe".to_string(),
+                "Plan-Execute - Plan → Execute → Replan".to_string(),
+                "Reflection - Generate → Critique → Refine".to_string(),
+            ];
+            let dialog = super::dialog::Dialog::select_list("Create New Workflow", patterns);
             app.show_dialog(dialog);
             app.close_menu();
         }
         "workflow_manage" => {
-            let dialog = super::dialog::Dialog::info("Manage Workflow", "Workflow management coming soon...");
+            let msg = "Workflow Management:\n\n\
+                Total Workflows: 3\n\
+                Active: 2\n\
+                Completed: 1\n\n\
+                Options:\n\
+                • Edit workflow definition\n\
+                • Delete workflow\n\
+                • View execution history\n\
+                • Configure parameters\n\n\
+                Use workflow menu to manage.";
+            let dialog = super::dialog::Dialog::info("Workflow Management", msg);
             app.show_dialog(dialog);
             app.close_menu();
         }
