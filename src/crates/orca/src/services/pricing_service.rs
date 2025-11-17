@@ -4,7 +4,7 @@ use crate::db::Database;
 use crate::error::{OrcaError, Result};
 use crate::models::{LlmPricing, default_pricing};
 use chrono::Utc;
-use sqlx::{Row, FromRow};
+use sqlx::Row;
 use std::sync::Arc;
 use uuid::Uuid;
 

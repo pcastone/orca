@@ -4,8 +4,7 @@ use crate::db::Database;
 use crate::error::{OrcaError, Result};
 use crate::models::LlmProfile;
 use chrono::Utc;
-use sqlx::sqlite::SqliteRow;
-use sqlx::{Row, FromRow};
+use sqlx::Row;
 use std::sync::Arc;
 use uuid::Uuid;
 

@@ -4,7 +4,6 @@ use crate::config::OrcaConfig;
 use crate::error::Result;
 use crate::models::LlmProfile;
 use crate::executor::llm_provider::LlmProvider;
-use crate::repositories::BudgetRepository;
 use crate::services::{BudgetService, PricingService};
 use std::sync::Arc;
 use tracing::debug;

@@ -1,7 +1,7 @@
 //! Budget service for managing budgets, enforcing limits, and tracking usage
 
 use crate::error::{OrcaError, Result};
-use crate::models::{Budget, BudgetEnforcement, BudgetType, RenewalInterval};
+use crate::models::{BudgetEnforcement, BudgetType};
 use crate::repositories::BudgetRepository;
 use chrono::Utc;
 use std::sync::Arc;

@@ -3,7 +3,9 @@
 //! Provides command handlers for the orca CLI binary.
 
 pub mod bug;
+pub mod budget;
 pub mod config;
+pub mod llm_profile;
 pub mod rule;
 pub mod task;
 pub mod workflow;
