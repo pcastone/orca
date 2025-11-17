@@ -26,6 +26,20 @@ impl InputHandler {
                 app.prev_focus();
             }
 
+            // PROMPTS AREA: Check prompts first to avoid conflicts
+            KeyCode::Left if app.focused == FocusedArea::Prompts => {
+                app.prompt_cursor_left();
+            }
+            KeyCode::Right if app.focused == FocusedArea::Prompts => {
+                app.prompt_cursor_right();
+            }
+            KeyCode::Char(c) if app.focused == FocusedArea::Prompts => {
+                app.add_prompt_char(c);
+            }
+            KeyCode::Backspace if app.focused == FocusedArea::Prompts => {
+                app.backspace_prompt();
+            }
+
             // Arrow keys and vim navigation
             KeyCode::Up | KeyCode::Char('k') => {
                 match app.focused {
@@ -74,33 +88,26 @@ impl InputHandler {
                 }
             }
 
-            // Sidebar tab navigation with left/right or h/l
-            KeyCode::Left | KeyCode::Char('h') => {
-                if app.focused == FocusedArea::Sidebar {
-                    app.prev_tab();
-                }
+            // Sidebar tab navigation (only for sidebar)
+            KeyCode::Char('h') if app.focused == FocusedArea::Sidebar => {
+                app.prev_tab();
             }
-            KeyCode::Right | KeyCode::Char('l') => {
-                if app.focused == FocusedArea::Sidebar {
-                    app.next_tab();
-                }
+            KeyCode::Char('l') if app.focused == FocusedArea::Sidebar => {
+                app.next_tab();
             }
 
-            // Text input in prompts area
-            KeyCode::Char(c) if app.focused == FocusedArea::Prompts => {
-                app.prompt_input.push(c);
-            }
-            KeyCode::Backspace if app.focused == FocusedArea::Prompts => {
-                app.prompt_input.pop();
+            // Newline in prompt (max 3 lines)
+            KeyCode::Enter if app.focused == FocusedArea::Prompts => {
+                app.newline_prompt();
             }
 
-            // Actions
-            KeyCode::Enter => {
-                if app.focused == FocusedArea::Prompts && !app.prompt_input.is_empty() {
-                    let prompt = app.prompt_input.clone();
-                    app.add_message(format!("You: {}", prompt));
-                    app.add_history(prompt.clone());
-                    app.prompt_input.clear();
+            // Submit prompt with Ctrl+Enter
+            KeyCode::Enter if key_event.modifiers.contains(KeyModifiers::CONTROL) && app.focused == FocusedArea::Prompts => {
+                let prompt_text = app.get_prompt_text();
+                if !prompt_text.trim().is_empty() {
+                    app.add_message(format!("You:\n{}", prompt_text));
+                    app.add_history(prompt_text);
+                    app.clear_prompt();
                 }
             }
 

@@ -1,0 +1,82 @@
+# Create Feature Branch Workflow
+# Pattern: ReAct (Reasoning + Acting)
+# Purpose: Create and switch to a new git branch
+# Complexity: Low
+# Use Cases:
+# - Start new feature development
+# - Create bugfix branches
+# - Isolate experimental work
+# - Follow git-flow workflow
+
+id: "git_create_branch"
+description: "Create and switch to a new feature or bugfix branch"
+
+steps:
+  - name: "create_and_checkout"
+    pattern: "react_1"
+    config:
+      # Simple workflow, few iterations needed
+      max_iterations: 4
+
+      # Git tools only
+      tools:
+        - git_status
+        - git_checkout
+
+      # System prompt for branch creation
+      system_prompt: |
+        You are a git workflow assistant.
+
+        Task: Create and switch to a new branch for development.
+
+        Workflow:
+        1. Check current git status
+        2. Ensure working directory is clean
+        3. Create and switch to new branch
+
+        Branch Naming Conventions:
+        - feature/description - for new features
+        - bugfix/description - for bug fixes
+        - hotfix/description - for urgent production fixes
+        - refactor/description - for refactoring work
+        - docs/description - for documentation
+        - test/description - for test additions
+
+        Guidelines:
+        - Use lowercase with hyphens
+        - Be descriptive but concise
+        - Include issue number if applicable (feature/123-add-auth)
+
+        Safety Checks:
+        - Verify working directory is clean (no uncommitted changes)
+        - If there are uncommitted changes, warn the user
+        - Suggest committing or stashing changes first
+
+        Steps:
+        1. Run git_status to check for uncommitted changes
+        2. If clean, create branch with git_checkout
+        3. If not clean, inform user and suggest actions
+
+        Output:
+        - Confirm branch creation
+        - Show current branch name
+        - Note any uncommitted changes
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+# Settings for branch creation
+settings:
+  max_total_steps: 6
+  enable_retries: true
+  max_retries: 1
+  timeout: 30  # 30 seconds
+
+# Usage Examples:
+# aco workflow execute git_create_branch --input "Create branch for adding authentication"
+# aco workflow execute git_create_branch --input "Create feature branch for API refactoring"
+# aco workflow execute git_create_branch --input "Create bugfix branch for login issue"
+# aco workflow execute git_create_branch --input "Create branch feature/user-dashboard"

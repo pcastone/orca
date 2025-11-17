@@ -1,0 +1,175 @@
+# Prepare Pull Request Workflow
+# Pattern: Plan-Execute (Systematic PR preparation)
+# Purpose: Ensure code is ready for pull request
+# Complexity: Medium
+# Use Cases:
+# - Prepare code for review
+# - Run quality checks before PR
+# - Ensure tests pass
+# - Verify formatting and linting
+
+id: "git_prepare_pr"
+description: "Prepare code for pull request by running quality checks, tests, and formatting"
+
+steps:
+  - name: "quality_checks"
+    pattern: "plan_execute_1"
+    config:
+      # Multiple quality check steps
+      max_steps: 10
+
+      # Don't replan - these steps are deterministic
+      replanning_enabled: false
+
+      # Tools for quality checks
+      tools:
+        - shell_exec
+        - git_status
+        - git_diff
+
+      # Planner configuration
+      planner_config:
+        temperature: 0.3
+        system_prompt: |
+          Create a plan to prepare code for a pull request.
+
+          Quality Gate Checklist:
+          1. Check for uncommitted changes
+          2. Run code formatter
+          3. Run linter
+          4. Run all tests
+          5. Check build passes
+          6. Review git diff
+          7. Verify no debug code or TODOs
+
+          Create a systematic plan covering all quality checks.
+
+      # Executor configuration
+      executor_config:
+        temperature: 0.2
+        system_prompt: |
+          Execute quality checks before pull request.
+
+          For each check:
+          1. Run the check command
+          2. Analyze output
+          3. Report pass/fail status
+          4. If fail, note specific issues
+
+          Common Commands (Rust):
+          - cargo fmt --check (formatting)
+          - cargo clippy -- -D warnings (linting)
+          - cargo test (tests)
+          - cargo build --release (build)
+
+          Common Commands (Other):
+          - npm run lint
+          - npm test
+          - python -m black --check .
+          - python -m pytest
+
+          Report Format:
+          ✓ Formatting: PASS
+          ✓ Linting: PASS
+          ✗ Tests: FAIL (2 tests failed)
+          ✓ Build: PASS
+
+    on_success: "pr_ready"
+
+    on_failure: "fix_issues"
+
+  # If all checks pass, confirm ready for PR
+  - name: "pr_ready"
+    pattern: "react_1"
+    config:
+      max_iterations: 2
+      tools:
+        - git_status
+        - git_diff
+
+      system_prompt: |
+        All quality checks passed! Summarize what's ready for PR:
+
+        1. Show changed files (git status)
+        2. Summarize changes (git diff stats)
+        3. Confirm all checks passed
+        4. Provide next steps for creating PR
+
+        Output Format:
+        ```
+        ✅ Code Ready for Pull Request
+
+        Changed Files:
+        - src/file1.rs (modified)
+        - src/file2.rs (added)
+
+        Quality Checks:
+        ✓ Formatting
+        ✓ Linting
+        ✓ Tests (X passing)
+        ✓ Build
+
+        Next Steps:
+        1. Push branch to remote
+        2. Create PR on GitHub/GitLab
+        3. Add description and reviewers
+        ```
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+  # If checks fail, report issues
+  - name: "fix_issues"
+    pattern: "react_1"
+    config:
+      max_iterations: 2
+      tools:
+        - shell_exec
+
+      system_prompt: |
+        Quality checks failed. Summarize issues found:
+
+        1. List which checks failed
+        2. Show specific error messages
+        3. Suggest fixes for each issue
+
+        DO NOT attempt to fix automatically - just report.
+
+        Output Format:
+        ```
+        ❌ Not Ready for PR - Issues Found
+
+        Failed Checks:
+        ✗ Tests: 2 tests failing
+          - test_user_login: assertion failed
+          - test_api_endpoint: connection refused
+
+        ✗ Linting: 5 warnings
+          - unused import in src/main.rs:10
+          - unused variable in src/api.rs:42
+
+        Recommended Actions:
+        1. Fix failing tests
+        2. Remove unused imports
+        3. Re-run this workflow to verify
+        ```
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+# Settings for PR preparation
+settings:
+  max_total_steps: 15
+  enable_retries: false  # Don't retry failed tests
+  timeout: 600  # 10 minutes for all checks
+
+# Usage Examples:
+# aco workflow execute git_prepare_pr --input "Check if code is ready for PR"
+# aco workflow execute git_prepare_pr --input "Run all quality checks before submitting"
+# aco workflow execute git_prepare_pr --input "Verify tests, linting, and formatting"

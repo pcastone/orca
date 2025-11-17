@@ -1,0 +1,38 @@
+# SQL Validation Workflow
+id: "sql_validate"
+description: "Validate SQL syntax"
+
+steps:
+  - name: "validate_sql"
+    pattern: "react_1"
+    config:
+      max_iterations: 4
+      tools: [shell_exec, file_read]
+      system_prompt: |
+        Validate SQL syntax.
+
+        Methods:
+        ```bash
+        # PostgreSQL
+        psql -d dbname --dry-run -f query.sql
+
+        # MySQL
+        mysql -u user --execute="source query.sql" --batch
+
+        # SQLite
+        sqlite3 -bail :memory: < query.sql
+
+        # sqlfluff
+        sqlfluff lint query.sql
+        ```
+
+        Check syntax, report errors
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 6
+  timeout: 120

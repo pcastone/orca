@@ -37,7 +37,9 @@ pub struct App {
 
     // Left side: conversation and prompts
     pub conversation: VecDeque<String>,
-    pub prompt_input: String,
+    pub prompt_lines: Vec<String>,
+    pub prompt_cursor_line: usize,
+    pub prompt_cursor_col: usize,
     pub conversation_scroll: u16,
 
     // Right sidebar content
@@ -64,7 +66,9 @@ impl App {
             active_tab: SidebarTab::History,
             health_report: None,
             conversation: VecDeque::new(),
-            prompt_input: String::new(),
+            prompt_lines: vec![String::new()],
+            prompt_cursor_line: 0,
+            prompt_cursor_col: 0,
             conversation_scroll: 0,
             history: VecDeque::new(),
             todo_items: VecDeque::new(),
@@ -177,6 +181,75 @@ impl App {
     pub fn clear_conversation(&mut self) {
         self.conversation.clear();
         self.conversation_scroll = 0;
+    }
+
+    /// Get full prompt text
+    pub fn get_prompt_text(&self) -> String {
+        self.prompt_lines.join("\n")
+    }
+
+    /// Add character to prompt at cursor position
+    pub fn add_prompt_char(&mut self, c: char) {
+        if self.prompt_cursor_line < self.prompt_lines.len() {
+            self.prompt_lines[self.prompt_cursor_line].insert(self.prompt_cursor_col, c);
+            self.prompt_cursor_col += 1;
+        }
+    }
+
+    /// Remove character before cursor in prompt
+    pub fn backspace_prompt(&mut self) {
+        if self.prompt_cursor_line < self.prompt_lines.len() {
+            if self.prompt_cursor_col > 0 {
+                self.prompt_lines[self.prompt_cursor_line].remove(self.prompt_cursor_col - 1);
+                self.prompt_cursor_col -= 1;
+            } else if self.prompt_cursor_line > 0 {
+                // Move to end of previous line
+                let line = self.prompt_lines.remove(self.prompt_cursor_line);
+                self.prompt_cursor_line -= 1;
+                self.prompt_cursor_col = self.prompt_lines[self.prompt_cursor_line].len();
+                self.prompt_lines[self.prompt_cursor_line].push_str(&line);
+            }
+        }
+    }
+
+    /// Add newline in prompt (max 3 lines)
+    pub fn newline_prompt(&mut self) {
+        if self.prompt_lines.len() < 3 && self.prompt_cursor_line < self.prompt_lines.len() {
+            let rest = self.prompt_lines[self.prompt_cursor_line].split_off(self.prompt_cursor_col);
+            self.prompt_lines.insert(self.prompt_cursor_line + 1, rest);
+            self.prompt_cursor_line += 1;
+            self.prompt_cursor_col = 0;
+        }
+    }
+
+    /// Move cursor left
+    pub fn prompt_cursor_left(&mut self) {
+        if self.prompt_cursor_col > 0 {
+            self.prompt_cursor_col -= 1;
+        } else if self.prompt_cursor_line > 0 {
+            self.prompt_cursor_line -= 1;
+            self.prompt_cursor_col = self.prompt_lines[self.prompt_cursor_line].len();
+        }
+    }
+
+    /// Move cursor right
+    pub fn prompt_cursor_right(&mut self) {
+        if self.prompt_cursor_line < self.prompt_lines.len() {
+            let line_len = self.prompt_lines[self.prompt_cursor_line].len();
+            if self.prompt_cursor_col < line_len {
+                self.prompt_cursor_col += 1;
+            } else if self.prompt_cursor_line < self.prompt_lines.len() - 1 {
+                self.prompt_cursor_line += 1;
+                self.prompt_cursor_col = 0;
+            }
+        }
+    }
+
+    /// Clear prompt
+    pub fn clear_prompt(&mut self) {
+        self.prompt_lines = vec![String::new()];
+        self.prompt_cursor_line = 0;
+        self.prompt_cursor_col = 0;
     }
 }
 

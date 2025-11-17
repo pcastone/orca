@@ -58,7 +58,7 @@ fn render_left_side(f: &mut Frame, app: &App, area: Rect) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Min(5),     // Conversation
-            Constraint::Length(3),  // Prompts
+            Constraint::Length(6),  // Prompts (3 lines + 2 for borders + 1 padding)
         ])
         .split(area);
 
@@ -96,12 +96,12 @@ fn render_conversation(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(list, area);
 }
 
-/// Render prompts input area
+/// Render prompts input area (supports up to 3 lines)
 fn render_prompts(f: &mut Frame, app: &App, area: Rect) {
     let is_focused = matches!(app.focused, FocusedArea::Prompts);
 
     let block = Block::default()
-        .title("Prompts")
+        .title("Prompts (Enter for newline, Ctrl+Enter to submit)")
         .borders(Borders::ALL)
         .style(if is_focused {
             Style::default().fg(Color::Cyan).bold()
@@ -109,13 +109,30 @@ fn render_prompts(f: &mut Frame, app: &App, area: Rect) {
             Style::default()
         });
 
-    let input_text = if is_focused {
-        format!("{}_", app.prompt_input)  // Show cursor
-    } else {
-        app.prompt_input.clone()
-    };
+    // Build display text with cursor
+    let mut display_text = String::new();
+    for (line_idx, line) in app.prompt_lines.iter().enumerate() {
+        if line_idx > 0 {
+            display_text.push('\n');
+        }
 
-    let paragraph = Paragraph::new(input_text)
+        if is_focused && line_idx == app.prompt_cursor_line {
+            // Insert cursor in the current line
+            display_text.push_str(&line[..app.prompt_cursor_col]);
+            display_text.push('│');
+            display_text.push_str(&line[app.prompt_cursor_col..]);
+        } else {
+            display_text.push_str(line);
+        }
+    }
+
+    // If in prompts and at end of last line, show cursor at end
+    if is_focused && app.prompt_cursor_line == app.prompt_lines.len() - 1
+        && app.prompt_cursor_col == app.prompt_lines[app.prompt_cursor_line].len() {
+        display_text.push('│');
+    }
+
+    let paragraph = Paragraph::new(display_text)
         .block(block)
         .style(Style::default().fg(Color::White))
         .wrap(Wrap { trim: true });

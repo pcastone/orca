@@ -1,0 +1,32 @@
+# SvelteKit Type Check Workflow
+id: "sveltekit_check"
+description: "Run svelte-check for type checking"
+
+steps:
+  - name: "check_sveltekit"
+    pattern: "react_1"
+    config:
+      max_iterations: 6
+      tools: [shell_exec, file_read, file_patch]
+      system_prompt: |
+        Run svelte-check for type and syntax checking.
+
+        Commands:
+        ```bash
+        npm run check
+        svelte-check --watch
+        svelte-check --threshold warning
+        ```
+
+        Check TypeScript, Svelte syntax, accessibility
+
+        Fix type errors, component props
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 10
+  timeout: 300
