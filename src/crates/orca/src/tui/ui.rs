@@ -355,14 +355,37 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
 }
 
 /// Get menu items for the currently open menu
-fn get_menu_items(menu_state: MenuState) -> Vec<&'static str> {
+fn get_menu_items(menu_state: MenuState) -> Vec<(&'static str, &'static str)> {
     match menu_state {
         MenuState::Closed => vec![],
-        MenuState::FileOpen => vec!["New", "Open", "Save", "Quit"],
-        MenuState::EditOpen => vec!["Clear", "Copy", "Preferences"],
-        MenuState::ConfigOpen => vec!["View Config", "Budget", "LLM Profile", "Editor"],
-        MenuState::WorkflowOpen => vec!["Run", "View", "Create", "Manage"],
-        MenuState::HelpOpen => vec!["About", "Shortcuts", "Documentation"],
+        MenuState::FileOpen => vec![
+            ("📄", "New"),
+            ("📂", "Open"),
+            ("💾", "Save"),
+            ("🚪", "Quit"),
+        ],
+        MenuState::EditOpen => vec![
+            ("🗑️", "Clear"),
+            ("📋", "Copy"),
+            ("⚙️", "Preferences"),
+        ],
+        MenuState::ConfigOpen => vec![
+            ("👁️", "View Config"),
+            ("💰", "Budget"),
+            ("🤖", "LLM Profile"),
+            ("✎", "Editor"),
+        ],
+        MenuState::WorkflowOpen => vec![
+            ("▶️", "Run"),
+            ("👀", "View"),
+            ("➕", "Create"),
+            ("🔧", "Manage"),
+        ],
+        MenuState::HelpOpen => vec![
+            ("ℹ️", "About"),
+            ("⌨️", "Shortcuts"),
+            ("📚", "Documentation"),
+        ],
     }
 }
 
@@ -378,7 +401,12 @@ fn render_dropdown_menu(f: &mut Frame, app: &App, menu_area: Rect) {
     }
 
     // Calculate popup size: width is max item length + 2, height is items count + 2
-    let popup_width = items.iter().map(|s| s.len()).max().unwrap_or(10) + 2;
+    let popup_width = items
+        .iter()
+        .map(|(icon, label)| icon.len() + label.len() + 1)
+        .max()
+        .unwrap_or(10)
+        + 2;
     let popup_height = items.len() as u16 + 2;
 
     // Position popup below menu bar
@@ -401,13 +429,13 @@ fn render_dropdown_menu(f: &mut Frame, app: &App, menu_area: Rect) {
     let list_items: Vec<ListItem> = items
         .iter()
         .enumerate()
-        .map(|(idx, item)| {
+        .map(|(idx, (icon, label))| {
             let style = if idx == app.menu_selected_index {
                 Style::default().bg(Color::Blue).fg(Color::White)
             } else {
                 Style::default().fg(Color::White)
             };
-            ListItem::new(*item).style(style)
+            ListItem::new(format!("{} {}", icon, label)).style(style)
         })
         .collect();
 
