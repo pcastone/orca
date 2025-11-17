@@ -44,7 +44,7 @@ pub fn render_ui(f: &mut Frame, app: &App) {
 
 /// Render the menu bar
 fn render_menu(f: &mut Frame, _app: &App, area: Rect) {
-    let menu_text = " File  Edit  View  Help ";
+    let menu_text = " File  Edit  Config  Workflow  Help ";
     let menu = Paragraph::new(menu_text)
         .style(Style::default().bg(Color::DarkGray).fg(Color::White))
         .alignment(Alignment::Left);
