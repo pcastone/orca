@@ -1,0 +1,32 @@
+# Fortran Test Workflow
+id: "fortran_test"
+description: "Run Fortran tests with pFUnit/FRUIT"
+
+steps:
+  - name: "run_fortran_tests"
+    pattern: "react_1"
+    config:
+      max_iterations: 6
+      tools: [shell_exec, file_read, grep]
+      system_prompt: |
+        Run Fortran unit tests.
+
+        Frameworks: pFUnit, FRUIT, custom harness
+
+        Commands:
+        ```bash
+        ./run_tests
+        make test
+        ctest  # if CMake
+        ```
+
+        Verify all tests pass, debug failures
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 10
+  timeout: 600

@@ -22,7 +22,6 @@ use ratatui::{
 };
 use std::io;
 use std::time::Duration;
-use tracing::info;
 
 /// Run the interactive TUI
 pub async fn run_tui(app: &mut App) -> Result<()> {
@@ -37,8 +36,6 @@ pub async fn run_tui(app: &mut App) -> Result<()> {
     terminal.draw(|f| {
         ui::render_ui(f, app);
     })?;
-
-    info!("TUI started");
 
     // Main event loop
     loop {
@@ -71,7 +68,6 @@ pub async fn run_tui(app: &mut App) -> Result<()> {
     )?;
     terminal.show_cursor()?;
 
-    info!("TUI closed");
     Ok(())
 }
 
