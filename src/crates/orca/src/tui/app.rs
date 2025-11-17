@@ -53,6 +53,17 @@ pub struct App {
     pub current_model: String,
     pub tokens_used: u32,
     pub runtime: String,
+
+    // Budget tracking
+    pub active_budget: Option<String>,
+    pub budget_usage: f64,
+    pub budget_remaining: Option<f64>,
+    pub budget_status: String,
+
+    // LLM profile tracking
+    pub llm_profile: Option<String>,
+    pub planner_llm: Option<String>,
+    pub worker_llm: Option<String>,
 }
 
 impl App {
@@ -78,6 +89,13 @@ impl App {
             current_model: "claude-3-5-sonnet".to_string(),
             tokens_used: 0,
             runtime: "0ms".to_string(),
+            active_budget: None,
+            budget_usage: 0.0,
+            budget_remaining: None,
+            budget_status: "No budget".to_string(),
+            llm_profile: None,
+            planner_llm: None,
+            worker_llm: None,
         }
     }
 
@@ -250,6 +268,47 @@ impl App {
         self.prompt_lines = vec![String::new()];
         self.prompt_cursor_line = 0;
         self.prompt_cursor_col = 0;
+    }
+
+    /// Set active budget and usage information
+    pub fn set_budget(&mut self, name: String, usage: f64, remaining: Option<f64>) {
+        self.active_budget = Some(name);
+        self.budget_usage = usage;
+        self.budget_remaining = remaining;
+        self.budget_status = if usage >= 100.0 {
+            "Budget exceeded".to_string()
+        } else if usage >= 80.0 {
+            "Budget near limit".to_string()
+        } else {
+            "Budget OK".to_string()
+        };
+    }
+
+    /// Clear active budget
+    pub fn clear_budget(&mut self) {
+        self.active_budget = None;
+        self.budget_usage = 0.0;
+        self.budget_remaining = None;
+        self.budget_status = "No budget".to_string();
+    }
+
+    /// Set LLM profile configuration
+    pub fn set_llm_profile(
+        &mut self,
+        profile_name: Option<String>,
+        planner: Option<String>,
+        worker: Option<String>,
+    ) {
+        self.llm_profile = profile_name;
+        self.planner_llm = planner;
+        self.worker_llm = worker;
+    }
+
+    /// Clear LLM profile configuration
+    pub fn clear_llm_profile(&mut self) {
+        self.llm_profile = None;
+        self.planner_llm = None;
+        self.worker_llm = None;
     }
 }
 
