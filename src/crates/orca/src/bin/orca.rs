@@ -44,6 +44,14 @@ enum Commands {
     /// Project rule management commands
     #[command(subcommand)]
     Rule(RuleCommands),
+
+    /// Budget management commands
+    #[command(subcommand)]
+    Budget(BudgetCommands),
+
+    /// LLM profile management commands
+    #[command(subcommand)]
+    LlmProfile(LlmProfileCommands),
 }
 
 #[derive(Subcommand)]
@@ -108,6 +116,112 @@ enum RuleCommands {
     Delete {
         /// Rule ID
         id: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum BudgetCommands {
+    /// Create a new budget
+    Create {
+        /// Budget name
+        name: String,
+        /// Budget type: recurring or credit
+        #[arg(short = 't', long)]
+        budget_type: String,
+        /// Renewal interval (days, weeks, months) - for recurring budgets
+        #[arg(short, long)]
+        interval: Option<String>,
+        /// Budget amount - for recurring interval count, for credit the amount
+        #[arg(short, long)]
+        amount: Option<f64>,
+        /// Credit cap (maximum amount) - for credit budgets
+        #[arg(short, long)]
+        cap: Option<f64>,
+        /// Enforcement mode: block or warn
+        #[arg(short, long)]
+        enforcement: Option<String>,
+    },
+    /// List all budgets
+    List,
+    /// Show budget details
+    Show {
+        /// Budget name
+        name: String,
+    },
+    /// Update a budget
+    Update {
+        /// Budget name
+        name: String,
+        /// New budget amount
+        #[arg(short, long)]
+        amount: Option<f64>,
+        /// New enforcement mode: block or warn
+        #[arg(short, long)]
+        enforcement: Option<String>,
+    },
+    /// Delete a budget
+    Delete {
+        /// Budget name
+        name: String,
+    },
+    /// Activate a budget
+    Activate {
+        /// Budget name
+        name: String,
+    },
+    /// Reset budget usage
+    Reset {
+        /// Budget name
+        name: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum LlmProfileCommands {
+    /// Create a new LLM profile
+    Create {
+        /// Profile name
+        name: String,
+        /// Planner LLM provider and model (format: provider:model)
+        #[arg(long)]
+        planner: String,
+        /// Worker LLM provider and model (format: provider:model)
+        #[arg(long)]
+        worker: String,
+        /// Profile description
+        #[arg(short, long)]
+        description: Option<String>,
+    },
+    /// List all LLM profiles
+    List,
+    /// Show LLM profile details
+    Show {
+        /// Profile name
+        name: String,
+    },
+    /// Update an LLM profile
+    Update {
+        /// Profile name
+        name: String,
+        /// New planner LLM (format: provider:model)
+        #[arg(long)]
+        planner: Option<String>,
+        /// New worker LLM (format: provider:model)
+        #[arg(long)]
+        worker: Option<String>,
+        /// New description
+        #[arg(short, long)]
+        description: Option<String>,
+    },
+    /// Delete an LLM profile
+    Delete {
+        /// Profile name
+        name: String,
+    },
+    /// Activate an LLM profile
+    Activate {
+        /// Profile name
+        name: String,
     },
 }
 
@@ -458,6 +572,93 @@ async fn main() -> anyhow::Result<()> {
                 }
                 RuleCommands::Delete { id } => {
                     orca::cli::rule::handle_delete(db_manager, id).await?;
+                }
+            }
+            Ok(())
+        }
+        Some(Commands::Budget(budget_cmd)) => {
+            // Check if initialized
+            if !orca::cli::is_initialized() {
+                eprintln!("{}", orca::cli::get_init_instructions());
+                return Err(anyhow::anyhow!("Orca not initialized"));
+            }
+
+            // Create database manager (workspace_root = current directory)
+            let db_manager = std::sync::Arc::new(
+                orca::DatabaseManager::new(".").await?
+            );
+
+            match budget_cmd {
+                BudgetCommands::Create { name, budget_type, interval, amount, cap, enforcement } => {
+                    orca::cli::budget::handle_create(db_manager, name, budget_type, interval, amount, cap, enforcement).await?;
+                }
+                BudgetCommands::List => {
+                    orca::cli::budget::handle_list(db_manager).await?;
+                }
+                BudgetCommands::Show { name } => {
+                    orca::cli::budget::handle_show(db_manager, name).await?;
+                }
+                BudgetCommands::Update { name, amount, enforcement } => {
+                    orca::cli::budget::handle_update(db_manager, name, amount, enforcement).await?;
+                }
+                BudgetCommands::Delete { name } => {
+                    orca::cli::budget::handle_delete(db_manager, name).await?;
+                }
+                BudgetCommands::Activate { name } => {
+                    orca::cli::budget::handle_activate(db_manager, name).await?;
+                }
+                BudgetCommands::Reset { name } => {
+                    orca::cli::budget::handle_reset(db_manager, name).await?;
+                }
+            }
+            Ok(())
+        }
+        Some(Commands::LlmProfile(profile_cmd)) => {
+            // Check if initialized
+            if !orca::cli::is_initialized() {
+                eprintln!("{}", orca::cli::get_init_instructions());
+                return Err(anyhow::anyhow!("Orca not initialized"));
+            }
+
+            // Create database manager (workspace_root = current directory)
+            let db_manager = std::sync::Arc::new(
+                orca::DatabaseManager::new(".").await?
+            );
+
+            match profile_cmd {
+                LlmProfileCommands::Create { name, planner, worker, description } => {
+                    // Parse planner
+                    let planner_parts: Vec<&str> = planner.split(':').collect();
+                    if planner_parts.len() != 2 {
+                        return Err(anyhow::anyhow!("Planner must be in format 'provider:model'"));
+                    }
+                    let (planner_provider, planner_model) = (planner_parts[0].to_string(), planner_parts[1].to_string());
+
+                    // Parse worker
+                    let worker_parts: Vec<&str> = worker.split(':').collect();
+                    if worker_parts.len() != 2 {
+                        return Err(anyhow::anyhow!("Worker must be in format 'provider:model'"));
+                    }
+                    let (worker_provider, worker_model) = (worker_parts[0].to_string(), worker_parts[1].to_string());
+
+                    orca::cli::llm_profile::handle_create(
+                        db_manager, name, planner_provider, planner_model, worker_provider, worker_model, description
+                    ).await?;
+                }
+                LlmProfileCommands::List => {
+                    orca::cli::llm_profile::handle_list(db_manager).await?;
+                }
+                LlmProfileCommands::Show { name } => {
+                    orca::cli::llm_profile::handle_show(db_manager, name).await?;
+                }
+                LlmProfileCommands::Update { name, planner, worker, description } => {
+                    orca::cli::llm_profile::handle_update(db_manager, name, planner, worker, description).await?;
+                }
+                LlmProfileCommands::Delete { name } => {
+                    orca::cli::llm_profile::handle_delete(db_manager, name).await?;
+                }
+                LlmProfileCommands::Activate { name } => {
+                    orca::cli::llm_profile::handle_activate(db_manager, name).await?;
                 }
             }
             Ok(())
