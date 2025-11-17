@@ -27,8 +27,8 @@ echo -e "${GREEN}✓ Clean complete${NC}"
 echo ""
 
 # Step 2: Build the project
-echo -e "${YELLOW}🏗️  Building Orca in release mode...${NC}"
-cargo build -p orca --release
+echo -e "${YELLOW}🏗️  Building all binaries in release mode...${NC}"
+cargo build -p orca -p aco -p orchestrator --release
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Build successful${NC}"
 else
@@ -49,17 +49,40 @@ mkdir -p "${RELEASE_BUILD_DIR}/docs"
 echo -e "${GREEN}✓ Directory structure created${NC}"
 echo ""
 
-# Step 4: Copy binary
+# Step 4: Copy binaries
 echo -e "${YELLOW}📋 Copying binaries...${NC}"
-BINARY_SRC="${PROJECT_ROOT}/target/release/orca"
-if [ -f "$BINARY_SRC" ]; then
-    cp "$BINARY_SRC" "${RELEASE_BUILD_DIR}/bin/"
+
+# Copy orca
+ORCA_SRC="${PROJECT_ROOT}/target/release/orca"
+if [ -f "$ORCA_SRC" ]; then
+    cp "$ORCA_SRC" "${RELEASE_BUILD_DIR}/bin/"
     chmod +x "${RELEASE_BUILD_DIR}/bin/orca"
-    echo -e "${GREEN}✓ Binary copied to ${RELEASE_BUILD_DIR}/bin/orca${NC}"
+    echo -e "${GREEN}✓ Binary copied: orca${NC}"
 else
-    echo -e "${RED}✗ Binary not found at $BINARY_SRC${NC}"
+    echo -e "${RED}✗ Orca binary not found${NC}"
     exit 1
 fi
+
+# Copy aco
+ACO_SRC="${PROJECT_ROOT}/target/release/aco"
+if [ -f "$ACO_SRC" ]; then
+    cp "$ACO_SRC" "${RELEASE_BUILD_DIR}/bin/"
+    chmod +x "${RELEASE_BUILD_DIR}/bin/aco"
+    echo -e "${GREEN}✓ Binary copied: aco${NC}"
+else
+    echo -e "${YELLOW}⚠ Aco binary not found${NC}"
+fi
+
+# Copy orchestrator
+ORCHESTRATOR_SRC="${PROJECT_ROOT}/target/release/orchestrator"
+if [ -f "$ORCHESTRATOR_SRC" ]; then
+    cp "$ORCHESTRATOR_SRC" "${RELEASE_BUILD_DIR}/bin/"
+    chmod +x "${RELEASE_BUILD_DIR}/bin/orchestrator"
+    echo -e "${GREEN}✓ Binary copied: orchestrator${NC}"
+else
+    echo -e "${YELLOW}⚠ Orchestrator binary not found${NC}"
+fi
+
 echo ""
 
 # Step 5: Copy templates
@@ -253,7 +276,7 @@ echo "Release Location: ${RELEASE_BUILD_DIR}"
 echo "Tarball: ${RELEASE_DIR}/${TARBALL_NAME}"
 echo ""
 echo "Contents:"
-echo "  • Binary: bin/orca"
+echo "  • Binaries: bin/orca, bin/aco, bin/orchestrator"
 echo "  • Configuration: config/orca.toml.sample"
 echo "  • Templates: templates/"
 echo "  • Workflows: workflows/"
@@ -262,11 +285,16 @@ echo "  • Documentation: docs/"
 echo "  • Version info: VERSION"
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
-echo "1. Quick access: ${RELEASE_DIR}/lastbuild/"
+echo "1. Quick access: ${RELEASE_DIR}/lastbuild/bin/"
 echo "2. Review and test the release in ${RELEASE_BUILD_DIR}"
 echo "3. Archive: tar -xzf ${RELEASE_DIR}/${TARBALL_NAME}"
-echo "4. Install: cp ${RELEASE_DIR}/lastbuild/bin/orca /usr/local/bin/"
+echo "4. Install binaries:"
+echo "   cp ${RELEASE_DIR}/lastbuild/bin/orca /usr/local/bin/"
+echo "   cp ${RELEASE_DIR}/lastbuild/bin/aco /usr/local/bin/"
+echo "   cp ${RELEASE_DIR}/lastbuild/bin/orchestrator /usr/local/bin/"
 echo ""
-echo -e "${YELLOW}Shortcut:${NC}"
+echo -e "${YELLOW}Run commands:${NC}"
 echo "   ./release/lastbuild/bin/orca"
+echo "   ./release/lastbuild/bin/aco"
+echo "   ./release/lastbuild/bin/orchestrator"
 echo ""
