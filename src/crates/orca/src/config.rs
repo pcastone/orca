@@ -9,7 +9,7 @@
 mod schema;
 mod loader;
 
-pub use schema::{OrcaConfig, DatabaseConfig, LlmConfig, ExecutionConfig, LoggingConfig};
+pub use schema::{OrcaConfig, DatabaseConfig, LlmConfig, ExecutionConfig, LoggingConfig, BudgetConfig, WorkflowConfig};
 pub use loader::ConfigLoader;
 
 use crate::Result;

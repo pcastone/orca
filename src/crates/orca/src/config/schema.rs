@@ -21,6 +21,14 @@ pub struct OrcaConfig {
     /// Logging configuration
     #[serde(default)]
     pub logging: LoggingConfig,
+
+    /// Budget configuration
+    #[serde(default)]
+    pub budget: BudgetConfig,
+
+    /// Workflow configuration
+    #[serde(default)]
+    pub workflow: WorkflowConfig,
 }
 
 /// Database configuration
@@ -205,6 +213,68 @@ impl Default for LoggingConfig {
     }
 }
 
+/// Budget configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BudgetConfig {
+    /// Default budget to use for workflows (by name)
+    pub default_budget: Option<String>,
+
+    /// Enable automatic budget enforcement during execution
+    pub enforce_budgets: bool,
+
+    /// Log budget usage details
+    pub log_usage: bool,
+
+    /// Alert threshold percentage (0.0-100.0) for budget usage
+    pub alert_threshold: f64,
+}
+
+impl Default for BudgetConfig {
+    fn default() -> Self {
+        Self {
+            default_budget: None,
+            enforce_budgets: true,
+            log_usage: true,
+            alert_threshold: 80.0,
+        }
+    }
+}
+
+/// Workflow configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowConfig {
+    /// Default LLM profile to use for workflows (by name)
+    pub default_llm_profile: Option<String>,
+
+    /// Default planner LLM (format: provider:model)
+    pub default_planner_llm: Option<String>,
+
+    /// Default worker LLM (format: provider:model)
+    pub default_worker_llm: Option<String>,
+
+    /// Enable workflow caching
+    pub enable_caching: bool,
+
+    /// Cache time-to-live in seconds
+    pub cache_ttl_secs: u64,
+
+    /// Maximum workflow execution duration in seconds
+    pub max_duration_secs: u64,
+}
+
+impl Default for WorkflowConfig {
+    fn default() -> Self {
+        Self {
+            default_llm_profile: None,
+            default_planner_llm: None,
+            default_worker_llm: None,
+            enable_caching: false,
+            cache_ttl_secs: 3600,
+            max_duration_secs: 3600,
+        }
+    }
+}
+
 impl OrcaConfig {
     /// Merge another config into this one (other takes precedence)
     ///
@@ -215,6 +285,8 @@ impl OrcaConfig {
         self.llm = other.llm;
         self.execution = other.execution;
         self.logging = other.logging;
+        self.budget = other.budget;
+        self.workflow = other.workflow;
     }
 
     /// Resolve environment variables in configuration values
