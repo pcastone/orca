@@ -2,10 +2,10 @@
 
 use ratatui::{
     prelude::*,
-    layout::{Alignment, Constraint, Direction, Layout},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Tabs, Wrap},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Tabs, Wrap},
 };
-use super::app::{App, FocusedArea, SidebarTab};
+use super::app::{App, FocusedArea, SidebarTab, MenuState};
 
 /// Render the complete UI
 pub fn render_ui(f: &mut Frame, app: &App) {
@@ -40,11 +40,37 @@ pub fn render_ui(f: &mut Frame, app: &App) {
 
     // Status bar
     render_status_bar(f, app, chunks[2]);
+
+    // Render dropdown menu if one is open
+    render_dropdown_menu(f, app, chunks[0]);
 }
 
 /// Render the menu bar
-fn render_menu(f: &mut Frame, _app: &App, area: Rect) {
-    let menu_text = " File  Edit  Config  Workflow  Help ";
+fn render_menu(f: &mut Frame, app: &App, area: Rect) {
+    let menus = vec!["File", "Edit", "Config", "Workflow", "Help"];
+    let mut menu_text = String::new();
+
+    for (idx, menu_name) in menus.iter().enumerate() {
+        let is_open = match (idx, app.menu_state) {
+            (0, MenuState::FileOpen) => true,
+            (1, MenuState::EditOpen) => true,
+            (2, MenuState::ConfigOpen) => true,
+            (3, MenuState::WorkflowOpen) => true,
+            (4, MenuState::HelpOpen) => true,
+            _ => false,
+        };
+
+        if idx > 0 {
+            menu_text.push_str("  ");
+        }
+
+        if is_open {
+            menu_text.push_str(&format!("[{}]", menu_name));
+        } else {
+            menu_text.push_str(menu_name);
+        }
+    }
+
     let menu = Paragraph::new(menu_text)
         .style(Style::default().bg(Color::DarkGray).fg(Color::White))
         .alignment(Alignment::Left);
@@ -295,3 +321,68 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
 
     f.render_widget(status, area);
 }
+
+/// Get menu items for the currently open menu
+fn get_menu_items(menu_state: MenuState) -> Vec<&'static str> {
+    match menu_state {
+        MenuState::Closed => vec![],
+        MenuState::FileOpen => vec!["New", "Open", "Save", "Quit"],
+        MenuState::EditOpen => vec!["Clear", "Copy", "Preferences"],
+        MenuState::ConfigOpen => vec!["View Config", "Budget", "LLM Profile", "Editor"],
+        MenuState::WorkflowOpen => vec!["Run", "View", "Create", "Manage"],
+        MenuState::HelpOpen => vec!["About", "Shortcuts", "Documentation"],
+    }
+}
+
+/// Render dropdown menu
+fn render_dropdown_menu(f: &mut Frame, app: &App, menu_area: Rect) {
+    if app.menu_state == MenuState::Closed {
+        return;
+    }
+
+    let items = get_menu_items(app.menu_state);
+    if items.is_empty() {
+        return;
+    }
+
+    // Calculate popup size: width is max item length + 2, height is items count + 2
+    let popup_width = items.iter().map(|s| s.len()).max().unwrap_or(10) + 2;
+    let popup_height = items.len() as u16 + 2;
+
+    // Position popup below menu bar
+    let popup_area = Rect {
+        x: menu_area.x + 1,
+        y: menu_area.y + 1,
+        width: popup_width as u16,
+        height: popup_height,
+    };
+
+    // Only render if there's space
+    if popup_area.y + popup_area.height > f.area().height {
+        return;
+    }
+
+    // Clear the area where popup will be rendered
+    f.render_widget(Clear, popup_area);
+
+    // Build list items with highlighting
+    let list_items: Vec<ListItem> = items
+        .iter()
+        .enumerate()
+        .map(|(idx, item)| {
+            let style = if idx == app.menu_selected_index {
+                Style::default().bg(Color::Blue).fg(Color::White)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            ListItem::new(*item).style(style)
+        })
+        .collect();
+
+    // Create bordered list
+    let list = List::new(list_items)
+        .block(Block::default().borders(Borders::ALL).style(Style::default().fg(Color::Cyan)));
+
+    f.render_widget(list, popup_area);
+}
+
