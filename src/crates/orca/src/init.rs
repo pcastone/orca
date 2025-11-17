@@ -150,6 +150,38 @@ level = "info"
 
 # Log format: "compact", "pretty", "json"
 format = "compact"
+
+[budget]
+# Default budget to use for workflows (by name, optional)
+# default_budget = "api-budget"
+
+# Enable automatic budget enforcement during execution (true/false)
+enforce_budgets = true
+
+# Log budget usage details (true/false)
+log_usage = true
+
+# Alert threshold percentage (0.0-100.0) - warn when usage exceeds this
+alert_threshold = 80.0
+
+[workflow]
+# Default LLM profile to use for all workflows (by name, optional)
+# default_llm_profile = "multi-llm"
+
+# Default planner LLM for workflows (format: provider:model, optional)
+# default_planner_llm = "anthropic:claude-3-sonnet"
+
+# Default worker LLM for workflows (format: provider:model, optional)
+# default_worker_llm = "openai:gpt-4"
+
+# Enable workflow caching (true/false)
+enable_caching = false
+
+# Cache time-to-live in seconds
+cache_ttl_secs = 3600
+
+# Maximum workflow execution duration in seconds
+max_duration_secs = 3600
 "#;
 
     fs::write(path, default_config)
@@ -221,5 +253,8 @@ mod tests {
         assert!(content.contains("[database]"));
         assert!(content.contains("[llm]"));
         assert!(content.contains("[execution]"));
+        assert!(content.contains("[logging]"));
+        assert!(content.contains("[budget]"));
+        assert!(content.contains("[workflow]"));
     }
 }
