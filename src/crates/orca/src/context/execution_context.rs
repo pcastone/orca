@@ -268,6 +268,8 @@ mod tests {
                 colored: false,
                 timestamps: true,
             },
+            budget: Default::default(),
+            workflow: Default::default(),
         }
     }
 
