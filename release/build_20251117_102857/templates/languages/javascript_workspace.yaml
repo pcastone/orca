@@ -1,0 +1,51 @@
+# JavaScript Project Workspace Configuration
+
+workspace:
+  root: "/path/to/project"
+
+  tools:
+    allowed_actions:
+      - read_file
+      - write_file
+      - edit_file
+      - list_files
+      - grep
+      - run_test
+      - run_build
+      - shell_exec
+
+    shell_allowlist:
+      - "^npm\\s"
+      - "^yarn\\s"
+      - "^pnpm\\s"
+      - "^node\\s"
+      - "^eslint\\s"
+      - "^jest\\s"
+      - "^mocha\\s"
+      - "^webpack\\s"
+      - "^vite\\s"
+      - "^git\\s"
+
+    network:
+      enabled: true
+      allowed_domains:
+        - "registry.npmjs.org"
+        - "github.com"
+
+  file_operations:
+    allowed_extensions:
+      - "js"
+      - "jsx"
+      - "mjs"
+      - "cjs"
+      - "json"
+      - "md"
+      - "yaml"
+
+  build:
+    command: "npm run build"
+    timeout_ms: 360000
+
+  test:
+    command: "npm test"
+    timeout_ms: 600000

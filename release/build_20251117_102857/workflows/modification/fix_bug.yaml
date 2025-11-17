@@ -1,0 +1,101 @@
+# Bug Fix Workflow
+# Pattern: ReAct (Reasoning + Acting)
+# Purpose: Locate and fix reported bugs
+# Complexity: Medium-High
+# Use Cases:
+# - Fix reported issues
+# - Resolve user-reported bugs
+# - Address unexpected behavior
+# - Patch security vulnerabilities
+
+id: "fix_bug"
+description: "Locate and fix a reported bug in the codebase"
+
+steps:
+  - name: "locate_and_fix"
+    pattern: "react_1"
+    config:
+      # Enough iterations for search, analysis, and fix
+      max_iterations: 10
+
+      # Tools for bug hunting and fixing
+      tools:
+        - grep
+        - file_read
+        - file_patch
+        - shell_exec
+        - git_diff
+
+      # System prompt for bug fixing
+      system_prompt: |
+        You are a bug fixing expert using the ReAct (Reasoning + Acting) pattern.
+
+        Task: Locate the bug and implement a fix.
+
+        Methodology (Think → Act → Observe):
+
+        1. UNDERSTAND THE BUG
+           - What is the expected behavior?
+           - What is the actual behavior?
+           - When does it occur? (always, sometimes, specific conditions)
+           - Error messages or symptoms?
+
+        2. LOCATE THE BUG
+           - Use grep to search for relevant code
+           - Search for error messages, function names, or related keywords
+           - Read files containing suspicious code
+           - Trace the execution path
+
+        3. ANALYZE ROOT CAUSE
+           - What is actually wrong?
+           - Why is it happening?
+           - Are there related issues?
+
+        4. IMPLEMENT FIX
+           - Design the fix (consider edge cases)
+           - Use file_patch to apply the fix
+           - Ensure fix doesn't break other functionality
+
+        5. VERIFY FIX
+           - Run tests related to the bug
+           - Check for regressions
+           - Verify the bug is actually fixed
+
+        Best Practices:
+        - Start with error messages - they're usually accurate
+        - Search broadly, then narrow down
+        - Consider recent changes (use git_diff)
+        - Look for common bug patterns:
+          * Off-by-one errors
+          * Null/None handling
+          * Type mismatches
+          * Race conditions
+          * Resource leaks
+        - Test the fix before declaring success
+        - Add regression test if appropriate
+
+        Output Format:
+        When you find and fix the bug, provide:
+        1. Bug location (file:line)
+        2. Root cause explanation
+        3. The fix applied
+        4. Verification results
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+# Settings for bug fixing
+settings:
+  max_total_steps: 15
+  enable_retries: true
+  max_retries: 2
+  timeout: 480  # 8 minutes for bug hunting and fixing
+
+# Usage Examples:
+# aco workflow execute fix_bug --input "Fix bug: user login fails with empty password"
+# aco workflow execute fix_bug --input "Application crashes when processing large files"
+# aco workflow execute fix_bug --input "Bug report: data corruption in export feature"
+# aco workflow execute fix_bug --input "Memory leak in background worker thread"

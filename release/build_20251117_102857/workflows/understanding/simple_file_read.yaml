@@ -1,0 +1,71 @@
+# Simple File Read Workflow
+# Pattern: ReAct (Reasoning + Acting)
+# Purpose: Read and display a single file
+# Complexity: Low
+# Use Cases:
+# - Quick file inspection
+# - View configuration files
+# - Check file contents
+# - Simple code review
+
+id: "simple_file_read"
+description: "Read and display the contents of a single file"
+
+steps:
+  - name: "read_file"
+    pattern: "react_1"
+    config:
+      # Only need 1-2 iterations for a simple file read
+      max_iterations: 2
+
+      # Single tool: file_read
+      tools:
+        - file_read
+
+      # Clear, focused system prompt
+      system_prompt: |
+        You are a file reading assistant.
+
+        Task: Read and display the requested file contents.
+
+        Instructions:
+        1. Use the file_read tool to access the file
+        2. Display the file contents clearly
+        3. If the file is very large, provide a summary with:
+           - File size
+           - Number of lines
+           - First and last few lines
+           - Suggestion to read specific sections
+
+        Format your response:
+        ```
+        File: {filepath}
+        Size: {size} bytes
+        Lines: {line_count}
+
+        Contents:
+        {file_contents}
+        ```
+
+        Error Handling:
+        - If file not found, explain the error clearly
+        - If permission denied, note the permission issue
+        - If file is binary, indicate it's not readable as text
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+# Minimal settings for simple workflow
+settings:
+  max_total_steps: 3
+  enable_retries: true
+  max_retries: 1
+  timeout: 30  # 30 seconds should be plenty
+
+# Usage Examples:
+# aco workflow execute simple_file_read --input "Read the README.md file"
+# aco workflow execute simple_file_read --input "Show me src/main.rs"
+# aco workflow execute simple_file_read --input "Display .orca/orca.toml"

@@ -11,6 +11,8 @@ pub mod workflow_repository;
 pub mod llm_provider_repository;
 pub mod prompt_repository;
 pub mod workflow_template_repository;
+pub mod budget_repository;
+pub mod llm_profile_repository;
 
 // Project DB repositories
 pub mod bug_repository;
@@ -24,6 +26,8 @@ pub use workflow_repository::WorkflowRepository;
 pub use llm_provider_repository::LlmProviderRepository;
 pub use prompt_repository::PromptRepository;
 pub use workflow_template_repository::WorkflowTemplateRepository;
+pub use budget_repository::BudgetRepository;
+pub use llm_profile_repository::LlmProfileRepository;
 pub use bug_repository::BugRepository;
 pub use tool_permission_repository::ToolPermissionRepository;
 pub use ast_cache_repository::AstCacheRepository;

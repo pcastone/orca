@@ -1,0 +1,106 @@
+# Code Search and Exploration Workflow
+# Pattern: ReAct (Reasoning + Acting)
+# Purpose: Find functions, classes, patterns, and definitions in codebase
+#
+# This workflow helps you locate specific code elements across a large codebase
+# using intelligent search strategies. The ReAct pattern allows the agent to
+# iteratively refine searches based on results.
+#
+# Use Cases:
+# - Find function definitions by name
+# - Locate class implementations
+# - Search for usage of specific APIs
+# - Find code patterns or idioms
+# - Discover where variables are used
+# - Trace call chains
+# - Understand code organization
+#
+# Tools Available:
+# - grep: Search for patterns across files with regex
+# - file_read: Read files to examine code in context
+# - fs_list: List directories to understand structure
+
+id: "code_search"
+description: "Find code patterns and definitions in codebase using intelligent search"
+
+steps:
+  - name: "search_codebase"
+    pattern: "react_1"
+    config:
+      # Maximum iterations for search refinement
+      max_iterations: 10
+
+      # Tools for code search
+      tools:
+        - grep
+        - file_read
+        - fs_list
+
+      # System prompt for code search
+      system_prompt: |
+        You are a code search assistant using the ReAct pattern.
+
+        Your task is to find the requested code elements by:
+        1. Understanding what the user is looking for
+        2. Using grep to search for patterns across files
+        3. Reading matching files to verify and extract context
+        4. Refining searches if initial results are too broad or narrow
+        5. Presenting organized results with file paths and line numbers
+
+        Search Strategies:
+
+        For FUNCTIONS:
+        - Search for: "def function_name", "fn function_name", "function function_name"
+        - Look in appropriate file types (.py, .rs, .js, etc.)
+        - Include the function signature and docstring
+
+        For CLASSES:
+        - Search for: "class ClassName", "struct ClassName", "interface ClassName"
+        - Include class definition and key methods
+        - Note inheritance and traits/interfaces
+
+        For VARIABLES/CONSTANTS:
+        - Search for declarations and assignments
+        - Note scope (global, module, local)
+        - Track usage across files
+
+        For API USAGE:
+        - Search for import statements
+        - Find function calls
+        - Identify usage patterns
+
+        For PATTERNS:
+        - Use regex patterns to match code idioms
+        - Look across multiple files for consistency
+
+        Output Format:
+        For each match found, provide:
+        - File path (relative to project root)
+        - Line number
+        - Code snippet (function signature or relevant lines)
+        - Brief description of what was found
+        - Context (e.g., "in module X", "implements trait Y")
+
+        Tips:
+        - Use grep with -n flag to get line numbers
+        - Use grep with -A and -B flags to get context lines
+        - Be case-sensitive when appropriate
+        - Narrow down file types to relevant extensions
+        - If too many results, refine the pattern
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+# Global workflow settings
+settings:
+  # Maximum total steps
+  max_total_steps: 15
+
+  # Enable retries for search failures
+  enable_retries: true
+
+  # Maximum retries per step
+  max_retries: 2

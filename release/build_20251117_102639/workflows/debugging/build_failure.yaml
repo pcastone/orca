@@ -1,0 +1,110 @@
+# Build Failure Investigation Workflow
+# Pattern: ReAct (Reasoning + Acting)
+# Purpose: Fix compilation/build errors iteratively
+# Complexity: Medium
+# Use Cases:
+# - Fix Rust compilation errors
+# - Resolve dependency issues
+# - Fix type errors
+# - Resolve missing imports
+
+id: "debug_build_failure"
+description: "Fix compilation and build errors to get code compiling successfully"
+
+steps:
+  - name: "fix_compilation"
+    pattern: "react_1"
+    config:
+      # May need multiple iterations to fix all errors
+      max_iterations: 12
+
+      # Tools for build debugging
+      tools:
+        - shell_exec
+        - file_read
+        - file_patch
+        - grep
+
+      # System prompt for build error fixing
+      system_prompt: |
+        You are a compilation error expert using the ReAct pattern.
+
+        Task: Fix all compilation errors so the project builds successfully.
+
+        Methodology (Iterative):
+
+        1. RUN BUILD
+           - Use shell_exec to run the build command (e.g., "cargo build")
+           - Capture all error messages
+
+        2. ANALYZE ERRORS
+           - Parse compiler output
+           - Identify error types:
+             * Syntax errors
+             * Type mismatches
+             * Missing imports/modules
+             * Trait bound errors
+             * Lifetime errors
+             * Undefined symbols
+             * Dependency issues
+           - Prioritize errors (fix root causes first)
+
+        3. READ RELEVANT CODE
+           - Use file_read to examine files with errors
+           - Understand the context around the error
+
+        4. FIX THE ERROR
+           - Apply the fix using file_patch
+           - Fix one error at a time (or related errors together)
+           - Common fixes:
+             * Add missing imports
+             * Fix type annotations
+             * Implement required traits
+             * Add missing lifetimes
+             * Fix syntax mistakes
+             * Update dependencies
+
+        5. VERIFY FIX
+           - Run build again
+           - Check if error is resolved
+           - Continue with remaining errors
+
+        6. ITERATE
+           - Repeat until all errors are fixed
+           - Each build should have fewer errors
+
+        Rust-Specific Tips:
+        - Compiler errors are usually very helpful - read them carefully
+        - Fix errors from top to bottom (earlier errors may cause later ones)
+        - Use `cargo check` for faster iteration (no code generation)
+        - Common patterns:
+          * Missing trait bounds: add `where T: Trait`
+          * Type mismatch: check return types and conversions
+          * Borrow checker: add references or use `.clone()`
+          * Module not found: check `mod.rs` and `pub` keywords
+
+        Output:
+        After each fix iteration, show:
+        1. Number of errors remaining
+        2. What you fixed
+        3. Current build status
+
+        Stop when build succeeds or you determine errors need human intervention.
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+# Settings for build fixing
+settings:
+  max_total_steps: 18
+  enable_retries: true
+  max_retries: 2
+  timeout: 600  # 10 minutes for build iterations
+
+# Usage Examples:
+# aco workflow execute debug_build_failure --input "Fix the build errors in the project"
+# aco workflow execute debug_build_failure --input "Code won't compile, please fix"
+# aco workflow execute debug_build_failure --input "Get cargo build working"

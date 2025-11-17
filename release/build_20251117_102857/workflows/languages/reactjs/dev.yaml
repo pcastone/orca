@@ -1,0 +1,40 @@
+# React Development Server Workflow
+id: "reactjs_dev"
+description: "Start React development server"
+
+steps:
+  - name: "start_dev_server"
+    pattern: "react_1"
+    config:
+      max_iterations: 4
+      tools: [shell_exec, file_read]
+      system_prompt: |
+        Start React development server.
+
+        Commands:
+        ```bash
+        # Create React App
+        npm start
+
+        # Vite
+        npm run dev
+        vite
+
+        # Next.js
+        npm run dev
+        next dev
+
+        # With specific port
+        PORT=3001 npm start
+        ```
+
+        Verify server starts, check for errors
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 6
+  timeout: 120
