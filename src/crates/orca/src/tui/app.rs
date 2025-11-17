@@ -20,6 +20,32 @@ pub enum FocusedArea {
     Conversation,
     Prompts,
     Sidebar,
+    Menu,
+}
+
+/// Menu bar state - which menu is open (if any)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MenuState {
+    Closed,
+    FileOpen,
+    EditOpen,
+    ConfigOpen,
+    WorkflowOpen,
+    HelpOpen,
+}
+
+/// Dialog state - what dialog is currently open
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DialogState {
+    None,
+    BudgetList,
+    BudgetCreate,
+    BudgetEdit,
+    LlmProfileList,
+    LlmProfileCreate,
+    LlmProfileEdit,
+    ConfigViewer,
+    ExternalEditor,
 }
 
 /// Application state
@@ -64,6 +90,11 @@ pub struct App {
     pub llm_profile: Option<String>,
     pub planner_llm: Option<String>,
     pub worker_llm: Option<String>,
+
+    // Menu management
+    pub menu_state: MenuState,
+    pub menu_selected_index: usize,
+    pub dialog_state: DialogState,
 }
 
 impl App {
@@ -96,6 +127,9 @@ impl App {
             llm_profile: None,
             planner_llm: None,
             worker_llm: None,
+            menu_state: MenuState::Closed,
+            menu_selected_index: 0,
+            dialog_state: DialogState::None,
         }
     }
 
@@ -153,6 +187,7 @@ impl App {
             FocusedArea::Conversation => FocusedArea::Prompts,
             FocusedArea::Prompts => FocusedArea::Sidebar,
             FocusedArea::Sidebar => FocusedArea::Conversation,
+            FocusedArea::Menu => FocusedArea::Conversation,
         };
     }
 
@@ -162,6 +197,7 @@ impl App {
             FocusedArea::Conversation => FocusedArea::Sidebar,
             FocusedArea::Prompts => FocusedArea::Conversation,
             FocusedArea::Sidebar => FocusedArea::Prompts,
+            FocusedArea::Menu => FocusedArea::Sidebar,
         };
     }
 
@@ -309,6 +345,94 @@ impl App {
         self.llm_profile = None;
         self.planner_llm = None;
         self.worker_llm = None;
+    }
+
+    // === Menu Management Methods ===
+
+    /// Open a menu
+    pub fn open_menu(&mut self, menu: MenuState) {
+        self.menu_state = menu;
+        self.menu_selected_index = 0;
+        self.focused = FocusedArea::Menu;
+    }
+
+    /// Close the current menu
+    pub fn close_menu(&mut self) {
+        self.menu_state = MenuState::Closed;
+        self.menu_selected_index = 0;
+        self.focused = FocusedArea::Conversation;
+    }
+
+    /// Move to next menu item
+    pub fn menu_next(&mut self) {
+        let max_items = self.get_menu_items_count();
+        if max_items > 0 {
+            self.menu_selected_index = (self.menu_selected_index + 1) % max_items;
+        }
+    }
+
+    /// Move to previous menu item
+    pub fn menu_prev(&mut self) {
+        let max_items = self.get_menu_items_count();
+        if max_items > 0 {
+            self.menu_selected_index = if self.menu_selected_index > 0 {
+                self.menu_selected_index - 1
+            } else {
+                max_items - 1
+            };
+        }
+    }
+
+    /// Get the count of items in the current menu
+    fn get_menu_items_count(&self) -> usize {
+        match self.menu_state {
+            MenuState::Closed => 0,
+            MenuState::FileOpen => 4,      // New, Open, Save, Quit
+            MenuState::EditOpen => 3,      // Clear, Copy, Preferences
+            MenuState::ConfigOpen => 4,    // View Config, Budget, LLM Profile, Editor
+            MenuState::WorkflowOpen => 4,  // Run, View, Create, Manage
+            MenuState::HelpOpen => 3,      // About, Shortcuts, Documentation
+        }
+    }
+
+    /// Get the selected menu item action
+    pub fn get_selected_menu_action(&self) -> Option<String> {
+        match self.menu_state {
+            MenuState::Closed => None,
+            MenuState::FileOpen => match self.menu_selected_index {
+                0 => Some("file_new".to_string()),
+                1 => Some("file_open".to_string()),
+                2 => Some("file_save".to_string()),
+                3 => Some("file_quit".to_string()),
+                _ => None,
+            },
+            MenuState::EditOpen => match self.menu_selected_index {
+                0 => Some("edit_clear".to_string()),
+                1 => Some("edit_copy".to_string()),
+                2 => Some("edit_preferences".to_string()),
+                _ => None,
+            },
+            MenuState::ConfigOpen => match self.menu_selected_index {
+                0 => Some("config_view".to_string()),
+                1 => Some("config_budget".to_string()),
+                2 => Some("config_llm_profile".to_string()),
+                3 => Some("config_editor".to_string()),
+                _ => None,
+            },
+            MenuState::WorkflowOpen => match self.menu_selected_index {
+                0 => Some("workflow_run".to_string()),
+                1 => Some("workflow_view".to_string()),
+                2 => Some("workflow_create".to_string()),
+                3 => Some("workflow_manage".to_string()),
+                _ => None,
+            },
+            MenuState::HelpOpen => match self.menu_selected_index {
+                0 => Some("help_about".to_string()),
+                1 => Some("help_shortcuts".to_string()),
+                2 => Some("help_documentation".to_string()),
+                _ => None,
+            },
+        }
     }
 }
 

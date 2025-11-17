@@ -1,0 +1,37 @@
+# React Build Workflow
+id: "reactjs_build"
+description: "Build React app for production"
+
+steps:
+  - name: "build_react"
+    pattern: "react_1"
+    config:
+      max_iterations: 6
+      tools: [shell_exec, file_read, grep]
+      system_prompt: |
+        Build React app for production.
+
+        Commands:
+        ```bash
+        # Create React App
+        npm run build
+
+        # Vite
+        npm run build
+        vite build
+
+        # Next.js
+        npm run build
+        next build
+        ```
+
+        Check build/ or dist/ output, verify bundle size
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 10
+  timeout: 360

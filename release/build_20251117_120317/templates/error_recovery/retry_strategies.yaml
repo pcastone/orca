@@ -1,0 +1,229 @@
+# Retry Strategies Configuration
+# Defines how different failure types should be retried
+
+retry_strategies:
+  # Planning LLM Failures
+  planning_failure:
+    description: "Planning LLM fails to generate valid plan"
+    max_retries: 3
+    backoff: "exponential"
+    initial_delay_ms: 1000
+    max_delay_ms: 10000
+    backoff_multiplier: 2.0
+
+    retry_conditions:
+      - error_code: "E_LLM_TIMEOUT"
+      - error_code: "E_LLM_RATE_LIMIT"
+      - error_code: "E_INVALID_JSON"
+      - error_code: "E_LLM_SERVER_ERROR"
+
+    recovery_actions:
+      - strategy: "simplify_prompt"
+        description: "Remove examples, use simpler language"
+        when: "retry_count >= 1"
+
+      - strategy: "alternative_model"
+        description: "Fall back to different planning model"
+        when: "retry_count >= 2"
+
+      - strategy: "reduce_complexity"
+        description: "Break task into smaller subtasks"
+        when: "retry_count >= 3"
+
+  # Execution LLM Failures
+  execution_failure:
+    description: "Execution LLM fails to generate tool calls"
+    max_retries: 2
+    backoff: "linear"
+    initial_delay_ms: 500
+    increment_ms: 500
+
+    retry_conditions:
+      - error_code: "E_LLM_TIMEOUT"
+      - error_code: "E_LLM_RATE_LIMIT"
+      - error_code: "E_INVALID_TOOL_CALL"
+
+    recovery_actions:
+      - strategy: "retry_with_context"
+        description: "Retry with more context from previous tasks"
+        when: "retry_count >= 1"
+
+      - strategy: "skip_task"
+        description: "Skip non-critical task"
+        when: "retry_count >= 2 AND task.optional"
+
+      - strategy: "alternative_tool"
+        description: "Suggest alternative tool for same goal"
+        when: "retry_count >= 2"
+
+  # Tool Execution Failures
+  tool_failure:
+    description: "Tool execution fails"
+    max_retries: 1
+    backoff: "none"
+    initial_delay_ms: 0
+
+    retry_conditions:
+      - error_code: "E_TIMEOUT"
+      - error_code: "E_NETWORK_ERROR"
+      - error_code: "E_TEMPORARY_FAILURE"
+
+    no_retry_conditions:
+      - error_code: "E_PERMISSION_DENIED"
+      - error_code: "E_FILE_NOT_FOUND"
+      - error_code: "E_INVALID_INPUT"
+      - error_code: "E_COMMAND_BLOCKED"
+
+    recovery_actions:
+      - strategy: "increase_timeout"
+        description: "Increase timeout for slow operations"
+        when: "error_code == E_TIMEOUT"
+
+      - strategy: "alternative_tool"
+        description: "Try alternative tool if available"
+        when: "retry_count >= 1"
+
+      - strategy: "fail_gracefully"
+        description: "Mark task as failed, continue if possible"
+        when: "retry_count >= max_retries"
+
+  # Network Failures
+  network_failure:
+    description: "Network or WebSocket failures"
+    max_retries: 5
+    backoff: "exponential"
+    initial_delay_ms: 1000
+    max_delay_ms: 30000
+    backoff_multiplier: 2.0
+
+    retry_conditions:
+      - error_code: "E_CONNECTION_REFUSED"
+      - error_code: "E_WEBSOCKET_CLOSED"
+      - error_code: "E_NETWORK_TIMEOUT"
+
+    recovery_actions:
+      - strategy: "reconnect"
+        description: "Attempt to reconnect to server"
+        when: "retry_count < max_retries"
+
+      - strategy: "use_fallback"
+        description: "Switch to fallback server if configured"
+        when: "retry_count >= 3"
+
+  # Database Failures
+  database_failure:
+    description: "Database operation failures"
+    max_retries: 3
+    backoff: "exponential"
+    initial_delay_ms: 100
+    max_delay_ms: 5000
+    backoff_multiplier: 2.0
+
+    retry_conditions:
+      - error_code: "E_DB_LOCKED"
+      - error_code: "E_DB_BUSY"
+      - error_code: "E_DB_TIMEOUT"
+
+    no_retry_conditions:
+      - error_code: "E_DB_CONSTRAINT_VIOLATION"
+      - error_code: "E_DB_CORRUPTION"
+
+    recovery_actions:
+      - strategy: "wait_and_retry"
+        description: "Wait for lock to be released"
+        when: "error_code == E_DB_LOCKED"
+
+      - strategy: "recreate_connection"
+        description: "Close and reopen database connection"
+        when: "retry_count >= 2"
+
+# Backoff Algorithms
+backoff_algorithms:
+  exponential:
+    formula: "initial_delay * (multiplier ^ retry_count)"
+    jitter: true
+    jitter_range: 0.1  # ±10% randomness
+
+  linear:
+    formula: "initial_delay + (increment * retry_count)"
+    jitter: false
+
+  constant:
+    formula: "initial_delay"
+    jitter: false
+
+  none:
+    formula: "0"
+    jitter: false
+
+# Circuit Breaker Patterns
+circuit_breaker:
+  enabled: true
+
+  # LLM API Circuit Breaker
+  llm_api:
+    failure_threshold: 5  # Open after 5 consecutive failures
+    success_threshold: 2  # Close after 2 successes in half-open
+    timeout_ms: 60000  # Stay open for 1 minute
+    half_open_requests: 1  # Try 1 request when half-open
+
+  # Tool Execution Circuit Breaker
+  tool_execution:
+    failure_threshold: 3
+    success_threshold: 1
+    timeout_ms: 30000
+
+# Global Retry Settings
+global:
+  max_total_retries: 10  # Across all operations in workflow
+  max_retry_time_ms: 300000  # Total retry time: 5 minutes
+
+  # Exponential backoff defaults
+  default_initial_delay_ms: 1000
+  default_max_delay_ms: 30000
+  default_backoff_multiplier: 2.0
+
+  # Jitter settings
+  enable_jitter: true
+  jitter_factor: 0.1  # ±10%
+
+# Error Classification
+error_classification:
+  transient:
+    - "E_TIMEOUT"
+    - "E_RATE_LIMIT"
+    - "E_SERVER_ERROR"
+    - "E_NETWORK_ERROR"
+    - "E_DB_LOCKED"
+
+  permanent:
+    - "E_PERMISSION_DENIED"
+    - "E_NOT_FOUND"
+    - "E_INVALID_INPUT"
+    - "E_AUTHENTICATION_FAILED"
+
+  retriable:
+    - "E_TIMEOUT"
+    - "E_RATE_LIMIT"
+    - "E_NETWORK_ERROR"
+    - "E_DB_LOCKED"
+
+# Monitoring and Logging
+monitoring:
+  log_retries: true
+  log_level: "info"  # Log all retry attempts
+
+  metrics:
+    - "retry_count_total"
+    - "retry_success_rate"
+    - "backoff_time_total"
+    - "circuit_breaker_state"
+
+  alerts:
+    - condition: "retry_count > max_retries"
+      severity: "warning"
+      message: "Excessive retry attempts"
+
+    - condition: "circuit_breaker_open"
+      severity: "critical"
+      message: "Circuit breaker opened for {component}"

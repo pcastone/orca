@@ -1,6 +1,6 @@
 //! Input event handling for TUI
 
-use super::app::{App, FocusedArea};
+use super::app::{App, FocusedArea, MenuState};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tracing::debug;
 
@@ -16,6 +16,62 @@ impl InputHandler {
     /// Handle a keyboard event
     pub fn handle_key_event(&self, key_event: KeyEvent, app: &mut App) {
         debug!("Key event: {:?}", key_event);
+
+        // Handle menu-specific keys first
+        if app.focused == FocusedArea::Menu {
+            match key_event.code {
+                KeyCode::Up => {
+                    app.menu_prev();
+                    return;
+                }
+                KeyCode::Down => {
+                    app.menu_next();
+                    return;
+                }
+                KeyCode::Enter => {
+                    // Menu action will be handled by UI layer
+                    return;
+                }
+                KeyCode::Esc => {
+                    app.close_menu();
+                    return;
+                }
+                _ => {}
+            }
+        }
+
+        // Handle Esc to close menu in any other focus area
+        if matches!(key_event.code, KeyCode::Esc) && app.menu_state != MenuState::Closed {
+            app.close_menu();
+            return;
+        }
+
+        // Handle Alt+F/E/C/W/H for menu shortcuts
+        if key_event.modifiers.contains(KeyModifiers::ALT) {
+            match key_event.code {
+                KeyCode::Char('f') | KeyCode::Char('F') => {
+                    app.open_menu(MenuState::FileOpen);
+                    return;
+                }
+                KeyCode::Char('e') | KeyCode::Char('E') => {
+                    app.open_menu(MenuState::EditOpen);
+                    return;
+                }
+                KeyCode::Char('c') | KeyCode::Char('C') => {
+                    app.open_menu(MenuState::ConfigOpen);
+                    return;
+                }
+                KeyCode::Char('w') | KeyCode::Char('W') => {
+                    app.open_menu(MenuState::WorkflowOpen);
+                    return;
+                }
+                KeyCode::Char('h') | KeyCode::Char('H') => {
+                    app.open_menu(MenuState::HelpOpen);
+                    return;
+                }
+                _ => {}
+            }
+        }
 
         match key_event.code {
             // Tab navigation between areas
@@ -46,6 +102,7 @@ impl InputHandler {
                     FocusedArea::Conversation => app.scroll_conversation_up(),
                     FocusedArea::Sidebar => app.sidebar_prev(),
                     FocusedArea::Prompts => {}
+                    FocusedArea::Menu => {} // Menu navigation handled above
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
@@ -53,6 +110,7 @@ impl InputHandler {
                     FocusedArea::Conversation => app.scroll_conversation_down(),
                     FocusedArea::Sidebar => app.sidebar_next(),
                     FocusedArea::Prompts => {}
+                    FocusedArea::Menu => {} // Menu navigation handled above
                 }
             }
 
@@ -118,8 +176,11 @@ impl InputHandler {
                 }
             }
 
-            // Quit
-            KeyCode::Char('q') | KeyCode::Esc => {
+            // Quit (q or Esc when menu is not open)
+            KeyCode::Char('q') => {
+                app.state.should_quit = true;
+            }
+            KeyCode::Esc if app.menu_state == MenuState::Closed => {
                 app.state.should_quit = true;
             }
 
