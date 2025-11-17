@@ -123,10 +123,20 @@ impl InputHandler {
         match key_event.code {
             // Tab navigation between areas
             KeyCode::Tab => {
-                app.next_focus();
+                // Close menu if it's open before navigating
+                if app.menu_state != MenuState::Closed {
+                    app.close_menu();
+                } else {
+                    app.next_focus();
+                }
             }
             KeyCode::BackTab => {
-                app.prev_focus();
+                // Close menu if it's open before navigating
+                if app.menu_state != MenuState::Closed {
+                    app.close_menu();
+                } else {
+                    app.prev_focus();
+                }
             }
 
             // PROMPTS AREA: Check prompts first to avoid conflicts

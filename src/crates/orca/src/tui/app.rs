@@ -363,7 +363,10 @@ impl App {
     pub fn close_menu(&mut self) {
         self.menu_state = MenuState::Closed;
         self.menu_selected_index = 0;
-        self.focused = FocusedArea::Conversation;
+        // Don't change focus if a dialog is open (dialog should have focus)
+        if !self.has_dialog() {
+            self.focused = FocusedArea::Conversation;
+        }
     }
 
     /// Move to next menu item
