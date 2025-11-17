@@ -299,12 +299,26 @@ fn execute_menu_action(action: &str, app: &mut App) {
             app.close_menu();
         }
         "config_budget" => {
-            let dialog = super::dialog::Dialog::info("Budget", "Budget management coming soon...");
+            // Show budget management options
+            let budget_options = vec![
+                "List Budgets".to_string(),
+                "Create Budget".to_string(),
+                "Edit Budget".to_string(),
+                "Activate Budget".to_string(),
+            ];
+            let dialog = super::dialog::Dialog::select_list("Budget Management", budget_options);
             app.show_dialog(dialog);
             app.close_menu();
         }
         "config_llm_profile" => {
-            let dialog = super::dialog::Dialog::info("LLM Profiles", "LLM profile management coming soon...");
+            // Show LLM profile management options
+            let profile_options = vec![
+                "List Profiles".to_string(),
+                "Create Profile".to_string(),
+                "Edit Profile".to_string(),
+                "Activate Profile".to_string(),
+            ];
+            let dialog = super::dialog::Dialog::select_list("LLM Profile Management", profile_options);
             app.show_dialog(dialog);
             app.close_menu();
         }
@@ -363,6 +377,38 @@ fn execute_menu_action(action: &str, app: &mut App) {
             app.close_menu();
         }
     }
+}
+
+/// Helper: Show budget operation confirmation
+fn _show_budget_operation(operation: &str, app: &mut App) {
+    let msg = format!(
+        "Budget {}:\n\n\
+        Name: Sample Budget\n\
+        Type: Credit\n\
+        Amount: $500.00\n\
+        Current Usage: $145.67\n\
+        Status: 29% used\n\n\
+        {} this budget?",
+        operation.to_lowercase(),
+        if operation == "Create" { "Create" } else { "Confirm" }
+    );
+    let dialog = super::dialog::Dialog::confirm(&format!("{} Budget", operation), msg);
+    app.show_dialog(dialog);
+}
+
+/// Helper: Show LLM profile operation confirmation
+fn _show_llm_operation(operation: &str, app: &mut App) {
+    let msg = format!(
+        "LLM Profile {}:\n\n\
+        Name: Multi-Model\n\
+        Planner: Claude-3-Opus\n\
+        Worker: GPT-4\n\n\
+        {} this profile?",
+        operation.to_lowercase(),
+        if operation == "Create" { "Create" } else { "Confirm" }
+    );
+    let dialog = super::dialog::Dialog::confirm(&format!("{} Profile", operation), msg);
+    app.show_dialog(dialog);
 }
 
 impl Default for InputHandler {
