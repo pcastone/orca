@@ -4,11 +4,13 @@
 
 pub mod app;
 pub mod dialog;
+pub mod forms;
 pub mod handler;
 pub mod ui;
 
 pub use app::{App, AppState};
 pub use dialog::{Dialog, DialogType, render_dialog};
+pub use forms::{Form, FormField, FieldType, render_form};
 pub use handler::InputHandler;
 pub use ui::render_ui;
 
