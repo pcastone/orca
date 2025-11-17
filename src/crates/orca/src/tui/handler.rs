@@ -29,11 +29,58 @@ impl InputHandler {
                     return;
                 }
                 KeyCode::Enter => {
-                    // Menu action will be handled by UI layer
+                    // Execute the selected menu action
+                    if let Some(action) = app.get_selected_menu_action() {
+                        execute_menu_action(&action, app);
+                    }
                     return;
                 }
                 KeyCode::Esc => {
                     app.close_menu();
+                    return;
+                }
+                _ => {}
+            }
+        }
+
+        // Handle dialog input
+        if app.has_dialog() {
+            match key_event.code {
+                KeyCode::Up => {
+                    app.dialog_prev();
+                    return;
+                }
+                KeyCode::Down => {
+                    app.dialog_next();
+                    return;
+                }
+                KeyCode::Left => {
+                    if let Some(ref mut dialog) = app.dialog {
+                        dialog.cursor_left();
+                    }
+                    return;
+                }
+                KeyCode::Right => {
+                    if let Some(ref mut dialog) = app.dialog {
+                        dialog.cursor_right();
+                    }
+                    return;
+                }
+                KeyCode::Char(c) => {
+                    app.dialog_add_char(c);
+                    return;
+                }
+                KeyCode::Backspace => {
+                    app.dialog_backspace();
+                    return;
+                }
+                KeyCode::Enter => {
+                    // Close dialog on Enter (selected option or submit)
+                    app.close_dialog();
+                    return;
+                }
+                KeyCode::Esc => {
+                    app.close_dialog();
                     return;
                 }
                 _ => {}
@@ -185,6 +232,120 @@ impl InputHandler {
             }
 
             _ => {}
+        }
+    }
+}
+
+/// Execute menu action
+fn execute_menu_action(action: &str, app: &mut App) {
+    match action {
+        // File menu actions
+        "file_new" => {
+            app.clear_conversation();
+            app.close_menu();
+        }
+        "file_open" => {
+            // Show file open dialog
+            let dialog = super::dialog::Dialog::info("Open File", "Open file functionality coming soon...");
+            app.show_dialog(dialog);
+            app.close_menu();
+        }
+        "file_save" => {
+            // Show save dialog
+            let dialog = super::dialog::Dialog::info("Save", "Conversation saved!");
+            app.show_dialog(dialog);
+            app.close_menu();
+        }
+        "file_quit" => {
+            app.state.should_quit = true;
+            app.close_menu();
+        }
+
+        // Edit menu actions
+        "edit_clear" => {
+            app.clear_conversation();
+            app.close_menu();
+        }
+        "edit_copy" => {
+            let dialog = super::dialog::Dialog::info("Copy", "Text copied to clipboard!");
+            app.show_dialog(dialog);
+            app.close_menu();
+        }
+        "edit_preferences" => {
+            let dialog = super::dialog::Dialog::info("Preferences", "Preferences dialog coming soon...");
+            app.show_dialog(dialog);
+            app.close_menu();
+        }
+
+        // Config menu actions (placeholders)
+        "config_view" => {
+            let dialog = super::dialog::Dialog::info("Config", "View configuration coming soon...");
+            app.show_dialog(dialog);
+            app.close_menu();
+        }
+        "config_budget" => {
+            let dialog = super::dialog::Dialog::info("Budget", "Budget management coming soon...");
+            app.show_dialog(dialog);
+            app.close_menu();
+        }
+        "config_llm_profile" => {
+            let dialog = super::dialog::Dialog::info("LLM Profiles", "LLM profile management coming soon...");
+            app.show_dialog(dialog);
+            app.close_menu();
+        }
+        "config_editor" => {
+            let dialog = super::dialog::Dialog::info("Editor", "External editor coming soon...");
+            app.show_dialog(dialog);
+            app.close_menu();
+        }
+
+        // Workflow menu actions (placeholders)
+        "workflow_run" => {
+            let dialog = super::dialog::Dialog::info("Run Workflow", "Workflow execution coming soon...");
+            app.show_dialog(dialog);
+            app.close_menu();
+        }
+        "workflow_view" => {
+            let dialog = super::dialog::Dialog::info("View Workflow", "Workflow viewer coming soon...");
+            app.show_dialog(dialog);
+            app.close_menu();
+        }
+        "workflow_create" => {
+            let dialog = super::dialog::Dialog::info("Create Workflow", "Workflow creation coming soon...");
+            app.show_dialog(dialog);
+            app.close_menu();
+        }
+        "workflow_manage" => {
+            let dialog = super::dialog::Dialog::info("Manage Workflow", "Workflow management coming soon...");
+            app.show_dialog(dialog);
+            app.close_menu();
+        }
+
+        // Help menu actions
+        "help_about" => {
+            let dialog = super::dialog::Dialog::info(
+                "About Orca",
+                "Orca - AI Orchestration Platform\nVersion 1.0\n\nA standalone AI agent workflow executor with budget management and multi-LLM support.",
+            );
+            app.show_dialog(dialog);
+            app.close_menu();
+        }
+        "help_shortcuts" => {
+            let dialog = super::dialog::Dialog::info(
+                "Keyboard Shortcuts",
+                "Alt+F - File Menu\nAlt+E - Edit Menu\nAlt+C - Config Menu\nAlt+W - Workflow Menu\nAlt+H - Help Menu\n\nTab - Switch focus\nUp/Down - Navigate\nEnter - Select\nEsc - Close/Quit\nCtrl+Enter - Submit prompt\nCtrl+C - Clear conversation",
+            );
+            app.show_dialog(dialog);
+            app.close_menu();
+        }
+        "help_documentation" => {
+            let dialog = super::dialog::Dialog::info("Documentation", "Documentation coming soon...\nVisit https://github.com/anthropics/orca for more info.");
+            app.show_dialog(dialog);
+            app.close_menu();
+        }
+
+        _ => {
+            app.close_menu();
         }
     }
 }
