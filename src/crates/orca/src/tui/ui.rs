@@ -6,6 +6,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Tabs, Wrap},
 };
 use super::app::{App, FocusedArea, SidebarTab, MenuState};
+use super::dialog;
 
 /// Render the complete UI
 pub fn render_ui(f: &mut Frame, app: &App) {
@@ -43,6 +44,11 @@ pub fn render_ui(f: &mut Frame, app: &App) {
 
     // Render dropdown menu if one is open
     render_dropdown_menu(f, app, chunks[0]);
+
+    // Render dialog if one is open
+    if let Some(ref dlg) = app.dialog {
+        dialog::render_dialog(f, dlg);
+    }
 }
 
 /// Render the menu bar

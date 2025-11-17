@@ -1,6 +1,7 @@
 //! Application state management for TUI
 
 use crate::HealthReport;
+use super::dialog::Dialog;
 use std::collections::VecDeque;
 
 /// Maximum number of conversation/log entries to keep
@@ -95,6 +96,7 @@ pub struct App {
     pub menu_state: MenuState,
     pub menu_selected_index: usize,
     pub dialog_state: DialogState,
+    pub dialog: Option<Dialog>,
 }
 
 impl App {
@@ -130,6 +132,7 @@ impl App {
             menu_state: MenuState::Closed,
             menu_selected_index: 0,
             dialog_state: DialogState::None,
+            dialog: None,
         }
     }
 
@@ -433,6 +436,63 @@ impl App {
                 _ => None,
             },
         }
+    }
+
+    // === Dialog Management Methods ===
+
+    /// Show a dialog
+    pub fn show_dialog(&mut self, dialog: Dialog) {
+        self.dialog = Some(dialog);
+        self.focused = FocusedArea::Menu; // Change focus to dialog
+    }
+
+    /// Close the current dialog
+    pub fn close_dialog(&mut self) {
+        self.dialog = None;
+        self.dialog_state = DialogState::None;
+    }
+
+    /// Navigate up in dialog (for list and confirmation dialogs)
+    pub fn dialog_prev(&mut self) {
+        if let Some(ref mut dialog) = self.dialog {
+            dialog.select_prev();
+        }
+    }
+
+    /// Navigate down in dialog (for list and confirmation dialogs)
+    pub fn dialog_next(&mut self) {
+        if let Some(ref mut dialog) = self.dialog {
+            dialog.select_next();
+        }
+    }
+
+    /// Add character to dialog input
+    pub fn dialog_add_char(&mut self, c: char) {
+        if let Some(ref mut dialog) = self.dialog {
+            dialog.add_char(c);
+        }
+    }
+
+    /// Backspace in dialog input
+    pub fn dialog_backspace(&mut self) {
+        if let Some(ref mut dialog) = self.dialog {
+            dialog.backspace();
+        }
+    }
+
+    /// Get selected option from dialog
+    pub fn dialog_selected_option(&self) -> Option<&str> {
+        self.dialog.as_ref().and_then(|d| d.selected_option())
+    }
+
+    /// Get input from text input dialog
+    pub fn dialog_get_input(&self) -> Option<String> {
+        self.dialog.as_ref().map(|d| d.get_input())
+    }
+
+    /// Check if dialog is open
+    pub fn has_dialog(&self) -> bool {
+        self.dialog.is_some()
     }
 }
 

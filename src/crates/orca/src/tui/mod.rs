@@ -3,10 +3,12 @@
 //! Provides an interactive multi-panel TUI for managing workflows, tasks, and viewing logs.
 
 pub mod app;
+pub mod dialog;
 pub mod handler;
 pub mod ui;
 
 pub use app::{App, AppState};
+pub use dialog::{Dialog, DialogType, render_dialog};
 pub use handler::InputHandler;
 pub use ui::render_ui;
 
