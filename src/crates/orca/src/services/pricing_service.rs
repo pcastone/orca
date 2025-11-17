@@ -41,8 +41,8 @@ impl PricingService {
 
             sqlx::query(
                 "INSERT INTO llm_pricing (id, provider, model, cost_per_input_token,
-                                        cost_per_output_token, cost_per_reasoning_token, updated_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)"
+                                        cost_per_output_token, cost_per_reasoning_token, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
             )
             .bind(&id)
             .bind(provider)
@@ -50,6 +50,7 @@ impl PricingService {
             .bind(input_cost)
             .bind(output_cost)
             .bind(reasoning_cost)
+            .bind(now)
             .bind(now)
             .execute(self.db.pool())
             .await

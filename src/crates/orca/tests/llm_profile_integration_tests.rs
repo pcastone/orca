@@ -10,7 +10,7 @@ async fn test_llm_profile_create_and_retrieve() {
     let (_temp, db) = common::setup_test_db().await;
     let repo = LlmProfileRepository::new(db);
 
-    let profile = LlmProfile {
+    let profile_input = LlmProfile {
         id: "profile-1".to_string(),
         name: "Multi LLM".to_string(),
         planner_provider: "anthropic".to_string(),
@@ -23,7 +23,7 @@ async fn test_llm_profile_create_and_retrieve() {
         updated_at: chrono::Utc::now().timestamp(),
     };
 
-    repo.create(profile.clone())
+    let profile = repo.create(profile_input)
         .await
         .expect("Failed to create profile");
 
@@ -44,7 +44,7 @@ async fn test_llm_profile_get_by_name() {
     let (_temp, db) = common::setup_test_db().await;
     let repo = LlmProfileRepository::new(db);
 
-    let profile = LlmProfile {
+    let profile_input = LlmProfile {
         id: "profile-1".to_string(),
         name: "FastExecution".to_string(),
         planner_provider: "openai".to_string(),
@@ -57,7 +57,7 @@ async fn test_llm_profile_get_by_name() {
         updated_at: chrono::Utc::now().timestamp(),
     };
 
-    repo.create(profile.clone())
+    let profile = repo.create(profile_input)
         .await
         .expect("Failed to create profile");
 
@@ -117,7 +117,7 @@ async fn test_llm_profile_update() {
     let (_temp, db) = common::setup_test_db().await;
     let repo = LlmProfileRepository::new(db);
 
-    let mut profile = LlmProfile {
+    let profile_input = LlmProfile {
         id: "p1".to_string(),
         name: "Original".to_string(),
         planner_provider: "anthropic".to_string(),
@@ -130,7 +130,7 @@ async fn test_llm_profile_update() {
         updated_at: chrono::Utc::now().timestamp(),
     };
 
-    repo.create(profile.clone())
+    let mut profile = repo.create(profile_input)
         .await
         .expect("Failed to create");
 
@@ -157,7 +157,7 @@ async fn test_llm_profile_delete() {
     let (_temp, db) = common::setup_test_db().await;
     let repo = LlmProfileRepository::new(db);
 
-    let profile = LlmProfile {
+    let profile_input = LlmProfile {
         id: "p1".to_string(),
         name: "ToDelete".to_string(),
         planner_provider: "anthropic".to_string(),
@@ -170,7 +170,7 @@ async fn test_llm_profile_delete() {
         updated_at: chrono::Utc::now().timestamp(),
     };
 
-    repo.create(profile.clone())
+    let profile = repo.create(profile_input)
         .await
         .expect("Failed to create");
 
@@ -191,7 +191,7 @@ async fn test_llm_profile_activate() {
     let (_temp, db) = common::setup_test_db().await;
     let repo = LlmProfileRepository::new(db);
 
-    let profile = LlmProfile {
+    let profile_input = LlmProfile {
         id: "p1".to_string(),
         name: "ToActivate".to_string(),
         planner_provider: "anthropic".to_string(),
@@ -204,7 +204,7 @@ async fn test_llm_profile_activate() {
         updated_at: chrono::Utc::now().timestamp(),
     };
 
-    repo.create(profile.clone())
+    let profile = repo.create(profile_input)
         .await
         .expect("Failed to create");
 
@@ -227,7 +227,7 @@ async fn test_llm_profile_with_description() {
     let (_temp, db) = common::setup_test_db().await;
     let repo = LlmProfileRepository::new(db);
 
-    let profile = LlmProfile {
+    let profile_input = LlmProfile {
         id: "p1".to_string(),
         name: "Documented".to_string(),
         planner_provider: "anthropic".to_string(),
@@ -240,7 +240,7 @@ async fn test_llm_profile_with_description() {
         updated_at: chrono::Utc::now().timestamp(),
     };
 
-    repo.create(profile.clone())
+    let profile = repo.create(profile_input)
         .await
         .expect("Failed to create");
 
