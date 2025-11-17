@@ -277,9 +277,24 @@ fn execute_menu_action(action: &str, app: &mut App) {
             app.close_menu();
         }
 
-        // Config menu actions (placeholders)
+        // Config menu actions
         "config_view" => {
-            let dialog = super::dialog::Dialog::info("Config", "View configuration coming soon...");
+            // Build config info string
+            let config_info = format!(
+                "Current Configuration:\n\n\
+                Model: {}\n\
+                Tokens Used: {}\n\
+                Budget: {}\n\
+                LLM Profile: {}\n\n\
+                Config files:\n\
+                - ~/.orca/orca.toml (user)\n\
+                - ./.orca/orca.toml (project)",
+                app.current_model,
+                app.tokens_used,
+                app.active_budget.as_ref().unwrap_or(&"None".to_string()),
+                app.llm_profile.as_ref().unwrap_or(&"None".to_string())
+            );
+            let dialog = super::dialog::Dialog::info("Configuration", config_info);
             app.show_dialog(dialog);
             app.close_menu();
         }
