@@ -316,6 +316,15 @@ enum WorkflowCommands {
     Run {
         /// Workflow ID
         id: String,
+        /// Planner LLM provider and model (format: provider:model)
+        #[arg(long)]
+        planner: Option<String>,
+        /// Worker LLM provider and model (format: provider:model)
+        #[arg(long)]
+        worker: Option<String>,
+        /// Budget ID to use for this workflow run
+        #[arg(long)]
+        budget: Option<String>,
     },
     /// Show workflow details
     Show {
@@ -475,8 +484,8 @@ async fn main() -> anyhow::Result<()> {
                 WorkflowCommands::List => {
                     orca::cli::workflow::handle_list(db_manager).await?;
                 }
-                WorkflowCommands::Run { id } => {
-                    orca::cli::workflow::handle_run(db_manager, id).await?;
+                WorkflowCommands::Run { id, planner, worker, budget } => {
+                    orca::cli::workflow::handle_run(db_manager, id, planner, worker, budget).await?;
                 }
                 WorkflowCommands::Show { id } => {
                     orca::cli::workflow::handle_show(db_manager, id).await?;

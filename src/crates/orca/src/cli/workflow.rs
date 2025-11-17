@@ -78,7 +78,13 @@ pub async fn handle_list(db_manager: Arc<DatabaseManager>) -> Result<()> {
 }
 
 /// Handle workflow run command
-pub async fn handle_run(db_manager: Arc<DatabaseManager>, id: String) -> Result<()> {
+pub async fn handle_run(
+    db_manager: Arc<DatabaseManager>,
+    id: String,
+    planner: Option<String>,
+    worker: Option<String>,
+    budget: Option<String>,
+) -> Result<()> {
     let project_db = db_manager
         .project_db()
         .ok_or_else(|| OrcaError::Other("No project database. Run 'orca init' in a project directory.".to_string()))?;
@@ -91,6 +97,20 @@ pub async fn handle_run(db_manager: Arc<DatabaseManager>, id: String) -> Result<
     println!("Running workflow: {}", workflow.name);
     println!("Workflow ID: {}", workflow.id);
     println!();
+
+    // Display LLM configuration if provided
+    if let Some(ref p) = planner {
+        println!("Planner LLM: {}", p);
+    }
+    if let Some(ref w) = worker {
+        println!("Worker LLM: {}", w);
+    }
+    if let Some(ref b) = budget {
+        println!("Budget: {}", b);
+    }
+    if planner.is_some() || worker.is_some() || budget.is_some() {
+        println!();
+    }
 
     // Load workflow tasks using repository
     let task_ids = repo.get_task_ids(&workflow.id).await?;
@@ -110,6 +130,17 @@ pub async fn handle_run(db_manager: Arc<DatabaseManager>, id: String) -> Result<
     println!("{}", "✓ Workflow execution started".green());
     println!("  Note: Full workflow execution requires ExecutionContext integration");
     println!("  Workflow status updated to 'running'");
+
+    // Log LLM profile and budget info for execution
+    if let Some(p) = planner {
+        info!(planner = %p, "Using planner LLM");
+    }
+    if let Some(w) = worker {
+        info!(worker = %w, "Using worker LLM");
+    }
+    if let Some(b) = budget {
+        info!(budget = %b, "Using budget for this execution");
+    }
 
     Ok(())
 }
