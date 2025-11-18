@@ -93,8 +93,10 @@ impl InputHandler {
             return;
         }
 
-        // Handle Alt+F/E/C/W/H for menu shortcuts
-        if key_event.modifiers.contains(KeyModifiers::ALT) {
+        // Handle Alt+F/E/C/W/H for menu shortcuts (Alt on Windows/Linux, Cmd on macOS)
+        let has_menu_modifier = key_event.modifiers.contains(KeyModifiers::ALT) ||
+                                key_event.modifiers.contains(KeyModifiers::SUPER);
+        if has_menu_modifier {
             match key_event.code {
                 KeyCode::Char('f') | KeyCode::Char('F') => {
                     app.open_menu(MenuState::FileOpen);
