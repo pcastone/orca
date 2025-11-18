@@ -28,6 +28,14 @@ impl InputHandler {
                     app.menu_next();
                     return;
                 }
+                KeyCode::Left => {
+                    app.prev_menu();
+                    return;
+                }
+                KeyCode::Right => {
+                    app.next_menu();
+                    return;
+                }
                 KeyCode::Enter => {
                     // Execute the selected menu action
                     if let Some(action) = app.get_selected_menu_action() {

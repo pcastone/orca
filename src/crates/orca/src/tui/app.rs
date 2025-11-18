@@ -389,6 +389,34 @@ impl App {
         }
     }
 
+    /// Switch to next menu (right arrow navigation)
+    pub fn next_menu(&mut self) {
+        self.menu_state = match self.menu_state {
+            MenuState::Closed => MenuState::FileOpen,
+            MenuState::FileOpen => MenuState::EditOpen,
+            MenuState::EditOpen => MenuState::ConfigOpen,
+            MenuState::ConfigOpen => MenuState::WorkflowOpen,
+            MenuState::WorkflowOpen => MenuState::HelpOpen,
+            MenuState::HelpOpen => MenuState::FileOpen, // Wrap around
+        };
+        self.menu_selected_index = 0;
+        self.focused = FocusedArea::Menu;
+    }
+
+    /// Switch to previous menu (left arrow navigation)
+    pub fn prev_menu(&mut self) {
+        self.menu_state = match self.menu_state {
+            MenuState::Closed => MenuState::HelpOpen,
+            MenuState::FileOpen => MenuState::HelpOpen, // Wrap around
+            MenuState::EditOpen => MenuState::FileOpen,
+            MenuState::ConfigOpen => MenuState::EditOpen,
+            MenuState::WorkflowOpen => MenuState::ConfigOpen,
+            MenuState::HelpOpen => MenuState::WorkflowOpen,
+        };
+        self.menu_selected_index = 0;
+        self.focused = FocusedArea::Menu;
+    }
+
     /// Get the count of items in the current menu
     fn get_menu_items_count(&self) -> usize {
         match self.menu_state {
