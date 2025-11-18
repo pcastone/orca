@@ -15,7 +15,7 @@ impl InputHandler {
 
     /// Handle a keyboard event
     pub fn handle_key_event(&self, key_event: KeyEvent, app: &mut App) {
-        debug!("Key event: {:?}", key_event);
+        debug!("Key event: code={:?}, modifiers={:?}", key_event.code, key_event.modifiers);
 
         // Handle menu-specific keys first
         if app.focused == FocusedArea::Menu {
@@ -93,9 +93,12 @@ impl InputHandler {
             return;
         }
 
-        // Handle Alt+F/E/C/W/H for menu shortcuts (Alt on Windows/Linux, Cmd on macOS)
+        // Handle Alt+F/E/C/W/H for menu shortcuts
+        // On Windows/Linux: Alt+F/E/C/W/H
+        // On macOS: Ctrl+Shift+F/E/C/W/H (Cmd is usually intercepted by terminal)
         let has_menu_modifier = key_event.modifiers.contains(KeyModifiers::ALT) ||
-                                key_event.modifiers.contains(KeyModifiers::SUPER);
+                                (key_event.modifiers.contains(KeyModifiers::CONTROL) &&
+                                 key_event.modifiers.contains(KeyModifiers::SHIFT));
         if has_menu_modifier {
             match key_event.code {
                 KeyCode::Char('f') | KeyCode::Char('F') => {
