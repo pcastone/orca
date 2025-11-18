@@ -93,6 +93,31 @@ impl InputHandler {
             return;
         }
 
+        // Handle function keys F1-F5 for menu shortcuts (works on all platforms)
+        match key_event.code {
+            KeyCode::F(1) => {
+                app.open_menu(MenuState::FileOpen);
+                return;
+            }
+            KeyCode::F(2) => {
+                app.open_menu(MenuState::EditOpen);
+                return;
+            }
+            KeyCode::F(3) => {
+                app.open_menu(MenuState::ConfigOpen);
+                return;
+            }
+            KeyCode::F(4) => {
+                app.open_menu(MenuState::WorkflowOpen);
+                return;
+            }
+            KeyCode::F(5) => {
+                app.open_menu(MenuState::HelpOpen);
+                return;
+            }
+            _ => {}
+        }
+
         // Handle Alt+F/E/C/W/H for menu shortcuts
         // On Windows/Linux: Alt+F/E/C/W/H
         // On macOS: Ctrl+Shift+F/E/C/W/H (Cmd is usually intercepted by terminal)
