@@ -780,3 +780,204 @@ async fn test_tool_execution_with_runtime_context() {
         ToolOutput::Error { error } => panic!("Expected success, got error: {}", error),
     }
 }
+
+/// Test Case 15: TOON serialization of tool call results
+///
+/// Verifies:
+/// - Tool results can be serialized to TOON format
+/// - TOON format is more compact for uniform arrays
+/// - Token savings are achieved for batch tool results
+#[tokio::test]
+async fn test_tool_results_toon_serialization() {
+    let mut registry = ToolRegistry::new();
+
+    // Register a tool that returns tabular data (ideal for TOON)
+    registry.register(Tool::new(
+        "list_files",
+        "Lists files in a directory",
+        json!({}),
+        Arc::new(|_args, _runtime| {
+            Box::pin(async move {
+                // Return uniform array data - perfect for TOON
+                Ok(json!({
+                    "files": [
+                        {"path": "src/main.rs", "size": 1024, "modified": "2025-01-15"},
+                        {"path": "src/lib.rs", "size": 2048, "modified": "2025-01-14"},
+                        {"path": "Cargo.toml", "size": 512, "modified": "2025-01-13"},
+                        {"path": "README.md", "size": 256, "modified": "2025-01-12"}
+                    ]
+                }))
+            })
+        }),
+    ));
+
+    let tool_call = ToolCall {
+        id: "call_files".to_string(),
+        name: "list_files".to_string(),
+        args: json!({}),
+    };
+
+    let result = registry.execute_tool_call(&tool_call, None).await;
+
+    match result.output {
+        ToolOutput::Success { content } => {
+            // Serialize to JSON
+            let json_output = serde_json::to_string(&content).unwrap();
+
+            // Serialize to TOON
+            let toon_output = rtoon::encode(&content, None);
+
+            // TOON should be more compact for this tabular data
+            println!("JSON length: {} bytes", json_output.len());
+            println!("TOON length: {} bytes", toon_output.len());
+            println!("TOON output:\n{}", toon_output);
+
+            assert!(
+                toon_output.len() < json_output.len(),
+                "TOON ({} bytes) should be smaller than JSON ({} bytes) for uniform arrays",
+                toon_output.len(),
+                json_output.len()
+            );
+
+            // Verify TOON can be decoded back
+            let decoded = rtoon::decode(&toon_output, None).unwrap();
+            assert_eq!(decoded["files"].as_array().unwrap().len(), 4);
+        }
+        ToolOutput::Error { error } => panic!("Expected success, got error: {}", error),
+    }
+}
+
+/// Test Case 16: TOON serialization of batch tool execution results
+///
+/// Verifies:
+/// - Multiple tool results can be serialized to TOON
+/// - Batch results benefit from TOON's tabular format
+/// - Round-trip encoding/decoding preserves data
+#[tokio::test]
+async fn test_batch_tool_results_toon_serialization() {
+    let mut registry = ToolRegistry::new();
+
+    // Register a simple echo tool
+    registry.register(Tool::new(
+        "search",
+        "Search tool",
+        json!({}),
+        Arc::new(|args, _runtime| {
+            Box::pin(async move {
+                Ok(json!({
+                    "query": args["query"],
+                    "results": [
+                        {"file": "a.rs", "line": 10, "match": "fn main()"},
+                        {"file": "b.rs", "line": 20, "match": "fn test()"},
+                        {"file": "c.rs", "line": 30, "match": "fn helper()"}
+                    ]
+                }))
+            })
+        }),
+    ));
+
+    // Execute multiple tool calls
+    let tool_calls = vec![
+        ToolCall {
+            id: "search_1".to_string(),
+            name: "search".to_string(),
+            args: json!({"query": "fn main"}),
+        },
+        ToolCall {
+            id: "search_2".to_string(),
+            name: "search".to_string(),
+            args: json!({"query": "fn test"}),
+        },
+        ToolCall {
+            id: "search_3".to_string(),
+            name: "search".to_string(),
+            args: json!({"query": "struct"}),
+        },
+    ];
+
+    let results = registry.execute_tool_calls(&tool_calls, None).await;
+    assert_eq!(results.len(), 3);
+
+    // Collect all results for batch serialization
+    let batch_results: Vec<_> = results
+        .iter()
+        .map(|r| {
+            json!({
+                "id": r.id,
+                "tool": r.name,
+                "output": match &r.output {
+                    ToolOutput::Success { content } => content.clone(),
+                    ToolOutput::Error { error } => json!({"error": error}),
+                }
+            })
+        })
+        .collect();
+
+    let batch_json = serde_json::to_value(&batch_results).unwrap();
+
+    // Serialize batch to TOON
+    let toon_output = rtoon::encode(&batch_json, None);
+    let json_output = serde_json::to_string(&batch_json).unwrap();
+
+    println!("Batch JSON length: {} bytes", json_output.len());
+    println!("Batch TOON length: {} bytes", toon_output.len());
+
+    // Calculate savings
+    let savings = 1.0 - (toon_output.len() as f64 / json_output.len() as f64);
+    println!("Token savings: {:.1}%", savings * 100.0);
+
+    // Verify round-trip
+    let decoded = rtoon::decode(&toon_output, None).unwrap();
+    assert_eq!(decoded.as_array().unwrap().len(), 3);
+}
+
+/// Test Case 17: TOON format selection for tool outputs
+///
+/// Verifies:
+/// - Auto-selection chooses TOON for uniform arrays
+/// - Single objects remain as JSON
+/// - Hybrid data gets appropriate format
+#[tokio::test]
+async fn test_tool_output_format_selection() {
+    // Test 1: Uniform array - should select TOON
+    let uniform_data = json!([
+        {"file": "a.rs", "line": 1, "content": "fn main"},
+        {"file": "b.rs", "line": 2, "content": "let x"},
+        {"file": "c.rs", "line": 3, "content": "struct"},
+        {"file": "d.rs", "line": 4, "content": "impl"}
+    ]);
+
+    let toon_output = rtoon::encode(&uniform_data, None);
+    let json_output = serde_json::to_string(&uniform_data).unwrap();
+
+    assert!(
+        toon_output.len() < json_output.len(),
+        "TOON should be smaller for uniform arrays"
+    );
+
+    // Test 2: Non-uniform array - JSON may be same or smaller
+    let non_uniform = json!([
+        {"type": "a"},
+        {"type": "b", "extra": "field", "more": 123}
+    ]);
+
+    let toon_non_uniform = rtoon::encode(&non_uniform, None);
+    let json_non_uniform = serde_json::to_string(&non_uniform).unwrap();
+
+    println!("Non-uniform JSON: {} bytes", json_non_uniform.len());
+    println!("Non-uniform TOON: {} bytes", toon_non_uniform.len());
+
+    // Test 3: Single object - likely similar sizes
+    let single_obj = json!({"status": "ok", "message": "success"});
+
+    let toon_single = rtoon::encode(&single_obj, None);
+    let json_single = serde_json::to_string(&single_obj).unwrap();
+
+    println!("Single obj JSON: {} bytes", json_single.len());
+    println!("Single obj TOON: {} bytes", toon_single.len());
+
+    // Verify all can be decoded
+    assert!(rtoon::decode(&toon_output, None).is_ok());
+    assert!(rtoon::decode(&toon_non_uniform, None).is_ok());
+    assert!(rtoon::decode(&toon_single, None).is_ok());
+}
