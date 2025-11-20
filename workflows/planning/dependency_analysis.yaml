@@ -1,0 +1,85 @@
+# Dependency Analysis Workflow
+# Pattern: ReAct (Exploration and analysis)
+# Purpose: Analyze task dependencies and create execution order
+# Complexity: Medium
+# Use Cases:
+# - Understand dependencies between tasks
+# - Create optimal execution order
+# - Identify parallelization opportunities
+# - Find critical path for project timeline
+
+id: "dependency_analysis"
+description: "Analyze task dependencies and create optimal execution order"
+
+steps:
+  - name: "analyze_dependencies"
+    pattern: "react_1"
+    config:
+      max_iterations: 12
+
+      tools:
+        - file_read
+        - grep
+        - fs_list
+        - shell_exec
+
+      system_prompt: |
+        You are analyzing dependencies between tasks to create an optimal execution plan.
+
+        Analysis Process:
+        1. List all tasks that need to be completed
+        2. For each task, identify:
+           - What it depends on (inputs)
+           - What depends on it (outputs)
+           - Resources it needs
+        3. Build a dependency graph
+        4. Identify the critical path
+        5. Find parallelization opportunities
+
+        Dependency Types:
+        - Data dependency: Task B needs output from Task A
+        - Resource dependency: Tasks compete for same resource
+        - Logical dependency: Task B must follow Task A conceptually
+        - Temporal dependency: Task B must happen at specific time
+
+        Analysis Output:
+
+        1. Task List:
+           - Task ID, Name, Description
+
+        2. Dependency Matrix:
+           - Which tasks depend on which
+
+        3. Critical Path:
+           - Longest chain of dependencies
+           - Determines minimum completion time
+
+        4. Parallel Groups:
+           - Tasks that can run simultaneously
+
+        5. Recommended Order:
+           - Optimal execution sequence
+           - Balances parallelism and dependencies
+
+        Look for:
+        - Circular dependencies (errors)
+        - Bottlenecks (many tasks depend on one)
+        - Orphan tasks (no dependencies, can start immediately)
+        - Leaf tasks (nothing depends on them, can end any time)
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 15
+  enable_retries: true
+  max_retries: 1
+  timeout: 480  # 8 minutes
+
+# Usage Examples:
+# aco workflow execute dependency_analysis --input "Analyze dependencies for the API migration tasks"
+# aco workflow execute dependency_analysis --input "Find the critical path for the release tasks"
+# aco workflow execute dependency_analysis --input "What can be parallelized in these build steps?"

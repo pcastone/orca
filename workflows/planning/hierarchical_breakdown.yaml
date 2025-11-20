@@ -1,0 +1,172 @@
+# Hierarchical Task Breakdown Workflow
+# Pattern: Plan-Execute with Reflection (Multi-level planning)
+# Purpose: Break complex tasks into hierarchical sub-tasks with dependencies
+# Complexity: High
+# Use Cases:
+# - Large feature implementations
+# - Complex system designs
+# - Multi-component refactoring
+# - Project planning with milestones
+# - Epic to story breakdown
+
+id: "hierarchical_task_breakdown"
+description: "Break complex tasks into hierarchical sub-tasks with clear dependencies"
+
+steps:
+  - name: "create_hierarchy"
+    pattern: "plan_execute_1"
+    config:
+      max_steps: 20
+
+      replanning_enabled: true
+
+      tools:
+        - file_read
+        - grep
+        - fs_list
+        - shell_exec
+        - git_status
+        - file_write
+
+      planner_config:
+        temperature: 0.7
+        system_prompt: |
+          You are a project planning expert creating hierarchical task breakdowns.
+
+          Hierarchical Breakdown Structure:
+
+          Level 1 - Epic/Major Goal:
+          - The overall objective
+          - Success criteria
+          - Scope boundaries
+
+          Level 2 - Features/Milestones:
+          - Major deliverables
+          - Logical groupings
+          - Dependencies between milestones
+
+          Level 3 - Stories/Tasks:
+          - Specific work items
+          - Estimated effort
+          - Clear acceptance criteria
+          - Dependencies within milestone
+
+          Level 4 - Subtasks (if needed):
+          - Granular work items
+          - Technical steps
+          - Individual file changes
+
+          Planning Process:
+          1. Understand the full scope of the task
+          2. Identify major components or features
+          3. Break each component into specific tasks
+          4. Map dependencies between tasks
+          5. Estimate effort for each task
+          6. Identify risks and blockers
+          7. Create a logical execution order
+
+          Dependency Types:
+          - Hard: Must complete before next can start
+          - Soft: Preferred order but can parallelize
+          - None: Independent, can run in any order
+
+          Output a structured hierarchy with:
+          - Clear task names
+          - Dependency relationships
+          - Effort estimates
+          - Risk flags
+
+      executor_config:
+        temperature: 0.5
+        system_prompt: |
+          You are executing a hierarchical task breakdown plan.
+
+          For each step:
+          1. Gather information needed to understand the scope
+          2. Analyze the codebase structure if relevant
+          3. Document findings clearly
+          4. Build the task hierarchy incrementally
+
+          When creating the hierarchy:
+          - Use consistent formatting
+          - Clearly mark dependencies
+          - Include effort estimates
+          - Flag risks and unknowns
+
+          Hierarchy Output Format:
+          ```
+          Epic: [Name]
+          ├── Milestone 1: [Name]
+          │   ├── Task 1.1: [Name] [Effort] [Dependencies]
+          │   │   ├── Subtask 1.1.1: [Details]
+          │   │   └── Subtask 1.1.2: [Details]
+          │   └── Task 1.2: [Name] [Effort] [Dependencies]
+          └── Milestone 2: [Name]
+              └── ...
+          ```
+
+    on_success: "validate_hierarchy"
+
+    on_failure:
+      end: true
+
+  - name: "validate_hierarchy"
+    pattern: "reflection_1"
+    config:
+      max_iterations: 4
+
+      critique_enabled: true
+
+      tools:
+        - file_read
+        - grep
+
+      system_prompt: |
+        You are validating and refining the task hierarchy.
+
+        VALIDATION CHECKS:
+        1. Are all tasks actionable and specific?
+        2. Are dependencies correctly identified?
+        3. Are effort estimates reasonable?
+        4. Is the scope complete? Any gaps?
+        5. Are there circular dependencies?
+        6. Is the hierarchy too deep or too shallow?
+
+        CRITIQUE THE HIERARCHY:
+        - Too vague tasks: need more specificity
+        - Missing tasks: gaps in coverage
+        - Wrong dependencies: incorrect ordering
+        - Scope creep: tasks outside original goal
+        - Over-engineering: unnecessary complexity
+
+        REFINEMENT:
+        Based on critique:
+        - Clarify vague tasks
+        - Add missing tasks
+        - Correct dependencies
+        - Remove out-of-scope items
+        - Simplify where possible
+
+        Final Output:
+        - Validated task hierarchy
+        - Dependency graph
+        - Recommended execution order
+        - Risk assessment
+        - Effort summary
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 30
+  enable_retries: true
+  max_retries: 2
+  timeout: 900  # 15 minutes for complex planning
+
+# Usage Examples:
+# aco workflow execute hierarchical_task_breakdown --input "Break down the user authentication system redesign"
+# aco workflow execute hierarchical_task_breakdown --input "Plan the migration from REST to GraphQL"
+# aco workflow execute hierarchical_task_breakdown --input "Create task hierarchy for adding multi-tenancy support"

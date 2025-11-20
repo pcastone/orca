@@ -1,0 +1,129 @@
+# Regression Test Template
+# Defines standard configuration for regression testing workflows
+
+# Test Suite Configuration
+test_suites:
+  unit:
+    description: "Unit tests for individual components"
+    priority: 1
+    command_patterns:
+      - "cargo test"
+      - "pytest"
+      - "npm test"
+      - "go test ./..."
+    timeout: 300
+
+  integration:
+    description: "Integration tests for component interactions"
+    priority: 2
+    command_patterns:
+      - "cargo test --features integration"
+      - "pytest tests/integration/"
+      - "npm run test:integration"
+    timeout: 600
+
+  e2e:
+    description: "End-to-end tests for full workflows"
+    priority: 3
+    command_patterns:
+      - "npm run test:e2e"
+      - "pytest tests/e2e/"
+    timeout: 900
+
+# Coverage Thresholds
+coverage:
+  minimum:
+    line: 70
+    branch: 60
+    function: 80
+  target:
+    line: 85
+    branch: 75
+    function: 90
+
+# Regression Categories
+categories:
+  critical:
+    description: "Tests for critical business functionality"
+    must_pass: true
+    examples:
+      - "authentication"
+      - "payment processing"
+      - "data integrity"
+
+  standard:
+    description: "Tests for normal functionality"
+    must_pass: true
+    examples:
+      - "CRUD operations"
+      - "API endpoints"
+      - "business logic"
+
+  edge_case:
+    description: "Tests for edge cases and boundaries"
+    must_pass: false
+    examples:
+      - "boundary conditions"
+      - "error handling"
+      - "timeout scenarios"
+
+# Reporting Configuration
+reporting:
+  format: "detailed"  # summary | detailed | json
+  include:
+    - passed_tests
+    - failed_tests
+    - skipped_tests
+    - coverage_data
+    - execution_time
+    - comparison_with_baseline
+
+  failure_details:
+    - error_message
+    - stack_trace
+    - test_context
+    - suggested_fixes
+
+# Baseline Comparison
+baseline:
+  # Compare against previous run
+  compare_with_previous: true
+
+  # Fail if new failures appear
+  fail_on_new_failures: true
+
+  # Track flaky tests
+  track_flaky_tests: true
+  flaky_threshold: 3  # runs to consider a test flaky
+
+# Environment Setup
+environment:
+  # Reset state before tests
+  reset_state: true
+
+  # Isolate test runs
+  isolation: true
+
+  # Parallel execution
+  parallel:
+    enabled: true
+    max_workers: 4
+
+# Retry Configuration
+retries:
+  # Retry failed tests
+  retry_failed: true
+  max_retries: 2
+
+  # Backoff between retries
+  backoff_seconds: 5
+
+# Notifications
+notifications:
+  on_failure:
+    - log_error
+    - save_artifacts
+
+  on_success:
+    - log_summary
+    - update_baseline

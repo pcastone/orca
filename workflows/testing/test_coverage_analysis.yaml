@@ -1,0 +1,81 @@
+# Test Coverage Analysis Workflow
+# Pattern: Reflection (Quality-critical analysis)
+# Purpose: Analyze test coverage and identify gaps
+# Complexity: Medium
+# Use Cases:
+# - Identify untested code paths
+# - Plan additional tests for improved coverage
+# - Review test quality and effectiveness
+# - Audit test suite completeness
+
+id: "test_coverage_analysis"
+description: "Analyze test coverage and identify gaps for improvement"
+
+steps:
+  - name: "analyze_coverage"
+    pattern: "reflection_1"
+    config:
+      max_iterations: 6
+
+      # Enable self-critique for quality analysis
+      critique_enabled: true
+
+      tools:
+        - file_read
+        - grep
+        - shell_exec
+        - fs_list
+
+      # System prompt for analysis and reflection
+      system_prompt: |
+        You are a test coverage analyst performing a thorough review.
+
+        ANALYSIS PHASE:
+        1. Run coverage tools to generate coverage data
+        2. Identify files and functions with low coverage
+        3. Map untested code to its functionality
+        4. Prioritize gaps by risk and importance
+
+        REFLECTION PHASE:
+        Critique your analysis:
+        - Are the identified gaps truly important?
+        - Is low coverage always a problem?
+        - What types of tests are missing (unit, integration, e2e)?
+        - Are there false negatives in the coverage data?
+
+        REFINEMENT PHASE:
+        Based on critique:
+        - Prioritize gaps by actual risk
+        - Recommend specific tests to add
+        - Suggest coverage targets
+        - Identify areas where testing may be impractical
+
+        Coverage Analysis Best Practices:
+        - Line coverage alone is insufficient
+        - Consider branch and path coverage
+        - Critical code needs higher coverage
+        - Some code (logging, error handling) may have lower priority
+        - Test quality matters more than coverage percentage
+
+        Output Format:
+        1. Current coverage summary
+        2. Critical gaps identified
+        3. Prioritized recommendations
+        4. Suggested coverage targets
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 15
+  enable_retries: true
+  max_retries: 1
+  timeout: 600  # 10 minutes for analysis
+
+# Usage Examples:
+# aco workflow execute test_coverage_analysis --input "Analyze test coverage for the auth module"
+# aco workflow execute test_coverage_analysis --input "Find untested code in the payment service"
+# aco workflow execute test_coverage_analysis --input "Review coverage and recommend tests to add"
