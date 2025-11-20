@@ -165,4 +165,129 @@ mod tests {
         let encoded = encode(&value, None);
         assert_eq!(encoded, "null");
     }
+
+    #[test]
+    fn test_inline_array() {
+        let value = json!({"numbers": [1, 2, 3]});
+        let encoded = encode(&value, None);
+        let decoded = decode(&encoded, None).unwrap();
+        assert_eq!(value, decoded);
+    }
+
+    #[test]
+    fn test_tabular_array() {
+        let value = json!({
+            "users": [
+                {"id": 1, "name": "Alice", "active": true},
+                {"id": 2, "name": "Bob", "active": false}
+            ]
+        });
+        let encoded = encode(&value, None);
+        let decoded = decode(&encoded, None).unwrap();
+        assert_eq!(value, decoded);
+    }
+
+    #[test]
+    fn test_nested_objects() {
+        let value = json!({
+            "config": {
+                "database": {
+                    "host": "localhost",
+                    "port": 5432
+                }
+            }
+        });
+        let encoded = encode(&value, None);
+        let decoded = decode(&encoded, None).unwrap();
+        assert_eq!(value, decoded);
+    }
+
+    #[test]
+    fn test_quoted_strings() {
+        let value = json!({"message": "Hello, World!"});
+        let encoded = encode(&value, None);
+        let decoded = decode(&encoded, None).unwrap();
+        assert_eq!(value, decoded);
+    }
+
+    #[test]
+    fn test_escape_sequences() {
+        let value = json!({"text": "line1\nline2\ttab"});
+        let encoded = encode(&value, None);
+        let decoded = decode(&encoded, None).unwrap();
+        assert_eq!(value, decoded);
+    }
+
+    #[test]
+    fn test_key_with_special_chars() {
+        let value = json!({"key:with:colons": "value"});
+        let encoded = encode(&value, None);
+        let decoded = decode(&encoded, None).unwrap();
+        assert_eq!(value, decoded);
+    }
+
+    #[test]
+    fn test_empty_array() {
+        let value = json!({"items": []});
+        let encoded = encode(&value, None);
+        let decoded = decode(&encoded, None).unwrap();
+        assert_eq!(value, decoded);
+    }
+
+    #[test]
+    fn test_mixed_array() {
+        let value = json!({
+            "mixed": [
+                {"type": "a"},
+                {"type": "b", "extra": "field"}
+            ]
+        });
+        let encoded = encode(&value, None);
+        let decoded = decode(&encoded, None).unwrap();
+        assert_eq!(value, decoded);
+    }
+
+    #[test]
+    fn test_key_folding() {
+        let value = json!({
+            "data": {
+                "metadata": {
+                    "version": "1.0"
+                }
+            }
+        });
+        let options = EncodeOptions {
+            key_folding: KeyFolding::Safe,
+            ..Default::default()
+        };
+        let encoded = encode(&value, Some(options));
+        assert!(encoded.contains("data.metadata.version"));
+    }
+
+    #[test]
+    fn test_path_expansion() {
+        let input = "data.metadata.version: v1.0";
+        let options = DecodeOptions {
+            expand_paths: PathExpansion::Safe,
+            ..Default::default()
+        };
+        let decoded = decode(input, Some(options)).unwrap();
+        assert_eq!(decoded["data"]["metadata"]["version"], "v1.0");
+    }
+
+    #[test]
+    fn test_floats() {
+        let value = json!({"pi": 3.14159});
+        let encoded = encode(&value, None);
+        let decoded = decode(&encoded, None).unwrap();
+        assert_eq!(value, decoded);
+    }
+
+    #[test]
+    fn test_negative_numbers() {
+        let value = json!({"temp": -42, "delta": -0.5});
+        let encoded = encode(&value, None);
+        let decoded = decode(&encoded, None).unwrap();
+        assert_eq!(value, decoded);
+    }
 }
