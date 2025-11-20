@@ -1,0 +1,139 @@
+# Scaffold Feature Workflow
+# Pattern: Plan-Execute (Structured creation)
+# Purpose: Scaffold modules, files, and boilerplate for new features
+# Complexity: Medium
+# Use Cases:
+# - Create directory structure for new feature
+# - Generate boilerplate files
+# - Set up test files
+# - Wire up basic dependencies
+
+id: "scaffold_feature"
+description: "Scaffold modules, files, and boilerplate for a new feature"
+
+steps:
+  - name: "scaffold"
+    pattern: "plan_execute_1"
+    config:
+      max_steps: 15
+
+      replanning_enabled: true
+
+      tools:
+        - file_read
+        - file_write
+        - fs_list
+        - grep
+        - shell_exec
+
+      planner_config:
+        temperature: 0.6
+        system_prompt: |
+          You are a developer scaffolding a new feature.
+
+          Scaffolding Plan:
+
+          1. Analyze Project Structure:
+             - Identify existing patterns
+             - Find similar features to model after
+             - Understand naming conventions
+             - Check for code generators
+
+          2. Plan Directory Structure:
+             - Source files location
+             - Test files location
+             - Config files if needed
+             - Documentation location
+
+          3. Files to Create:
+             - Main implementation file(s)
+             - Interface/types definitions
+             - Test file(s)
+             - Index/barrel exports
+             - README if complex
+
+          4. Boilerplate Content:
+             - Imports and dependencies
+             - Basic class/function structure
+             - Type definitions
+             - Test setup
+             - Documentation stubs
+
+          5. Integration:
+             - Update barrel exports
+             - Add to dependency injection
+             - Register routes if API
+             - Update configuration
+
+          Consider:
+          - Follow existing project conventions
+          - Use consistent naming
+          - Include TODO comments for implementation
+          - Set up proper error handling structure
+
+      executor_config:
+        temperature: 0.4
+        system_prompt: |
+          You are creating scaffold files for a new feature.
+
+          For each file created:
+          1. Follow project conventions exactly
+          2. Include necessary imports
+          3. Add TODO comments for implementation
+          4. Set up proper structure
+          5. Include basic documentation
+
+          File Templates:
+
+          **Implementation File:**
+          ```
+          // TODO: Implement [feature name]
+          // Created: [date]
+
+          [imports]
+
+          [types/interfaces]
+
+          [main implementation stub]
+
+          [exports]
+          ```
+
+          **Test File:**
+          ```
+          // Tests for [feature name]
+
+          [test imports]
+
+          describe('[feature]', () => {
+            // TODO: Add tests
+
+            it('should [behavior]', () => {
+              // Arrange
+              // Act
+              // Assert
+            });
+          });
+          ```
+
+          After scaffolding:
+          - List all created files
+          - Note any manual steps needed
+          - Highlight TODOs for implementation
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 20
+  enable_retries: true
+  max_retries: 1
+  timeout: 600
+
+# Usage Examples:
+# aco workflow execute scaffold_feature --input "Scaffold a new user notification service"
+# aco workflow execute scaffold_feature --input "Create boilerplate for payment webhook handler"
+# aco workflow execute scaffold_feature --input "Set up files for the new analytics dashboard component"
