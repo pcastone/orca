@@ -8,6 +8,7 @@ members = [
     "src/crates/langgraph-prebuilt",
     "src/crates/langgraph-cli",
     "src/crates/llm",
+    "src/crates/rtoon",
     "src/crates/tooling",
     "src/crates/utils",
 ]
