@@ -1,0 +1,240 @@
+# API Contract Template
+# Defines standard format for API endpoint documentation
+
+# OpenAPI Skeleton
+openapi_template:
+  version: "3.0.3"
+
+  info:
+    title: "[API Name]"
+    version: "1.0.0"
+    description: "[API Description]"
+
+  servers:
+    - url: "https://api.example.com/v1"
+      description: "Production"
+    - url: "https://staging-api.example.com/v1"
+      description: "Staging"
+
+# Endpoint Definition
+endpoint:
+  required_fields:
+    - method
+    - path
+    - summary
+    - request_body
+    - responses
+
+  optional_fields:
+    - description
+    - parameters
+    - headers
+    - security
+    - tags
+
+# Request Definition
+request:
+  headers:
+    common:
+      - name: "Content-Type"
+        value: "application/json"
+      - name: "Authorization"
+        value: "Bearer {token}"
+      - name: "X-Request-ID"
+        value: "{uuid}"
+
+  parameters:
+    types:
+      - path: "Part of URL path"
+      - query: "URL query string"
+      - header: "HTTP header"
+
+    definition:
+      name: "Parameter name"
+      in: "path | query | header"
+      required: true
+      schema:
+        type: "string | integer | boolean | array"
+      description: "What this parameter does"
+
+  body:
+    content_types:
+      - "application/json"
+      - "multipart/form-data"
+      - "application/x-www-form-urlencoded"
+
+    schema_template:
+      type: "object"
+      required: ["field1"]
+      properties:
+        field1:
+          type: "string"
+          description: "Field description"
+          example: "example value"
+
+# Response Definition
+response:
+  status_codes:
+    success:
+      200: "OK - Request succeeded"
+      201: "Created - Resource created"
+      204: "No Content - Success with no body"
+
+    client_error:
+      400: "Bad Request - Invalid input"
+      401: "Unauthorized - Authentication required"
+      403: "Forbidden - Permission denied"
+      404: "Not Found - Resource doesn't exist"
+      409: "Conflict - Resource conflict"
+      422: "Unprocessable Entity - Validation error"
+      429: "Too Many Requests - Rate limited"
+
+    server_error:
+      500: "Internal Server Error"
+      502: "Bad Gateway"
+      503: "Service Unavailable"
+
+  body_template:
+    success:
+      type: "object"
+      properties:
+        data:
+          type: "object"
+          description: "Response payload"
+        meta:
+          type: "object"
+          properties:
+            request_id:
+              type: "string"
+            timestamp:
+              type: "string"
+              format: "date-time"
+
+    error:
+      type: "object"
+      properties:
+        error:
+          type: "object"
+          properties:
+            code:
+              type: "string"
+              description: "Error code"
+            message:
+              type: "string"
+              description: "Human-readable message"
+            details:
+              type: "array"
+              description: "Additional error details"
+
+# Authentication
+authentication:
+  types:
+    bearer:
+      type: "http"
+      scheme: "bearer"
+      bearerFormat: "JWT"
+
+    api_key:
+      type: "apiKey"
+      in: "header"
+      name: "X-API-Key"
+
+    oauth2:
+      type: "oauth2"
+      flows:
+        authorizationCode:
+          authorizationUrl: "/oauth/authorize"
+          tokenUrl: "/oauth/token"
+          scopes:
+            read: "Read access"
+            write: "Write access"
+
+# Pagination
+pagination:
+  cursor_based:
+    parameters:
+      - cursor: "Pagination cursor"
+      - limit: "Items per page (default 20, max 100)"
+    response:
+      next_cursor: "Cursor for next page"
+      has_more: "Whether more items exist"
+
+  offset_based:
+    parameters:
+      - offset: "Number of items to skip"
+      - limit: "Items per page"
+    response:
+      total: "Total item count"
+      offset: "Current offset"
+      limit: "Current limit"
+
+# Versioning
+versioning:
+  strategies:
+    url_path: "/v1/resource"
+    header: "Accept: application/vnd.api+json;version=1"
+    query: "/resource?version=1"
+
+  recommended: "url_path"
+
+# Example Endpoint Template
+example_template: |
+  ## [HTTP Method] [Path]
+
+  [Brief description]
+
+  ### Request
+
+  **Headers:**
+  | Header | Required | Description |
+  |--------|----------|-------------|
+  | Authorization | Yes | Bearer token |
+  | Content-Type | Yes | application/json |
+
+  **Path Parameters:**
+  | Parameter | Type | Description |
+  |-----------|------|-------------|
+  | id | string | Resource ID |
+
+  **Query Parameters:**
+  | Parameter | Type | Default | Description |
+  |-----------|------|---------|-------------|
+  | include | string | - | Related resources to include |
+
+  **Request Body:**
+  ```json
+  {
+    "field": "value"
+  }
+  ```
+
+  ### Responses
+
+  **200 OK**
+  ```json
+  {
+    "data": {
+      "id": "123",
+      "type": "resource"
+    }
+  }
+  ```
+
+  **400 Bad Request**
+  ```json
+  {
+    "error": {
+      "code": "INVALID_INPUT",
+      "message": "Field 'name' is required"
+    }
+  }
+  ```
+
+  ### Example
+
+  ```bash
+  curl -X POST https://api.example.com/v1/resource \
+    -H "Authorization: Bearer {token}" \
+    -H "Content-Type: application/json" \
+    -d '{"field": "value"}'
+  ```

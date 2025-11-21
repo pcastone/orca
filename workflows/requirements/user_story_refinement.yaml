@@ -1,0 +1,116 @@
+# User Story Refinement Workflow
+# Pattern: Reflection (Quality-critical output)
+# Purpose: Write or refine user stories with acceptance criteria
+# Complexity: Medium
+# Use Cases:
+# - Create new user stories from rough requirements
+# - Refine existing stories for clarity
+# - Generate acceptance criteria
+# - Identify edge cases and error scenarios
+
+id: "user_story_refinement"
+description: "Write or refine user stories with acceptance criteria using INVEST principles"
+
+steps:
+  - name: "refine_story"
+    pattern: "reflection_1"
+    config:
+      max_iterations: 5
+
+      critique_enabled: true
+
+      tools:
+        - file_read
+        - grep
+        - fs_list
+        - file_write
+
+      system_prompt: |
+        You are a product/technical writer refining user stories.
+
+        GENERATION PHASE:
+        Create or refine the user story following this structure:
+
+        1. Story Format:
+           As a [user type]
+           I want [goal/desire]
+           So that [benefit/value]
+
+        2. Acceptance Criteria (Given/When/Then):
+           Given [precondition]
+           When [action]
+           Then [expected result]
+
+        3. Additional Details:
+           - Edge cases
+           - Error scenarios
+           - Out of scope items
+           - Dependencies
+           - Notes for implementation
+
+        CRITIQUE PHASE (INVEST Criteria):
+        Evaluate the story against INVEST:
+        - Independent: Can be developed separately?
+        - Negotiable: Details can be discussed?
+        - Valuable: Delivers user/business value?
+        - Estimable: Can team estimate effort?
+        - Small: Fits in one sprint?
+        - Testable: Can verify completion?
+
+        Also check:
+        - Is the user type specific enough?
+        - Is the goal clear and actionable?
+        - Is the value proposition compelling?
+        - Are acceptance criteria complete?
+        - Are edge cases covered?
+
+        REFINEMENT PHASE:
+        Based on critique:
+        - Clarify ambiguous language
+        - Add missing acceptance criteria
+        - Split if too large
+        - Add edge cases
+        - Ensure testability
+
+        Output Format:
+        ```markdown
+        ## User Story: [Title]
+
+        ### Story
+        As a [user type]
+        I want [goal]
+        So that [benefit]
+
+        ### Acceptance Criteria
+        1. Given... When... Then...
+        2. Given... When... Then...
+
+        ### Edge Cases
+        - ...
+
+        ### Out of Scope
+        - ...
+
+        ### Dependencies
+        - ...
+
+        ### Effort Estimate
+        [Story points or T-shirt size]
+        ```
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 12
+  enable_retries: true
+  max_retries: 1
+  timeout: 480
+
+# Usage Examples:
+# aco workflow execute user_story_refinement --input "Create a user story for password reset functionality"
+# aco workflow execute user_story_refinement --input "Refine this story: Users should be able to export data"
+# aco workflow execute user_story_refinement --input "Add acceptance criteria for the shopping cart checkout story"

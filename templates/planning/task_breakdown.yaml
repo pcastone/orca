@@ -1,0 +1,183 @@
+# Task Breakdown Template
+# Defines standard configuration for task breakdown workflows
+
+# Breakdown Levels
+levels:
+  epic:
+    description: "High-level goal or initiative"
+    max_count: 1
+    attributes:
+      - name
+      - description
+      - success_criteria
+      - scope_boundaries
+      - timeline
+
+  milestone:
+    description: "Major deliverable or feature"
+    max_count: 10
+    attributes:
+      - name
+      - description
+      - acceptance_criteria
+      - dependencies
+      - estimated_duration
+
+  task:
+    description: "Specific work item"
+    max_count: 50
+    attributes:
+      - name
+      - description
+      - acceptance_criteria
+      - dependencies
+      - effort_estimate
+      - assignee
+      - priority
+
+  subtask:
+    description: "Granular technical step"
+    max_count: 200
+    attributes:
+      - name
+      - description
+      - parent_task
+      - effort_minutes
+
+# Effort Estimation
+estimation:
+  units: "story_points"  # story_points | hours | days
+
+  scales:
+    story_points:
+      - value: 1
+        description: "Trivial - less than 1 hour"
+      - value: 2
+        description: "Small - 1-4 hours"
+      - value: 3
+        description: "Medium - 4-8 hours"
+      - value: 5
+        description: "Large - 1-2 days"
+      - value: 8
+        description: "X-Large - 3-5 days"
+      - value: 13
+        description: "Epic - needs breakdown"
+
+    hours:
+      min: 0.5
+      max: 40
+      warning_threshold: 8  # Suggest breakdown if > 8 hours
+
+# Dependency Configuration
+dependencies:
+  types:
+    - hard: "Must complete before dependent can start"
+    - soft: "Preferred order but can parallelize"
+    - blocked: "Cannot proceed until blocker resolved"
+
+  validation:
+    check_circular: true
+    check_orphans: true
+    warn_long_chains: 5  # Warn if dependency chain > 5
+
+# Priority Levels
+priorities:
+  - level: 1
+    name: "Critical"
+    description: "Blocking or time-sensitive"
+
+  - level: 2
+    name: "High"
+    description: "Important for milestone"
+
+  - level: 3
+    name: "Medium"
+    description: "Standard priority"
+
+  - level: 4
+    name: "Low"
+    description: "Nice to have"
+
+# Risk Assessment
+risk:
+  categories:
+    - technical: "Technical complexity or unknowns"
+    - resource: "Resource availability"
+    - external: "External dependencies"
+    - scope: "Scope creep potential"
+
+  levels:
+    - low: "Well understood, low impact"
+    - medium: "Some unknowns, moderate impact"
+    - high: "Significant unknowns, major impact"
+
+# Output Formats
+output:
+  formats:
+    - markdown: "Human-readable markdown"
+    - json: "Structured JSON for tooling"
+    - yaml: "YAML for configuration"
+
+  include:
+    - task_hierarchy
+    - dependency_graph
+    - effort_summary
+    - risk_assessment
+    - execution_order
+
+# Templates for Task Creation
+task_templates:
+  feature:
+    pattern: "Implement [feature] for [component]"
+    default_effort: 5
+    required_fields:
+      - acceptance_criteria
+      - test_requirements
+
+  bug_fix:
+    pattern: "Fix [issue] in [component]"
+    default_effort: 3
+    required_fields:
+      - reproduction_steps
+      - expected_behavior
+
+  refactor:
+    pattern: "Refactor [component] to [improvement]"
+    default_effort: 5
+    required_fields:
+      - current_state
+      - target_state
+      - migration_plan
+
+  documentation:
+    pattern: "Document [topic] for [audience]"
+    default_effort: 2
+    required_fields:
+      - scope
+      - target_audience
+
+  test:
+    pattern: "Add tests for [component/feature]"
+    default_effort: 3
+    required_fields:
+      - coverage_target
+      - test_types
+
+# Validation Rules
+validation:
+  # Minimum breakdown requirements
+  min_tasks_per_milestone: 2
+  max_tasks_per_milestone: 15
+
+  # Effort validation
+  max_task_effort: 13
+  recommend_breakdown_above: 8
+
+  # Dependency validation
+  max_dependencies_per_task: 5
+  warn_on_orphan_tasks: true
+
+  # Completeness checks
+  require_acceptance_criteria: true
+  require_effort_estimate: true
+  require_priority: false

@@ -1,0 +1,130 @@
+# Continuous Execution Workflow
+# Pattern: ReAct (Tight execution loop)
+# Purpose: Simple loop to execute todos one by one until done
+# Complexity: Medium
+# Use Cases:
+# - Fast autonomous execution
+# - Simple task lists
+# - When planning overhead not needed
+
+id: "continuous_execution"
+description: "Execute todos in a tight loop until all are complete"
+
+steps:
+  - name: "execute_loop"
+    pattern: "react_1"
+    config:
+      max_iterations: 100  # High for many todos
+
+      tools:
+        - file_read
+        - file_write
+        - file_patch
+        - grep
+        - shell_exec
+        - git_status
+        - git_diff
+        - git_add
+        - git_commit
+        - fs_list
+
+      system_prompt: |
+        You are in CONTINUOUS EXECUTION mode. Process todos until done.
+
+        EXECUTION LOOP:
+
+        ```
+        while pending_todos exist:
+            todo = get_next_pending_todo()
+            mark_in_progress(todo)
+            execute(todo)
+            if success:
+                mark_completed(todo)
+            else:
+                handle_failure(todo)
+
+        report_summary()
+        ```
+
+        RULES:
+
+        1. ONE TODO AT A TIME
+           - Get the next pending item
+           - Focus entirely on it
+           - Complete before moving on
+
+        2. NO PLANNING OVERHEAD
+           - Just execute
+           - Don't over-analyze
+           - Quick decisions
+
+        3. MARK PROGRESS IMMEDIATELY
+           - Update status as you go
+           - Don't batch updates
+
+        4. FAIL FAST
+           - If stuck > 3 attempts, skip
+           - Log reason and continue
+           - Don't block on one item
+
+        5. KEEP MOVING
+           - Momentum matters
+           - Complete easy items
+           - Flag hard items for review
+
+        OUTPUT FORMAT:
+
+        For each todo:
+        ```
+        → [IN PROGRESS] {description}
+        ... executing ...
+        ✓ [COMPLETED] {description}
+        ```
+
+        On skip:
+        ```
+        ⊘ [SKIPPED] {description} - {reason}
+        ```
+
+        On failure:
+        ```
+        ✗ [FAILED] {description} - {error}
+        ```
+
+        FINAL OUTPUT:
+
+        ```
+        ═══════════════════════════════
+        EXECUTION COMPLETE
+        ═══════════════════════════════
+        ✓ Completed: {n}
+        ⊘ Skipped:   {n}
+        ✗ Failed:    {n}
+        ───────────────────────────────
+        Total:       {n}
+        ═══════════════════════════════
+        ```
+
+        TERMINATION CONDITIONS:
+        - All todos completed/skipped/failed
+        - Max iterations reached
+        - Critical error (e.g., system failure)
+
+        DO NOT STOP until one of these conditions is met.
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 100
+  enable_retries: true
+  max_retries: 2
+  timeout: 1800  # 30 minutes
+
+# Usage Examples:
+# aco workflow execute continuous_execution --input "Execute all todos"
+# aco workflow execute continuous_execution --input "Process the task list until complete"
+# aco workflow execute continuous_execution --input "Run through remaining items"

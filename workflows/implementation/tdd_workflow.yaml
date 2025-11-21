@@ -1,0 +1,165 @@
+# TDD Workflow
+# Pattern: Plan-Execute (Iterative Red-Green-Refactor)
+# Purpose: Implement features using Test-Driven Development
+# Complexity: High
+# Use Cases:
+# - Write failing tests first
+# - Implement minimal code to pass
+# - Refactor while keeping tests green
+# - Build features incrementally
+
+id: "tdd_workflow"
+description: "Implement features using Test-Driven Development (Red-Green-Refactor)"
+
+steps:
+  - name: "tdd_cycle"
+    pattern: "plan_execute_1"
+    config:
+      max_steps: 20
+
+      replanning_enabled: true
+
+      tools:
+        - file_read
+        - file_write
+        - file_patch
+        - grep
+        - shell_exec
+        - fs_list
+
+      planner_config:
+        temperature: 0.6
+        system_prompt: |
+          You are implementing a feature using TDD (Test-Driven Development).
+
+          TDD Cycle: Red → Green → Refactor
+
+          Plan Structure:
+
+          1. Understand Requirements:
+             - What behavior needs to be implemented?
+             - What are the acceptance criteria?
+             - What edge cases exist?
+
+          2. Plan Test Cases (prioritized):
+             - Happy path first
+             - Edge cases
+             - Error cases
+             - Integration points
+
+          3. For Each Test Case:
+             a. RED: Write a failing test
+                - Test should be specific and focused
+                - Run to confirm it fails
+             b. GREEN: Write minimal code to pass
+                - Only enough to pass the test
+                - Don't over-engineer
+                - Run to confirm it passes
+             c. REFACTOR: Improve code quality
+                - Clean up duplication
+                - Improve naming
+                - Extract functions if needed
+                - Run tests to confirm still passing
+
+          4. Repeat until all requirements met
+
+          TDD Best Practices:
+          - One test at a time
+          - Small increments
+          - Don't write production code without a failing test
+          - Refactor only when tests are green
+          - Keep tests fast
+
+      executor_config:
+        temperature: 0.4
+        system_prompt: |
+          You are executing TDD cycles.
+
+          For each cycle:
+
+          **RED Phase:**
+          1. Write a single focused test
+          2. Test should clearly describe expected behavior
+          3. Run the test to confirm it FAILS
+          4. If test passes, it's not testing new behavior
+
+          **GREEN Phase:**
+          1. Write the MINIMUM code to make the test pass
+          2. It's okay if the code is ugly
+          3. Don't add functionality not required by the test
+          4. Run the test to confirm it PASSES
+
+          **REFACTOR Phase:**
+          1. Look for code smells
+          2. Remove duplication
+          3. Improve naming
+          4. Extract methods if needed
+          5. Run ALL tests to confirm still PASSING
+
+          Output for each cycle:
+          ```
+          ## Cycle N: [Test Description]
+
+          ### RED - Failing Test
+          File: [test file]
+          ```code
+          [test code]
+          ```
+          Test Result: FAIL (expected)
+
+          ### GREEN - Minimal Implementation
+          File: [impl file]
+          ```code
+          [implementation code]
+          ```
+          Test Result: PASS
+
+          ### REFACTOR
+          Changes: [what was refactored]
+          Test Result: ALL PASS
+          ```
+
+          Continue until all requirements are implemented.
+
+    on_success:
+      end: true
+
+    on_failure: "recovery_implementation"
+
+  - name: "recovery_implementation"
+    pattern: "react_1"
+    config:
+      max_iterations: 8
+
+      tools:
+        - file_read
+        - file_write
+        - shell_exec
+        - grep
+
+      system_prompt: |
+        TDD cycle encountered issues. Use a more flexible approach.
+
+        1. Review what tests exist and their status
+        2. Identify what's blocking progress
+        3. Fix immediate issues
+        4. Continue with remaining implementation
+
+        Focus on getting tests passing while maintaining quality.
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 30
+  enable_retries: true
+  max_retries: 2
+  timeout: 1200  # 20 minutes for iterative development
+
+# Usage Examples:
+# aco workflow execute tdd_workflow --input "Implement user password validation using TDD"
+# aco workflow execute tdd_workflow --input "Build the shopping cart total calculation with TDD"
+# aco workflow execute tdd_workflow --input "Create the email service following TDD practices"

@@ -1,0 +1,130 @@
+# Context Summarization Workflow
+# Pattern: Reflection (Quality-critical compression)
+# Purpose: Summarize and compress context for agent efficiency
+# Complexity: Medium
+# Use Cases:
+# - Compress long conversation history
+# - Summarize large codebases
+# - Create context windows for new agents
+# - Extract key information from documents
+
+id: "context_summarization"
+description: "Summarize and compress context to maintain essential information efficiently"
+
+steps:
+  - name: "summarize_context"
+    pattern: "reflection_1"
+    config:
+      max_iterations: 4
+
+      critique_enabled: true
+
+      tools:
+        - file_read
+        - grep
+        - fs_list
+
+      system_prompt: |
+        You are a context compression specialist for AI agents.
+
+        GOAL: Create concise summaries that preserve essential information
+        while dramatically reducing token count.
+
+        SUMMARIZATION PRINCIPLES:
+
+        1. PRESERVE CRITICAL INFO:
+           - Key decisions made
+           - Important constraints
+           - Current state/status
+           - Blocking issues
+           - User preferences expressed
+
+        2. COMPRESS AGGRESSIVELY:
+           - Remove redundancy
+           - Eliminate filler words
+           - Use abbreviations where clear
+           - Combine related points
+           - Remove resolved issues
+
+        3. STRUCTURE FOR RETRIEVAL:
+           - Use headers for scanning
+           - Bullet points over prose
+           - Most important first
+           - Group related information
+
+        4. MAINTAIN ACTIONABILITY:
+           - Keep TODOs explicit
+           - Preserve next steps
+           - Retain blockers
+           - Keep context for decisions
+
+        SUMMARIZATION PROCESS:
+
+        1. IDENTIFY INFORMATION TYPES:
+           - Facts (keep)
+           - Decisions (keep)
+           - Rationale (compress)
+           - Exploration (discard)
+           - Small talk (discard)
+
+        2. CREATE STRUCTURED SUMMARY:
+           ```markdown
+           ## Context Summary
+
+           ### Current State
+           [What exists now - 2-3 bullets]
+
+           ### Goal
+           [What we're trying to achieve - 1-2 sentences]
+
+           ### Key Decisions
+           - [Decision]: [Rationale in <10 words]
+
+           ### Constraints
+           - [Constraint]
+
+           ### Progress
+           - [x] Completed item
+           - [ ] Pending item
+
+           ### Blockers
+           - [Blocker if any]
+
+           ### Next Actions
+           1. [Immediate next step]
+           ```
+
+        3. CRITIQUE SUMMARY:
+           - Is critical info preserved?
+           - Can an agent continue work with this?
+           - Is it actually shorter?
+           - Are ambiguities resolved?
+
+        4. REFINE:
+           - Add missing critical info
+           - Remove remaining fluff
+           - Clarify ambiguities
+
+        TARGET: 10-20% of original size while preserving 90%+ of utility.
+
+        Output both:
+        1. The compressed summary
+        2. Compression ratio achieved
+        3. Any critical information that couldn't be compressed
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 10
+  enable_retries: true
+  max_retries: 1
+  timeout: 300
+
+# Usage Examples:
+# aco workflow execute context_summarization --input "Summarize this conversation for handoff to another agent"
+# aco workflow execute context_summarization --input "Compress the project context to fit in 2000 tokens"
+# aco workflow execute context_summarization --input "Create a summary of the codebase for onboarding"
