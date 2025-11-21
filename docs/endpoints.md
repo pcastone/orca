@@ -28,6 +28,8 @@ curl -H "Authorization: Bearer eyJhbGc..." http://localhost:8080/api/tasks
 - [Workflows](#workflows)
 - [Executions](#executions)
 - [Checkpoints](#checkpoints)
+- [Bugs](#bugs)
+- [Prompt History](#prompt-history)
 - [Tools](#tools)
 - [System](#system)
 - [Error Codes](#error-codes)
@@ -515,6 +517,358 @@ Get checkpoint state.
 Delete checkpoint.
 
 **Response (204):** No content
+
+## Bugs
+
+### Create Bug
+
+**POST** `/v1/bugs`
+
+Create a new bug report.
+
+**Request:**
+```json
+{
+  "title": "Workflow execution fails on large inputs",
+  "description": "When input exceeds 10MB, workflow times out",
+  "severity": "high",
+  "task_id": "task_1",
+  "workflow_id": "workflow_1",
+  "error_message": "Timeout after 30000ms",
+  "reproduction_steps": "1. Create workflow\n2. Submit 15MB input",
+  "expected_behavior": "Process completes within timeout",
+  "actual_behavior": "Execution times out",
+  "reporter": "user@example.com"
+}
+```
+
+**Response (201):**
+```json
+{
+  "id": "bug_1",
+  "title": "Workflow execution fails on large inputs",
+  "severity": "high",
+  "status": "open",
+  "created_at": "2025-11-10T10:00:00Z"
+}
+```
+
+### List Bugs
+
+**GET** `/v1/bugs`
+
+List all bugs with filtering.
+
+**Query Parameters:**
+- `status` (string): Filter by status (open, in_progress, resolved, closed, wont_fix)
+- `severity` (string): Filter by severity (low, medium, high, critical)
+- `task_id` (string): Filter by task
+- `assignee` (string): Filter by assignee
+- `search` (string): Search in title and description
+- `page` (int): Page number (default: 0)
+- `per_page` (int): Items per page (default: 20, max: 100)
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "id": "bug_1",
+      "title": "Workflow execution fails on large inputs",
+      "severity": "high",
+      "status": "open",
+      "assignee": "dev@example.com",
+      "created_at": "2025-11-10T10:00:00Z"
+    }
+  ],
+  "page": 0,
+  "per_page": 20,
+  "total": 42
+}
+```
+
+### Get Bug
+
+**GET** `/v1/bugs/{id}`
+
+Get bug details.
+
+**Response (200):**
+```json
+{
+  "id": "bug_1",
+  "title": "Workflow execution fails on large inputs",
+  "description": "When input exceeds 10MB, workflow times out",
+  "severity": "high",
+  "status": "open",
+  "task_id": "task_1",
+  "workflow_id": "workflow_1",
+  "error_message": "Timeout after 30000ms",
+  "stack_trace": "...",
+  "reproduction_steps": "...",
+  "expected_behavior": "...",
+  "actual_behavior": "...",
+  "assignee": "dev@example.com",
+  "reporter": "user@example.com",
+  "labels": "[\"performance\", \"timeout\"]",
+  "created_at": "2025-11-10T10:00:00Z",
+  "updated_at": "2025-11-10T11:00:00Z",
+  "resolved_at": null
+}
+```
+
+### Update Bug
+
+**PUT** `/v1/bugs/{id}`
+
+Update bug fields.
+
+**Request:**
+```json
+{
+  "status": "in_progress",
+  "assignee": "dev@example.com",
+  "severity": "critical"
+}
+```
+
+**Response (200):**
+```json
+{
+  "id": "bug_1",
+  "status": "in_progress",
+  "assignee": "dev@example.com",
+  "severity": "critical",
+  "updated_at": "2025-11-10T12:00:00Z"
+}
+```
+
+### Delete Bug
+
+**DELETE** `/v1/bugs/{id}`
+
+Delete a bug.
+
+**Response (204):** No content
+
+### Get Bug Statistics
+
+**GET** `/v1/bugs/stats`
+
+Get bug statistics.
+
+**Response (200):**
+```json
+{
+  "total": 42,
+  "open": 15,
+  "in_progress": 8,
+  "resolved": 19
+}
+```
+
+## Prompt History
+
+### Create Prompt History
+
+**POST** `/v1/prompts`
+
+Record an LLM interaction.
+
+**Request:**
+```json
+{
+  "provider": "anthropic",
+  "model": "claude-3-opus",
+  "user_prompt": "Explain quantum computing",
+  "system_prompt": "You are a helpful assistant",
+  "assistant_response": "Quantum computing is...",
+  "task_id": "task_1",
+  "session_id": "session_1",
+  "input_tokens": 150,
+  "output_tokens": 500,
+  "cost_usd": 0.025,
+  "latency_ms": 2500
+}
+```
+
+**Response (201):**
+```json
+{
+  "id": "prompt_1",
+  "provider": "anthropic",
+  "model": "claude-3-opus",
+  "status": "completed",
+  "created_at": "2025-11-10T10:00:00Z"
+}
+```
+
+### List Prompt History
+
+**GET** `/v1/prompts`
+
+List prompt history with filtering.
+
+**Query Parameters:**
+- `task_id` (string): Filter by task
+- `workflow_id` (string): Filter by workflow
+- `execution_id` (string): Filter by execution
+- `session_id` (string): Filter by session
+- `provider` (string): Filter by provider
+- `model` (string): Filter by model
+- `page` (int): Page number (default: 0)
+- `per_page` (int): Items per page (default: 20, max: 100)
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "id": "prompt_1",
+      "provider": "anthropic",
+      "model": "claude-3-opus",
+      "input_tokens": 150,
+      "output_tokens": 500,
+      "cost_usd": 0.025,
+      "created_at": "2025-11-10T10:00:00Z"
+    }
+  ],
+  "page": 0,
+  "per_page": 20,
+  "total": 100
+}
+```
+
+### Get Prompt History
+
+**GET** `/v1/prompts/{id}`
+
+Get prompt details.
+
+**Response (200):**
+```json
+{
+  "id": "prompt_1",
+  "task_id": "task_1",
+  "session_id": "session_1",
+  "provider": "anthropic",
+  "model": "claude-3-opus",
+  "prompt_type": "chat",
+  "system_prompt": "You are a helpful assistant",
+  "user_prompt": "Explain quantum computing",
+  "assistant_response": "Quantum computing is...",
+  "input_tokens": 150,
+  "output_tokens": 500,
+  "total_tokens": 650,
+  "cost_usd": 0.025,
+  "latency_ms": 2500,
+  "temperature": 0.7,
+  "status": "completed",
+  "created_at": "2025-11-10T10:00:00Z"
+}
+```
+
+### Delete Prompt History
+
+**DELETE** `/v1/prompts/{id}`
+
+Delete a prompt history entry.
+
+**Response (204):** No content
+
+### Get Prompt Statistics
+
+**GET** `/v1/prompts/stats`
+
+Get prompt usage statistics.
+
+**Response (200):**
+```json
+{
+  "total_prompts": 1000,
+  "total_tokens": 650000,
+  "total_cost_usd": 25.50
+}
+```
+
+### List Task Prompts
+
+**GET** `/v1/tasks/{task_id}/prompts`
+
+Get all prompts for a specific task.
+
+**Response (200):**
+```json
+[
+  {
+    "id": "prompt_1",
+    "provider": "anthropic",
+    "model": "claude-3-opus",
+    "user_prompt": "...",
+    "assistant_response": "...",
+    "created_at": "2025-11-10T10:00:00Z"
+  }
+]
+```
+
+### List Session Prompts
+
+**GET** `/v1/sessions/{session_id}/prompts`
+
+Get all prompts for a specific session.
+
+**Response (200):**
+```json
+[
+  {
+    "id": "prompt_1",
+    "provider": "anthropic",
+    "model": "claude-3-opus",
+    "user_prompt": "...",
+    "assistant_response": "...",
+    "created_at": "2025-11-10T10:00:00Z"
+  }
+]
+```
+
+### List Execution Checkpoints
+
+**GET** `/v1/executions/{execution_id}/checkpoints`
+
+Get all checkpoints for an execution.
+
+**Response (200):**
+```json
+[
+  {
+    "id": "cp_1",
+    "execution_id": "exec_1",
+    "workflow_id": "workflow_1",
+    "node_id": "planner",
+    "superstep": 3,
+    "created_at": "2025-11-10T10:00:05Z"
+  }
+]
+```
+
+### Get Latest Checkpoint
+
+**GET** `/v1/executions/{execution_id}/checkpoints/latest`
+
+Get the latest checkpoint for an execution.
+
+**Response (200):**
+```json
+{
+  "id": "cp_5",
+  "execution_id": "exec_1",
+  "workflow_id": "workflow_1",
+  "node_id": "executor",
+  "superstep": 7,
+  "state": "{...}",
+  "created_at": "2025-11-10T10:05:00Z"
+}
+```
 
 ## Tools
 
