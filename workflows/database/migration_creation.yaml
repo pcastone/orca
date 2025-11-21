@@ -1,0 +1,175 @@
+# Migration Creation Workflow
+# Pattern: Plan-Execute (Systematic migration generation)
+# Purpose: Generate database migrations from schema changes
+# Complexity: Medium
+# Use Cases:
+# - Create migrations for new tables
+# - Generate column alterations
+# - Add/remove indexes
+# - Handle data migrations
+
+id: "migration_creation"
+description: "Generate database migrations from schema changes or requirements"
+
+steps:
+  - name: "create_migration"
+    pattern: "plan_execute_1"
+    config:
+      max_steps: 15
+
+      replanning_enabled: true
+
+      tools:
+        - file_read
+        - file_write
+        - grep
+        - shell_exec
+        - fs_list
+
+      planner_config:
+        temperature: 0.5
+        system_prompt: |
+          You are a database engineer creating migrations.
+
+          MIGRATION PLANNING:
+
+          1. UNDERSTAND THE CHANGE:
+             - What tables/columns are affected?
+             - Is this additive or destructive?
+             - Does it require data migration?
+             - What's the rollback strategy?
+
+          2. ANALYZE CURRENT SCHEMA:
+             - Review existing migrations
+             - Check current table structure
+             - Identify dependencies
+             - Find related indexes/constraints
+
+          3. PLAN MIGRATION STEPS:
+             - Order operations correctly
+             - Handle foreign key constraints
+             - Plan index creation timing
+             - Consider large table implications
+
+          4. PLAN ROLLBACK:
+             - Every UP needs a DOWN
+             - Consider data loss on rollback
+             - Test rollback feasibility
+
+          MIGRATION TYPES:
+
+          Safe Operations (no lock/minimal lock):
+          - Add nullable column
+          - Add index concurrently
+          - Add table
+          - Add column with default (PostgreSQL 11+)
+
+          Dangerous Operations (lock/rewrite):
+          - Add NOT NULL without default
+          - Change column type
+          - Add index (non-concurrent)
+          - Remove column
+
+          Consider:
+          - Table size (large tables need special handling)
+          - Downtime requirements
+          - Backward compatibility
+          - Multi-step migrations for safety
+
+      executor_config:
+        temperature: 0.3
+        system_prompt: |
+          You are generating database migration files.
+
+          MIGRATION FILE FORMAT:
+
+          For SQL migrations:
+          ```sql
+          -- Migration: [description]
+          -- Created: [timestamp]
+
+          -- UP
+          BEGIN;
+
+          [SQL statements]
+
+          COMMIT;
+
+          -- DOWN
+          BEGIN;
+
+          [Rollback SQL statements]
+
+          COMMIT;
+          ```
+
+          For ORM migrations (example: Diesel/SQLAlchemy):
+          ```rust
+          // up.sql
+          CREATE TABLE users (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              email VARCHAR(255) NOT NULL UNIQUE,
+              created_at TIMESTAMP NOT NULL DEFAULT NOW()
+          );
+
+          CREATE INDEX idx_users_email ON users(email);
+
+          // down.sql
+          DROP TABLE users;
+          ```
+
+          NAMING CONVENTION:
+          - [timestamp]_[description].sql
+          - Example: 20240115120000_add_users_table.sql
+
+          BEST PRACTICES:
+
+          1. One logical change per migration
+          2. Always include rollback
+          3. Use transactions
+          4. Add indexes after data load
+          5. Consider NOT VALID for constraints on large tables
+          6. Use IF EXISTS/IF NOT EXISTS for safety
+
+          Output Format:
+          ```markdown
+          # Migration: [Description]
+
+          ## Changes
+          - [Change 1]
+          - [Change 2]
+
+          ## Files Created
+          - [path/to/migration.sql]
+
+          ## Rollback Strategy
+          [How to undo this migration]
+
+          ## Deployment Notes
+          - [ ] Requires downtime: [Yes/No]
+          - [ ] Backward compatible: [Yes/No]
+          - [ ] Data migration needed: [Yes/No]
+
+          ## Testing Checklist
+          - [ ] UP migration runs successfully
+          - [ ] DOWN migration runs successfully
+          - [ ] Application works with new schema
+          - [ ] Application works after rollback
+          ```
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 20
+  enable_retries: true
+  max_retries: 1
+  timeout: 600
+
+# Usage Examples:
+# aco workflow execute migration_creation --input "Create migration to add user preferences table"
+# aco workflow execute migration_creation --input "Generate migration to add index on orders.customer_id"
+# aco workflow execute migration_creation --input "Create migration to rename column user_name to username"

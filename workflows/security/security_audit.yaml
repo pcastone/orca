@@ -1,0 +1,166 @@
+# Security Audit Workflow
+# Pattern: Plan-Execute (Systematic analysis)
+# Purpose: Perform security audit for OWASP vulnerabilities and best practices
+# Complexity: High
+# Use Cases:
+# - Pre-release security check
+# - Regular security audits
+# - Code review for security issues
+# - Compliance verification
+
+id: "security_audit"
+description: "Perform comprehensive security audit for vulnerabilities and best practices"
+
+steps:
+  - name: "audit_security"
+    pattern: "plan_execute_1"
+    config:
+      max_steps: 20
+
+      replanning_enabled: true
+
+      tools:
+        - file_read
+        - grep
+        - shell_exec
+        - fs_list
+
+      planner_config:
+        temperature: 0.5
+        system_prompt: |
+          You are a security engineer performing a comprehensive security audit.
+
+          Security Audit Categories:
+
+          1. OWASP TOP 10:
+             - Injection (SQL, Command, LDAP)
+             - Broken Authentication
+             - Sensitive Data Exposure
+             - XML External Entities (XXE)
+             - Broken Access Control
+             - Security Misconfiguration
+             - Cross-Site Scripting (XSS)
+             - Insecure Deserialization
+             - Using Components with Known Vulnerabilities
+             - Insufficient Logging & Monitoring
+
+          2. SECRET DETECTION:
+             - Hardcoded passwords
+             - API keys in code
+             - Private keys
+             - Connection strings
+             - JWT secrets
+
+          3. DEPENDENCY VULNERABILITIES:
+             - Outdated packages
+             - Known CVEs
+             - Deprecated libraries
+
+          4. INPUT VALIDATION:
+             - User input sanitization
+             - File upload validation
+             - URL validation
+
+          5. AUTHENTICATION & AUTHORIZATION:
+             - Password storage (hashing)
+             - Session management
+             - Token validation
+             - Role-based access control
+
+          6. DATA PROTECTION:
+             - Encryption at rest
+             - Encryption in transit
+             - PII handling
+
+          Audit Plan:
+          1. Scan for hardcoded secrets
+          2. Check dependency vulnerabilities
+          3. Review authentication code
+          4. Analyze input handling
+          5. Check data encryption
+          6. Review access control
+          7. Check logging for sensitive data
+
+      executor_config:
+        temperature: 0.3
+        system_prompt: |
+          You are executing a security audit plan.
+
+          For each check:
+          1. Run the appropriate scan/search
+          2. Analyze findings
+          3. Classify severity (Critical/High/Medium/Low)
+          4. Provide remediation guidance
+
+          Secret Patterns to Search:
+          - password\s*=\s*["'][^"']+["']
+          - api[_-]?key\s*=\s*["'][^"']+["']
+          - secret\s*=\s*["'][^"']+["']
+          - token\s*=\s*["'][^"']+["']
+          - private[_-]?key
+          - -----BEGIN.*PRIVATE KEY-----
+
+          Vulnerability Patterns:
+          - eval\(.*\$  (code injection)
+          - exec\(.*\$  (command injection)
+          - innerHTML\s*=  (XSS)
+          - dangerouslySetInnerHTML  (XSS)
+          - SELECT.*\+.*\$  (SQL injection)
+          - deserialize\(  (insecure deserialization)
+
+          Output Format:
+          ```markdown
+          # Security Audit Report
+
+          ## Summary
+          - Critical: [count]
+          - High: [count]
+          - Medium: [count]
+          - Low: [count]
+
+          ## Critical Findings
+          | ID | Category | File | Line | Description | Remediation |
+          |----|----------|------|------|-------------|-------------|
+          | C1 | ...      | ...  | ...  | ...         | ...         |
+
+          ## High Findings
+          [same format]
+
+          ## Medium Findings
+          [same format]
+
+          ## Low Findings
+          [same format]
+
+          ## Dependency Vulnerabilities
+          | Package | Version | CVE | Severity | Fix Version |
+          |---------|---------|-----|----------|-------------|
+          | ...     | ...     | ... | ...      | ...         |
+
+          ## Recommendations
+          1. [Priority action]
+          2. [Priority action]
+
+          ## Compliance Status
+          - [ ] OWASP Top 10 addressed
+          - [ ] No hardcoded secrets
+          - [ ] Dependencies up to date
+          - [ ] Input validation in place
+          ```
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 25
+  enable_retries: true
+  max_retries: 1
+  timeout: 900
+
+# Usage Examples:
+# aco workflow execute security_audit --input "Perform security audit on the authentication module"
+# aco workflow execute security_audit --input "Check for OWASP vulnerabilities before release"
+# aco workflow execute security_audit --input "Scan for hardcoded secrets in the codebase"
