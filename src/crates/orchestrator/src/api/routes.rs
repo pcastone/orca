@@ -3,7 +3,7 @@
 //! Defines all API routes and their associated handler functions.
 
 use axum::{
-    routing::{get, post},
+    routing::{get, post, delete},
     Router,
 };
 use std::sync::Arc;
@@ -86,6 +86,64 @@ pub fn create_router(db: DatabaseConnection, broadcast: Arc<BroadcastState>) -> 
         .route(
             "/api/status",
             get(handlers::status),
+        )
+        // Bug endpoints
+        .route(
+            "/api/v1/bugs",
+            post(handlers::create_bug)
+                .get(handlers::list_bugs),
+        )
+        .route(
+            "/api/v1/bugs/stats",
+            get(handlers::get_bug_stats),
+        )
+        .route(
+            "/api/v1/bugs/:id",
+            get(handlers::get_bug)
+                .put(handlers::update_bug)
+                .delete(handlers::delete_bug),
+        )
+        // Prompt history endpoints
+        .route(
+            "/api/v1/prompts",
+            post(handlers::create_prompt_history)
+                .get(handlers::list_prompt_history),
+        )
+        .route(
+            "/api/v1/prompts/stats",
+            get(handlers::get_prompt_stats),
+        )
+        .route(
+            "/api/v1/prompts/:id",
+            get(handlers::get_prompt_history)
+                .delete(handlers::delete_prompt_history),
+        )
+        .route(
+            "/api/v1/tasks/:task_id/prompts",
+            get(handlers::list_task_prompts),
+        )
+        .route(
+            "/api/v1/sessions/:session_id/prompts",
+            get(handlers::list_session_prompts),
+        )
+        // Checkpoint endpoints
+        .route(
+            "/api/v1/checkpoints",
+            post(handlers::create_checkpoint)
+                .get(handlers::list_checkpoints),
+        )
+        .route(
+            "/api/v1/checkpoints/:id",
+            get(handlers::get_checkpoint)
+                .delete(handlers::delete_checkpoint),
+        )
+        .route(
+            "/api/v1/executions/:execution_id/checkpoints",
+            get(handlers::list_execution_checkpoints),
+        )
+        .route(
+            "/api/v1/executions/:execution_id/checkpoints/latest",
+            get(handlers::get_latest_checkpoint),
         )
         .with_state(app_state)
 }

@@ -5,10 +5,16 @@
 pub mod task;
 pub mod workflow;
 pub mod tool_execution;
+pub mod bug;
+pub mod prompt_history;
+pub mod checkpoint;
 
 pub use task::{CreateTaskRequest, UpdateTaskRequest, TaskResponse, TaskListQuery};
 pub use workflow::{CreateWorkflowRequest, UpdateWorkflowRequest, WorkflowResponse, WorkflowListQuery};
 pub use tool_execution::{ExecuteToolRequest, ToolExecutionResponse, ExecutionListQuery};
+pub use bug::{CreateBugRequest, UpdateBugRequest, BugResponse, BugListQuery};
+pub use prompt_history::{CreatePromptHistoryRequest, PromptHistoryResponse, PromptHistoryListQuery, PromptHistoryStatsResponse};
+pub use checkpoint::{CreateCheckpointRequest, CheckpointResponse, CheckpointListQuery};
 
 /// System health response
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
