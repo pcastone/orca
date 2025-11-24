@@ -36,23 +36,28 @@ impl CompiledGraph {
 
         // 2. Build reverse edge map: node → list of predecessors
         let mut incoming_edges: HashMap<String, Vec<String>> = HashMap::new();
+        let mut has_conditional_incoming: HashMap<String, bool> = HashMap::new();
 
         for (from_node, edges) in &self.graph.edges {
             for edge in edges {
-                let to_node = match edge {
-                    Edge::Direct(node_id) => node_id.clone(),
-                    Edge::Conditional { .. } => {
-                        // For conditional edges, DO NOT add to incoming_edges
-                        // The conditional edge evaluation will handle routing dynamically
-                        // at runtime based on the router function result
-                        continue;
+                match edge {
+                    Edge::Direct(node_id) => {
+                        // Direct edges add to incoming_edges for automatic triggering
+                        incoming_edges
+                            .entry(node_id.clone())
+                            .or_default()
+                            .push(from_node.clone());
                     }
-                };
-
-                incoming_edges
-                    .entry(to_node)
-                    .or_default()
-                    .push(from_node.clone());
+                    Edge::Conditional { branches, .. } => {
+                        // Mark all branch targets as having conditional incoming edges
+                        for (_branch_name, target_node) in branches {
+                            has_conditional_incoming
+                                .insert(target_node.clone(), true);
+                        }
+                        // Don't add to incoming_edges - conditional targets are scheduled
+                        // dynamically when the conditional edge evaluates
+                    }
+                }
             }
         }
 
@@ -68,9 +73,17 @@ impl CompiledGraph {
             .channel_versions
             .insert(START.to_string(), ChannelVersion::Int(1));
 
-        // Create channel for each regular node
-        for node_id in self.graph.nodes.keys() {
-            channels.insert(node_id.clone(), Box::new(LastValueChannel::new()));
+        // Check if using shared state/messages channel
+        let has_shared_state = self.graph.channels.contains_key("state")
+            || self.graph.channels.contains_key("messages");
+
+        // Only create individual node channels if NOT using shared state
+        // When using shared state (StateGraph::new()), all nodes write to the same channel
+        if !has_shared_state {
+            // Create channel for each regular node
+            for node_id in self.graph.nodes.keys() {
+                channels.insert(node_id.clone(), Box::new(LastValueChannel::new()));
+            }
         }
 
         // Create END channel
@@ -143,12 +156,50 @@ impl CompiledGraph {
         // 4. Convert graph nodes to Pregel node specs
         let mut pregel_nodes = HashMap::new();
 
+        // Check if using shared state channel
+        let has_shared_state = self.graph.channels.contains_key("state")
+            || self.graph.channels.contains_key("messages");
+
         for (node_id, node_spec) in &self.graph.nodes {
-            // Determine which channels trigger this node (its predecessors)
-            let triggers = incoming_edges
-                .get(node_id)
-                .cloned()
-                .unwrap_or_else(|| vec![START.to_string()]);
+            // Determine which channels trigger this node
+            let triggers = if has_shared_state {
+                // For StateGraph with shared state channel
+                if node_id.starts_with("__") {
+                    // Special nodes like __start__ and __end__ use their default triggers
+                    incoming_edges
+                        .get(node_id)
+                        .cloned()
+                        .unwrap_or_else(|| vec![START.to_string()])
+                } else {
+                    // For regular nodes in StateGraph:
+                    // Only nodes directly connected to START trigger on state channel
+                    // Other nodes are scheduled by graph edge traversal
+                    if let Some(predecessors) = incoming_edges.get(node_id) {
+                        if predecessors.contains(&START.to_string()) {
+                            // Entry node: trigger on state channel
+                            let state_channel = if self.graph.channels.contains_key("state") {
+                                "state"
+                            } else {
+                                "messages"
+                            };
+                            vec![state_channel.to_string()]
+                        } else {
+                            // Non-entry node with direct edges: no automatic triggers
+                            // Will be scheduled by edge traversal
+                            vec![]
+                        }
+                    } else {
+                        // No direct incoming edges - only conditional edges or unreachable
+                        vec![]
+                    }
+                }
+            } else {
+                // Standard graph: use incoming edges as triggers
+                incoming_edges
+                    .get(node_id)
+                    .cloned()
+                    .unwrap_or_else(|| vec![START.to_string()])
+            };
 
             // Wrap the existing executor in a Pregel-compatible adapter
             let executor_clone = node_spec.executor.clone();

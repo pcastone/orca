@@ -150,13 +150,17 @@ impl ChatModel for OllamaClient {
             },
         };
 
+
         let response = self
             .client
             .post(&url)
             .json(&req_body)
             .send()
             .await
-            .map_err(|e| LlmError::HttpError(e))?;
+            .map_err(|e| {
+                LlmError::HttpError(e)
+            })?;
+
 
         if !response.status().is_success() {
             let status = response.status();
@@ -171,7 +175,9 @@ impl ChatModel for OllamaClient {
         let ollama_resp: OllamaResponse = response
             .json()
             .await
-            .map_err(|e| LlmError::InvalidResponse(e.to_string()))?;
+            .map_err(|e| {
+                LlmError::InvalidResponse(e.to_string())
+            })?;
 
         Ok(self.convert_response(ollama_resp))
     }

@@ -203,7 +203,8 @@ pub fn apply_writes<W: WritesProtocol>(
     // 5. Group writes by channel
     let mut pending_writes_by_channel: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
     for task in &tasks {
-        for (chan_name, value) in task.writes() {
+        let task_writes = task.writes();
+        for (chan_name, value) in task_writes {
             // Skip special channels (these are handled separately)
             if !is_special_channel(chan_name) && channels.contains_key(chan_name) {
                 pending_writes_by_channel
@@ -218,7 +219,7 @@ pub fn apply_writes<W: WritesProtocol>(
     let mut updated_channels = HashSet::new();
     for (chan_name, values) in pending_writes_by_channel {
         if let Some(channel) = channels.get_mut(&chan_name) {
-            if channel.update(values)? {
+            if channel.update(values.clone())? {
                 checkpoint
                     .channel_versions
                     .insert(chan_name.clone(), next_version.clone());
@@ -226,6 +227,7 @@ pub fn apply_writes<W: WritesProtocol>(
                 if channel.is_available() {
                     updated_channels.insert(chan_name);
                 }
+            } else {
             }
         }
     }

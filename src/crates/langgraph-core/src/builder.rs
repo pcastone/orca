@@ -943,11 +943,13 @@ impl StateGraph {
             // Using shared state or messages - nodes should read from and write to it
             let channel_name = if has_state_channel { "state" } else { "messages" };
 
+
             // Remove any individual node channels that were created
             let node_names: Vec<String> = self.graph.nodes.keys().cloned().collect();
             for node_name in &node_names {
-                self.graph.channels.remove(node_name);
+                let removed = self.graph.channels.remove(node_name);
             }
+
 
             // Configure nodes to use the shared channel
             for (_, spec) in self.graph.nodes.iter_mut() {

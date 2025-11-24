@@ -295,6 +295,10 @@ pub struct PregelLoop {
     store: Option<Arc<dyn Store>>,
     /// Edges from the graph (for conditional routing)
     edges: HashMap<String, Vec<crate::graph::Edge>>,
+    /// Nodes that executed in the current superstep (for edge-based scheduling)
+    executed_nodes_this_superstep: HashSet<String>,
+    /// Reverse dependency map: node → list of required predecessors
+    node_dependencies: HashMap<String, Vec<String>>,
 }
 
 impl PregelLoop {
@@ -327,6 +331,32 @@ impl PregelLoop {
             }
         }
 
+        // Build reverse dependency map: node → list of required predecessors
+        // This tracks which nodes must execute before a given node can run
+        let mut node_dependencies: HashMap<String, Vec<String>> = HashMap::new();
+        for (source_node, edge_list) in &edges {
+            for edge in edge_list {
+                match edge {
+                    crate::graph::Edge::Direct(target_node) => {
+                        // Direct edge: target depends on source
+                        node_dependencies
+                            .entry(target_node.clone())
+                            .or_default()
+                            .push(source_node.clone());
+                    }
+                    crate::graph::Edge::Conditional { branches, .. } => {
+                        // Conditional edge: all possible targets depend on source
+                        for target_node in branches.values() {
+                            node_dependencies
+                                .entry(target_node.clone())
+                                .or_default()
+                                .push(source_node.clone());
+                        }
+                    }
+                }
+            }
+        }
+
         Self {
             checkpoint,
             channels,
@@ -348,6 +378,8 @@ impl PregelLoop {
             resume_value: None,
             store: None,
             edges,
+            executed_nodes_this_superstep: HashSet::new(),
+            node_dependencies,
         }
     }
 
@@ -505,6 +537,29 @@ impl PregelLoop {
             }
         }
 
+        // Build reverse dependency map: node → list of required predecessors
+        let mut node_dependencies: HashMap<String, Vec<String>> = HashMap::new();
+        for (source_node, edge_list) in &edges {
+            for edge in edge_list {
+                match edge {
+                    crate::graph::Edge::Direct(target_node) => {
+                        node_dependencies
+                            .entry(target_node.clone())
+                            .or_default()
+                            .push(source_node.clone());
+                    }
+                    crate::graph::Edge::Conditional { branches, .. } => {
+                        for target_node in branches.values() {
+                            node_dependencies
+                                .entry(target_node.clone())
+                                .or_default()
+                                .push(source_node.clone());
+                        }
+                    }
+                }
+            }
+        }
+
         // Restore step number from metadata
         let step = metadata.step.unwrap_or(0) as usize;
 
@@ -529,6 +584,8 @@ impl PregelLoop {
             resume_value: None,
             store: None,
             edges,
+            executed_nodes_this_superstep: HashSet::new(),
+            node_dependencies,
         })
     }
 
@@ -1028,7 +1085,10 @@ impl PregelLoop {
     /// - [`apply_writes`](super::algo::apply_writes) - Write application
     /// - [`execute_with_retry`](Self::execute_with_retry) - Task execution with retry
     async fn execute_superstep(&mut self) -> Result<bool> {
-        // 0. Apply resume value if resuming from interrupt
+        // 0. Clear executed nodes set at start of superstep
+        self.executed_nodes_this_superstep.clear();
+
+        // 0.1. Apply resume value if resuming from interrupt
         let just_resumed = self.interrupt_tracker.is_resuming();
         if just_resumed {
             if let Some(resume_value) = self.resume_value.take() {
@@ -1058,6 +1118,9 @@ impl PregelLoop {
             updated_channels.as_ref(),
             &self.trigger_to_nodes,
         )?;
+
+        // Track which nodes are already scheduled (to prevent duplicate scheduling)
+        let mut already_scheduled: HashSet<String> = tasks.values().map(|t| t.name.clone()).collect();
 
         // If no tasks, we're done
         if tasks.is_empty() {
@@ -1161,6 +1224,12 @@ impl PregelLoop {
         // Collect results into HashMap
         let task_results: HashMap<String, Result<serde_json::Value>> =
             results.into_iter().collect();
+
+        // 5.5. Track executed nodes (for edge-based scheduling)
+        for (task_id, task) in &tasks {
+            // Track both successful and failed executions for dependency tracking
+            self.executed_nodes_this_superstep.insert(task.name.clone());
+        }
 
         // 6. Emit TaskEnd/TaskError and Updates events
         for (task_id, task) in &tasks {
@@ -1284,11 +1353,53 @@ impl PregelLoop {
             }
         }
 
-        // 7.3. Write all Sends to TASKS channel
-        if !sends_to_write.is_empty() {
+        // 7.2.5. Process direct edges from executed nodes
+        for executed_node in &self.executed_nodes_this_superstep {
+            if let Some(edges) = self.edges.get(executed_node) {
+                // Get the task result for this executed node
+                // Find the task_id that corresponds to this node
+                let node_output = tasks.iter()
+                    .find(|(_, task)| &task.name == executed_node)
+                    .and_then(|(task_id, _)| task_results.get(task_id))
+                    .and_then(|result| result.as_ref().ok().cloned());
+
+                if let Some(output) = node_output {
+                    for edge in edges {
+                        if let crate::graph::Edge::Direct(target_node) = edge {
+                            // Skip if target node is already scheduled in this superstep
+                            // (prevents duplicate scheduling from multiple predecessors)
+                            if already_scheduled.contains(target_node) {
+                                continue;
+                            }
+                            
+                            // Check if target node is ready (all dependencies executed)
+                            if self.is_node_ready(target_node) {
+                                let send = crate::send::Send::new(target_node.clone(), output.clone());
+                                sends_to_write.push(send);
+                                // Mark as scheduled to prevent duplicates
+                                already_scheduled.insert(target_node.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 7.3. Deduplicate Send objects (same node should only be scheduled once per superstep)
+        // Use a HashMap to track unique (node, state) pairs
+        let mut unique_sends: HashMap<String, Send> = HashMap::new();
+        for send in sends_to_write {
+            // For now, just use node name as key (last Send for a node wins)
+            // TODO: Could use node + state hash for more sophisticated deduplication
+            unique_sends.insert(send.node().to_string(), send);
+        }
+        let deduplicated_sends: Vec<Send> = unique_sends.into_values().collect();
+
+        // 7.4. Write all Sends to TASKS channel
+        if !deduplicated_sends.is_empty() {
             if let Some(tasks_channel) = self.channels.get_mut("__tasks__") {
                 // Convert Send objects to Value for channel write
-                let send_values: Vec<Value> = sends_to_write
+                let send_values: Vec<Value> = deduplicated_sends
                     .iter()
                     .map(|s| serde_json::to_value(s).unwrap_or(Value::Null))
                     .collect();
@@ -1666,23 +1777,17 @@ impl PregelLoop {
     /// Read all channel values into a single JSON object
     fn read_all_channels(&self) -> Value {
         // Debug: log all channels
-        eprintln!("DEBUG: Reading all channels. Total channels: {}", self.channels.len());
         for (name, _) in &self.channels {
-            eprintln!("DEBUG:   Channel: {}", name);
         }
 
         // Special handling for single "state" channel - return its value directly
         if self.channels.len() == 1 || (self.channels.len() == 2 && self.channels.contains_key("__start__")) {
-            eprintln!("DEBUG: Checking for single state channel");
             if let Some(state_channel) = self.channels.get("state") {
                 if let Ok(value) = state_channel.get() {
-                    eprintln!("DEBUG: Returning state channel value directly: {:?}", value);
                     return value;
                 } else {
-                    eprintln!("DEBUG: State channel exists but get() failed");
                 }
             } else {
-                eprintln!("DEBUG: No state channel found");
             }
         }
 
@@ -1694,29 +1799,28 @@ impl PregelLoop {
                 continue;
             }
 
-            // Skip node output channels (channels that match node names)
-            if self.nodes.contains_key(name) {
-                eprintln!("DEBUG: Skipping node channel: {}", name);
-                continue;
-            }
+            // REMOVED BUGGY CODE: Don't skip node channels - they contain important state updates
+            // The previous code skipped channels matching node names, which caused agent node
+            // outputs to be lost. Node channels are used by some graph patterns (like ReAct)
+            // to communicate state changes.
+            //
+            // if self.nodes.contains_key(name) {
+            //     continue;
+            // }
 
             // Read the latest value from state channels only
             if let Ok(value) = channel.get() {
-                eprintln!("DEBUG: Reading channel {}: {:?}", name, value);
                 // If it's the "state" channel and it's the only non-internal channel,
                 // return its value directly for better ergonomics
                 if name == "state" && state.is_empty() {
                     // Check if state channel contains the actual state object
-                    eprintln!("DEBUG: Returning state channel value from loop: {:?}", value);
                     return value;
                 }
                 state.insert(name.clone(), value);
             } else {
-                eprintln!("DEBUG: Channel {} get() failed", name);
             }
         }
 
-        eprintln!("DEBUG: Final state map: {:?}", state);
 
         if state.len() == 1 && state.contains_key("state") {
             // If we only have a "state" key, unwrap it
@@ -1730,6 +1834,39 @@ impl PregelLoop {
     ///
     /// Resume values can either be a single value (applied to a special __resume__ channel)
     /// or a map of interrupt IDs to values.
+    /// Check if a node is ready to execute (all dependencies have executed).
+    ///
+    /// A node is ready if:
+    /// - It has no dependencies, OR
+    /// - All of its dependencies have executed (in current superstep OR any previous superstep)
+    ///
+    /// This is used for edge-based scheduling to ensure nodes only execute
+    /// after their predecessors complete. For nodes scheduled via Send objects,
+    /// they execute in the next superstep, so we check if dependencies executed
+    /// in the current superstep (they'll be ready next step) OR if they've
+    /// executed in any previous superstep (indicated by having versions_seen entries).
+    ///
+    /// For sequential chains: If A executes in superstep 1, we create Send for B.
+    /// In superstep 2, B should execute because A executed in superstep 1 (has versions_seen entry).
+    fn is_node_ready(&self, node: &str) -> bool {
+        if let Some(dependencies) = self.node_dependencies.get(node) {
+            // Check if all dependencies have executed
+            dependencies.iter().all(|dep| {
+                // Check if dependency executed in current superstep
+                if self.executed_nodes_this_superstep.contains(dep) {
+                    return true;
+                }
+                // Check if dependency has executed in any previous superstep
+                // (indicated by having versions_seen entries in checkpoint)
+                // This handles the case where dependency executed in a previous superstep
+                self.checkpoint.versions_seen.contains_key(dep)
+            })
+        } else {
+            // No dependencies, always ready
+            true
+        }
+    }
+
     fn apply_resume_value(&mut self, resume_value: ResumeValue) -> Result<()> {
         match resume_value {
             ResumeValue::Single(value) => {

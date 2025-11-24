@@ -550,6 +550,7 @@ fn build_react_graph(config: ReactAgentConfig) -> Result<CompiledGraph> {
     let should_continue = |state: &Value| -> langgraph_core::send::ConditionalEdgeResult {
         use langgraph_core::send::ConditionalEdgeResult;
 
+
         // Get the last message
         if let Some(messages) = state.get("messages").and_then(|m| m.as_array()) {
             if let Some(last_msg) = messages.last() {
@@ -559,8 +560,10 @@ fn build_react_graph(config: ReactAgentConfig) -> Result<CompiledGraph> {
                     if msg.is_ai() && msg.has_tool_calls() {
                         return ConditionalEdgeResult::Node("tools".to_string());
                     }
+                } else {
                 }
             }
+        } else {
         }
 
         // Otherwise, end execution
