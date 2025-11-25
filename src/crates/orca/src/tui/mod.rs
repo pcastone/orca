@@ -29,6 +29,12 @@ use std::time::Duration;
 
 /// Run the interactive TUI
 pub async fn run_tui(app: &mut App) -> Result<()> {
+    // Initialize user database for LLM provider storage
+    app.init_user_db().await;
+
+    // Initialize prompt service for LLM interactions
+    app.init_prompt_service().await;
+
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -40,6 +46,9 @@ pub async fn run_tui(app: &mut App) -> Result<()> {
     terminal.draw(|f| {
         ui::render_ui(f, app);
     })?;
+
+    // Track previous dialog state for loading config
+    let mut prev_dialog_state = app.dialog_state;
 
     // Main event loop
     loop {
@@ -56,6 +65,20 @@ pub async fn run_tui(app: &mut App) -> Result<()> {
                 let handler = InputHandler::new();
                 handler.handle_key_event(key_event, app);
             }
+        }
+
+        // Check if dialog state changed to LlmProfileEdit - load config
+        if app.dialog_state != prev_dialog_state {
+            if app.dialog_state == app::DialogState::LlmProfileEdit || app.dialog_state == app::DialogState::LlmProfileCreate {
+                app.load_llm_config_form().await;
+            }
+            prev_dialog_state = app.dialog_state;
+        }
+
+        // Handle pending LLM config save
+        if app.pending_llm_save {
+            app.pending_llm_save = false;
+            app.save_llm_config().await;
         }
 
         // Redraw

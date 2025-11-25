@@ -65,6 +65,12 @@ langgraph-core = { workspace = true }
 langgraph-prebuilt = { workspace = true }
 tooling = { workspace = true }
 llm = { path = "../llm" }
+orca = { path = "../orca" }
+dirs = "5.0"
+
+# Authentication
+base64 = "0.22"
+sha2 = "0.10"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "macros"] }

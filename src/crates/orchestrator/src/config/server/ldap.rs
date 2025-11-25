@@ -3,7 +3,7 @@
 //! Handles LDAP connection and authentication based on configuration.
 
 use crate::config::LdapConfig;
-use ldap3::{Ldap, LdapConnAsync};
+use ldap3::{Ldap, LdapConnAsync, Scope, SearchEntry};
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, info, warn};
@@ -112,19 +112,83 @@ impl LdapClient {
         }
 
         if self.config.group.is_empty() {
-            // No group requirement
+            // No group requirement - allow all authenticated users
+            debug!("No group requirement configured, allowing user: {}", username);
             return Ok(true);
         }
 
         // Search for user's group membership
         let search_base = &self.config.suffix;
         let filter = format!("(&(cn={})(memberOf={}))", username, self.config.group);
-        
-        debug!("Checking group membership: {}", filter);
 
-        // TODO: Implement actual LDAP search
-        // For now, return true if group is not configured
-        Ok(true)
+        debug!(
+            "Checking group membership for user '{}' in group '{}' with filter: {}",
+            username, self.config.group, filter
+        );
+
+        // Connect to LDAP server
+        let server_url = if self.config.server_url.is_empty() {
+            "ldap://localhost"
+        } else {
+            &self.config.server_url
+        };
+
+        let (_conn, mut ldap) = LdapConnAsync::new(server_url)
+            .await
+            .map_err(|e| LdapError::Connection(format!("Failed to connect for group check: {}", e)))?;
+
+        // Bind with readonly credentials if available, otherwise anonymous
+        if let Some((user, pass)) = self.readonly_credentials() {
+            ldap.simple_bind(&user, &pass)
+                .await
+                .map_err(|e| LdapError::Bind(format!("Readonly bind failed: {}", e)))?;
+        } else {
+            ldap.simple_bind("", "")
+                .await
+                .map_err(|e| LdapError::Bind(format!("Anonymous bind failed: {}", e)))?;
+        }
+
+        // Perform LDAP search for user with group membership
+        let (rs, _res) = ldap
+            .search(
+                search_base,
+                Scope::Subtree,
+                &filter,
+                vec!["cn", "memberOf"],
+            )
+            .await
+            .map_err(|e| LdapError::Search(format!("Group membership search failed: {}", e)))?
+            .success()
+            .map_err(|e| LdapError::Search(format!("Search result error: {}", e)))?;
+
+        // Check if any entries were found
+        let has_membership = !rs.is_empty();
+
+        if has_membership {
+            // Log found entries for debugging
+            for entry in rs {
+                let se = SearchEntry::construct(entry);
+                debug!(
+                    "Found user '{}' with group membership: {:?}",
+                    se.dn,
+                    se.attrs.get("memberOf")
+                );
+            }
+            info!(
+                "User '{}' is a member of required group '{}'",
+                username, self.config.group
+            );
+        } else {
+            warn!(
+                "User '{}' is NOT a member of required group '{}'",
+                username, self.config.group
+            );
+        }
+
+        // Unbind to close connection properly
+        let _ = ldap.unbind().await;
+
+        Ok(has_membership)
     }
 
     /// Get read-only login credentials

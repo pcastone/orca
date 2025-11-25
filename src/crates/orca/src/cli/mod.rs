@@ -7,6 +7,7 @@ pub mod budget;
 pub mod config;
 pub mod helpers;
 pub mod llm_profile;
+pub mod pattern;
 pub mod rule;
 pub mod task;
 pub mod workflow;

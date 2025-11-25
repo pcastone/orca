@@ -1,12 +1,13 @@
 //! Domain models for Orca
 //!
-//! Defines domain models for LLM providers, prompts, bugs, permissions, AST cache, budgets, and LLM profiles.
+//! Defines domain models for LLM providers, prompts, bugs, permissions, AST cache, budgets, LLM profiles, and pattern configs.
 
 pub mod ast_cache;
 pub mod bug;
 pub mod budget;
 pub mod llm_profile;
 pub mod llm_provider;
+pub mod pattern_config;
 pub mod pricing;
 pub mod project_rule;
 pub mod prompt;
@@ -18,6 +19,7 @@ pub use budget::{Budget, BudgetEnforcement, BudgetType, RenewalInterval};
 pub use bug::{Bug, BugPriority, BugStatus};
 pub use llm_profile::{LlmConfig, LlmProfile};
 pub use llm_provider::LlmProviderConfig;
+pub use pattern_config::{PatternConfig, PatternType};
 pub use pricing::{default_pricing, LlmPricing};
 pub use project_rule::ProjectRule;
 pub use prompt::Prompt;

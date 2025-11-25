@@ -140,6 +140,28 @@ impl ConfigLoader {
     pub fn project_config_exists(&self) -> bool {
         self.project_config_path.exists()
     }
+
+    /// Save configuration to user-level config file
+    pub async fn save_user_config(&self, config: &OrcaConfig) -> Result<()> {
+        // Ensure the directory exists
+        if let Some(parent) = self.user_config_path.parent() {
+            fs::create_dir_all(parent)
+                .await
+                .map_err(|e| OrcaError::Config(format!("Failed to create config directory: {}", e)))?;
+        }
+
+        // Serialize to TOML
+        let content = toml::to_string_pretty(config)
+            .map_err(|e| OrcaError::Config(format!("Failed to serialize config: {}", e)))?;
+
+        // Write to file
+        fs::write(&self.user_config_path, content)
+            .await
+            .map_err(|e| OrcaError::Config(format!("Failed to write config: {}", e)))?;
+
+        info!(path = %self.user_config_path.display(), "Saved user configuration");
+        Ok(())
+    }
 }
 
 impl Default for ConfigLoader {

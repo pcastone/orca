@@ -24,8 +24,8 @@ impl TaskRepository {
         let created_at = Utc::now().timestamp();
 
         sqlx::query(
-            "INSERT INTO tasks (id, description, status, priority, created_at, updated_at, metadata)
-             VALUES (?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO tasks (id, description, status, priority, created_at, updated_at, metadata, pattern_config_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(&task.id)
         .bind(&task.description)
@@ -34,6 +34,7 @@ impl TaskRepository {
         .bind(created_at)
         .bind(created_at)
         .bind(&task.metadata)
+        .bind(&task.pattern_config_id)
         .execute(self.db.pool())
         .await
         .map_err(|e| OrcaError::Database(format!("Failed to save task: {}", e)))?;
@@ -45,7 +46,7 @@ impl TaskRepository {
     pub async fn find_by_id(&self, id: &str) -> Result<Task> {
         let row = sqlx::query(
             "SELECT id, description, status, priority, result, error, created_at, updated_at,
-                    started_at, completed_at, metadata
+                    started_at, completed_at, metadata, pattern_config_id
              FROM tasks WHERE id = ?"
         )
         .bind(id)
@@ -66,6 +67,7 @@ impl TaskRepository {
             started_at: row.get("started_at"),
             completed_at: row.get("completed_at"),
             metadata: row.get("metadata"),
+            pattern_config_id: row.get("pattern_config_id"),
         };
 
         Ok(task)
@@ -75,7 +77,7 @@ impl TaskRepository {
     pub async fn list(&self) -> Result<Vec<Task>> {
         let rows = sqlx::query(
             "SELECT id, description, status, priority, result, error, created_at, updated_at,
-                    started_at, completed_at, metadata
+                    started_at, completed_at, metadata, pattern_config_id
              FROM tasks
              ORDER BY created_at DESC"
         )
@@ -97,6 +99,7 @@ impl TaskRepository {
                 started_at: row.get("started_at"),
                 completed_at: row.get("completed_at"),
                 metadata: row.get("metadata"),
+                pattern_config_id: row.get("pattern_config_id"),
             })
             .collect();
 
@@ -107,7 +110,7 @@ impl TaskRepository {
     pub async fn list_by_status(&self, status: &str) -> Result<Vec<Task>> {
         let rows = sqlx::query(
             "SELECT id, description, status, priority, result, error, created_at, updated_at,
-                    started_at, completed_at, metadata
+                    started_at, completed_at, metadata, pattern_config_id
              FROM tasks
              WHERE status = ?
              ORDER BY created_at DESC"
@@ -131,6 +134,7 @@ impl TaskRepository {
                 started_at: row.get("started_at"),
                 completed_at: row.get("completed_at"),
                 metadata: row.get("metadata"),
+                pattern_config_id: row.get("pattern_config_id"),
             })
             .collect();
 
@@ -144,7 +148,7 @@ impl TaskRepository {
         sqlx::query(
             "UPDATE tasks
              SET description = ?, status = ?, priority = ?, result = ?, error = ?,
-                 updated_at = ?, started_at = ?, completed_at = ?, metadata = ?
+                 updated_at = ?, started_at = ?, completed_at = ?, metadata = ?, pattern_config_id = ?
              WHERE id = ?"
         )
         .bind(&task.description)
@@ -156,6 +160,7 @@ impl TaskRepository {
         .bind(task.started_at)
         .bind(task.completed_at)
         .bind(&task.metadata)
+        .bind(&task.pattern_config_id)
         .bind(&task.id)
         .execute(self.db.pool())
         .await

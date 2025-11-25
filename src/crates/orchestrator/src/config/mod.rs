@@ -23,7 +23,7 @@ pub use router::{
     RouterSettings, RuleCondition, TerminationCondition, TerminationConfig,
 };
 pub use server::{
-    DatabaseConfig, LdapConfig, SecurityConfig, SecurityMode, ServerConfig, ServerConfigError,
+    DatabaseConfig, LdapConfig, LlmConfig, SecurityConfig, SecurityMode, ServerConfig, ServerConfigError,
     SslConfig, SslMode, X509Config,
 };
 pub use server::ldap::{LdapClient, LdapError};

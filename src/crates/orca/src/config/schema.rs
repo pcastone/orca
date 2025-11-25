@@ -132,6 +132,10 @@ pub struct ExecutionConfig {
     /// Retry backoff multiplier
     #[serde(default = "default_retry_multiplier")]
     pub retry_multiplier: f64,
+
+    /// Show LLM thinking/reasoning output (default: true)
+    #[serde(default = "default_show_thinking")]
+    pub show_thinking: bool,
 }
 
 fn default_pattern() -> String {
@@ -166,6 +170,10 @@ fn default_retry_multiplier() -> f64 {
     2.0
 }
 
+fn default_show_thinking() -> bool {
+    true
+}
+
 impl Default for ExecutionConfig {
     fn default() -> Self {
         Self {
@@ -182,6 +190,7 @@ impl Default for ExecutionConfig {
             initial_retry_delay_secs: default_initial_retry_delay(),
             max_retry_delay_secs: default_max_retry_delay(),
             retry_multiplier: default_retry_multiplier(),
+            show_thinking: default_show_thinking(),
         }
     }
 }

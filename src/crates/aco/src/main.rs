@@ -44,6 +44,15 @@ enum Command {
     },
     /// Show connection status
     Status,
+    /// Send a prompt to the LLM via orchestrator-server
+    Prompt {
+        /// The prompt to send
+        #[arg(value_name = "PROMPT")]
+        prompt: String,
+        /// Orchestrator server URL (default from config or ORCHESTRATOR_URL env)
+        #[arg(short, long)]
+        server: Option<String>,
+    },
     /// Run as server (default behavior)
     Server {
         /// Workspace root directory
@@ -115,6 +124,13 @@ async fn main() -> Result<()> {
         }
         Some(Command::Status) => {
             aco::client::show_status().await?;
+        }
+        Some(Command::Prompt { prompt, server }) => {
+            let server_url = server.unwrap_or_else(|| {
+                std::env::var("ORCHESTRATOR_URL")
+                    .unwrap_or_else(|_| config.client.orchestrator_url.clone())
+            });
+            send_prompt(&server_url, &prompt).await?;
         }
         Some(Command::Server { workspace, address, tui }) => {
             info!("Workspace: {}", workspace.display());
@@ -215,6 +231,65 @@ async fn register_tools(server: &AcoServer) -> Result<()> {
     server.register_tool(Arc::new(ShellExecTool)).await;
 
     info!("Registered all tools");
+
+    Ok(())
+}
+
+/// Send a prompt to the orchestrator-server's LLM endpoint
+async fn send_prompt(server_url: &str, prompt: &str) -> Result<()> {
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize)]
+    struct PromptRequest {
+        prompt: String,
+    }
+
+    #[derive(Deserialize)]
+    struct PromptResponseWrapper {
+        success: bool,
+        data: PromptResponseData,
+    }
+
+    #[derive(Deserialize)]
+    struct PromptResponseData {
+        response: String,
+    }
+
+    #[derive(Deserialize)]
+    struct ErrorResponse {
+        success: bool,
+        message: String,
+    }
+
+    // Build the URL
+    let url = format!("{}/api/v1/prompt", server_url.trim_end_matches('/'));
+
+    // Send the request
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&url)
+        .json(&PromptRequest {
+            prompt: prompt.to_string(),
+        })
+        .send()
+        .await
+        .map_err(|e| {
+            aco::error::AcoError::Connection(format!("Failed to connect to orchestrator: {}", e))
+        })?;
+
+    // Check response status
+    if response.status().is_success() {
+        let result: PromptResponseWrapper = response.json().await.map_err(|e| {
+            aco::error::AcoError::General(format!("Failed to parse response: {}", e))
+        })?;
+        println!("{}", result.data.response);
+    } else {
+        let error: ErrorResponse = response.json().await.map_err(|e| {
+            aco::error::AcoError::General(format!("Failed to parse error response: {}", e))
+        })?;
+        eprintln!("Error: {}", error.message);
+        return Err(aco::error::AcoError::General(error.message).into());
+    }
 
     Ok(())
 }

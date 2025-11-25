@@ -104,6 +104,20 @@ pub struct StatusResponse {
     pub database: String,
 }
 
+/// LLM prompt request
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PromptRequest {
+    /// The prompt to send to the LLM
+    pub prompt: String,
+}
+
+/// LLM prompt response
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PromptResponse {
+    /// The LLM's response
+    pub response: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

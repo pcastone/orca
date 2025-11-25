@@ -24,6 +24,7 @@
 
 use crate::config::RemoteLlmConfig;
 use crate::error::LlmError;
+use crate::streaming;
 use async_trait::async_trait;
 use langgraph_core::error::Result as GraphResult;
 use langgraph_core::llm::{
@@ -32,6 +33,7 @@ use langgraph_core::llm::{
 use langgraph_core::{Message, MessageContent, MessageRole};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::collections::HashMap;
 
 /// Google Gemini API client.
@@ -222,9 +224,64 @@ impl ChatModel for GeminiClient {
         Ok(self.convert_response(gemini_resp))
     }
 
-    async fn stream(&self, _request: ChatRequest) -> GraphResult<ChatStreamResponse> {
-        // TODO: Implement streaming support
-        Err(LlmError::Other("Streaming not yet implemented for Gemini".to_string()).into())
+    async fn stream(&self, request: ChatRequest) -> GraphResult<ChatStreamResponse> {
+        // Gemini streaming uses streamGenerateContent endpoint
+        let url = format!(
+            "{}/models/{}:streamGenerateContent",
+            self.config.base_url, self.config.model
+        );
+
+        let contents = self.convert_messages(&request.messages);
+
+        // Convert to JSON format
+        let contents_json: Vec<serde_json::Value> = contents
+            .iter()
+            .map(|m| {
+                json!({
+                    "role": m.role,
+                    "parts": m.parts.iter().map(|p| json!({"text": p.text})).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+
+        // Build request body
+        let mut req_body = json!({
+            "contents": contents_json,
+        });
+
+        // Add generation config
+        let mut gen_config = serde_json::Map::new();
+        if let Some(temp) = request.config.temperature {
+            gen_config.insert("temperature".to_string(), json!(temp));
+        }
+        if let Some(max) = request.config.max_tokens {
+            gen_config.insert("maxOutputTokens".to_string(), json!(max));
+        }
+        if let Some(top_p) = request.config.top_p {
+            gen_config.insert("topP".to_string(), json!(top_p));
+        }
+        if !request.config.stop_sequences.is_empty() {
+            gen_config.insert("stopSequences".to_string(), json!(request.config.stop_sequences));
+        }
+        if !gen_config.is_empty() {
+            req_body["generationConfig"] = serde_json::Value::Object(gen_config);
+        }
+
+        // Use Gemini streaming helper
+        let (content_stream, reasoning_stream) = streaming::stream_gemini(
+            &self.client,
+            &url,
+            req_body,
+            &self.config.api_key,
+        )
+        .await?;
+
+        Ok(ChatStreamResponse {
+            stream: content_stream,
+            reasoning_stream,
+            usage: None,
+            metadata: HashMap::new(),
+        })
     }
 
     fn clone_box(&self) -> Box<dyn ChatModel> {

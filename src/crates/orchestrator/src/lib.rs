@@ -10,6 +10,7 @@ pub mod context;
 pub mod db;
 pub mod executor;
 pub mod execution;
+pub mod expression;
 pub mod integration;
 pub mod interpreter;
 pub mod pattern;

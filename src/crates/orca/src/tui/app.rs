@@ -1,8 +1,13 @@
 //! Application state management for TUI
 
 use crate::HealthReport;
+use crate::db::Database;
+use crate::models::{LlmProviderConfig, PatternConfig};
+use crate::repositories::{LlmProviderRepository, PatternConfigRepository};
 use super::dialog::Dialog;
 use std::collections::VecDeque;
+use std::sync::Arc;
+use chrono::Utc;
 
 /// Maximum number of conversation/log entries to keep
 const MAX_ENTRIES: usize = 1000;
@@ -13,6 +18,7 @@ pub enum SidebarTab {
     History,
     Todo,
     Bugs,
+    Patterns,
 }
 
 /// Which area is currently focused
@@ -47,6 +53,89 @@ pub enum DialogState {
     LlmProfileEdit,
     ConfigViewer,
     ExternalEditor,
+    PatternSelect,
+    PatternCreate,
+    PatternEdit,
+    PatternList,
+}
+
+/// LLM configuration form state
+#[derive(Debug, Clone)]
+pub struct LlmConfigForm {
+    pub id: Option<String>,  // None for new, Some for editing existing
+    pub name: String,
+    pub provider: String,
+    pub model: String,
+    pub api_key: String,
+    pub api_base: String,
+    pub temperature: String,
+    pub max_tokens: String,
+    pub selected_field: usize,
+}
+
+impl Default for LlmConfigForm {
+    fn default() -> Self {
+        Self {
+            id: None,
+            name: "default".to_string(),
+            provider: "ollama".to_string(),
+            model: "llama2".to_string(),
+            api_key: String::new(),
+            api_base: String::new(),
+            temperature: "0.7".to_string(),
+            max_tokens: "4096".to_string(),
+            selected_field: 0,
+        }
+    }
+}
+
+impl LlmConfigForm {
+    pub fn field_count() -> usize {
+        7 // name, provider, model, api_key, api_base, temperature, max_tokens
+    }
+
+    pub fn get_field_value(&self, index: usize) -> &str {
+        match index {
+            0 => &self.name,
+            1 => &self.provider,
+            2 => &self.model,
+            3 => &self.api_key,
+            4 => &self.api_base,
+            5 => &self.temperature,
+            6 => &self.max_tokens,
+            _ => "",
+        }
+    }
+
+    pub fn get_field_value_mut(&mut self, index: usize) -> &mut String {
+        match index {
+            0 => &mut self.name,
+            1 => &mut self.provider,
+            2 => &mut self.model,
+            3 => &mut self.api_key,
+            4 => &mut self.api_base,
+            5 => &mut self.temperature,
+            6 => &mut self.max_tokens,
+            _ => &mut self.provider, // fallback
+        }
+    }
+
+    pub fn field_name(index: usize) -> &'static str {
+        match index {
+            0 => "Name",
+            1 => "Provider",
+            2 => "Model",
+            3 => "API Key",
+            4 => "API Base URL",
+            5 => "Temperature",
+            6 => "Max Tokens",
+            _ => "",
+        }
+    }
+
+    pub fn providers() -> &'static [&'static str] {
+        &["ollama", "openai", "claude", "deepseek", "grok", "gemini", "openrouter", "lmstudio", "llamacpp"]
+    }
 }
 
 /// Application state
@@ -97,6 +186,22 @@ pub struct App {
     pub menu_selected_index: usize,
     pub dialog_state: DialogState,
     pub dialog: Option<Dialog>,
+
+    // LLM configuration form
+    pub llm_config_form: LlmConfigForm,
+    pub pending_llm_save: bool,
+
+    // LLM Prompt service
+    pub prompt_service: Option<crate::services::PromptService>,
+
+    // User database connection
+    pub user_db: Option<Arc<Database>>,
+
+    // Pattern selection state
+    pub patterns: Vec<PatternConfig>,
+    pub selected_pattern_index: Option<usize>,
+    pub active_pattern: Option<PatternConfig>,
+    pub pending_pattern_load: bool,
 }
 
 impl App {
@@ -133,7 +238,240 @@ impl App {
             menu_selected_index: 0,
             dialog_state: DialogState::None,
             dialog: None,
+            llm_config_form: LlmConfigForm::default(),
+            pending_llm_save: false,
+            prompt_service: None,
+            user_db: None,
+            patterns: Vec::new(),
+            selected_pattern_index: None,
+            active_pattern: None,
+            pending_pattern_load: false,
         }
+    }
+
+    /// Initialize user database connection
+    pub async fn init_user_db(&mut self) {
+        let user_db_path = dirs::home_dir()
+            .expect("Failed to get home directory")
+            .join(".orca")
+            .join("user.db");
+
+        match Database::new(&user_db_path).await {
+            Ok(db) => {
+                self.user_db = Some(Arc::new(db));
+            }
+            Err(e) => {
+                self.add_message(format!("Failed to connect to user database: {}", e));
+            }
+        }
+    }
+
+    /// Load current LLM config into the form from database
+    pub async fn load_llm_config_form(&mut self) {
+        let Some(db) = &self.user_db else {
+            self.add_message("Database not initialized".to_string());
+            return;
+        };
+
+        let repo = LlmProviderRepository::new(Arc::clone(db));
+
+        match repo.get_default().await {
+            Ok(provider) => {
+                self.llm_config_form = LlmConfigForm {
+                    id: Some(provider.id),
+                    name: provider.name,
+                    provider: provider.provider_type,
+                    model: provider.model,
+                    api_key: provider.api_key.unwrap_or_default(),
+                    api_base: provider.api_base.unwrap_or_default(),
+                    temperature: provider.temperature.to_string(),
+                    max_tokens: provider.max_tokens.to_string(),
+                    selected_field: 0,
+                };
+                // Update display
+                self.current_model = format!("{}/{}", self.llm_config_form.provider, self.llm_config_form.model);
+            }
+            Err(_) => {
+                // No default provider, use form defaults
+                self.llm_config_form = LlmConfigForm::default();
+                self.add_message("No LLM provider configured. Using defaults.".to_string());
+            }
+        }
+    }
+
+    /// Save LLM config from form to database
+    pub async fn save_llm_config(&mut self) -> bool {
+        let Some(db) = &self.user_db else {
+            self.add_message("Database not initialized".to_string());
+            return false;
+        };
+
+        let repo = LlmProviderRepository::new(Arc::clone(db));
+        let now = Utc::now().timestamp();
+
+        // Build the provider config from form
+        let provider = LlmProviderConfig {
+            id: self.llm_config_form.id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            name: self.llm_config_form.name.clone(),
+            provider_type: self.llm_config_form.provider.clone(),
+            model: self.llm_config_form.model.clone(),
+            api_key: if self.llm_config_form.api_key.is_empty() {
+                None
+            } else {
+                Some(self.llm_config_form.api_key.clone())
+            },
+            api_base: if self.llm_config_form.api_base.is_empty() {
+                None
+            } else {
+                Some(self.llm_config_form.api_base.clone())
+            },
+            temperature: self.llm_config_form.temperature.parse().unwrap_or(0.7),
+            max_tokens: self.llm_config_form.max_tokens.parse().unwrap_or(4096),
+            settings: String::new(),
+            is_default: true,
+            created_at: now,
+            updated_at: now,
+        };
+
+        // Save or update based on whether we have an existing ID
+        let result = if self.llm_config_form.id.is_some() {
+            repo.update(&provider).await
+        } else {
+            // New provider - save and set as default
+            match repo.save(&provider).await {
+                Ok(()) => repo.set_default(&provider.id).await,
+                Err(e) => Err(e),
+            }
+        };
+
+        match result {
+            Ok(()) => {
+                // Update the form ID if this was a new provider
+                if self.llm_config_form.id.is_none() {
+                    self.llm_config_form.id = Some(provider.id);
+                }
+
+                self.add_message("LLM configuration saved to database".to_string());
+                self.current_model = format!("{}/{}", provider.provider_type, provider.model);
+
+                // Reinitialize prompt service with new config
+                if let Ok(config) = crate::config::load_config().await {
+                    match crate::services::PromptService::new(&config) {
+                        Ok(service) => {
+                            self.prompt_service = Some(service);
+                            self.add_message("LLM service reinitialized".to_string());
+                        }
+                        Err(e) => {
+                            self.add_message(format!("Failed to reinitialize LLM: {}", e));
+                        }
+                    }
+                }
+                true
+            }
+            Err(e) => {
+                self.add_message(format!("Failed to save LLM config: {}", e));
+                false
+            }
+        }
+    }
+
+    /// Initialize the prompt service from configuration (async)
+    pub async fn init_prompt_service(&mut self) {
+        match crate::config::load_config().await {
+            Ok(config) => {
+                match crate::services::PromptService::new(&config) {
+                    Ok(service) => {
+                        self.prompt_service = Some(service);
+                    }
+                    Err(e) => {
+                        self.add_message(format!("Failed to initialize LLM: {}", e));
+                    }
+                }
+            }
+            Err(e) => {
+                self.add_message(format!("Failed to load config: {}", e));
+            }
+        }
+    }
+
+    /// Load patterns from database
+    pub async fn load_patterns(&mut self) {
+        let Some(db) = &self.user_db else {
+            self.add_message("Database not initialized".to_string());
+            return;
+        };
+
+        let repo = PatternConfigRepository::new(Arc::clone(db));
+
+        match repo.list().await {
+            Ok(patterns) => {
+                // Find default pattern index
+                let default_index = patterns.iter().position(|p| p.is_default);
+                self.patterns = patterns;
+                self.selected_pattern_index = default_index;
+
+                // Set active pattern to default
+                if let Some(idx) = default_index {
+                    self.active_pattern = self.patterns.get(idx).cloned();
+                }
+            }
+            Err(e) => {
+                self.add_message(format!("Failed to load patterns: {}", e));
+            }
+        }
+    }
+
+    /// Select a pattern by index
+    pub fn select_pattern(&mut self, index: usize) {
+        if index < self.patterns.len() {
+            self.selected_pattern_index = Some(index);
+            self.active_pattern = self.patterns.get(index).cloned();
+        }
+    }
+
+    /// Get the currently selected pattern name for display
+    pub fn get_active_pattern_display(&self) -> String {
+        self.active_pattern
+            .as_ref()
+            .map(|p| format!("{} ({})", p.name, p.pattern_type))
+            .unwrap_or_else(|| "Auto".to_string())
+    }
+
+    /// Move pattern selection up in list
+    pub fn pattern_select_prev(&mut self) {
+        if self.patterns.is_empty() {
+            return;
+        }
+
+        let current = self.selected_pattern_index.unwrap_or(0);
+        let new_index = if current > 0 {
+            current - 1
+        } else {
+            self.patterns.len() - 1
+        };
+        self.selected_pattern_index = Some(new_index);
+    }
+
+    /// Move pattern selection down in list
+    pub fn pattern_select_next(&mut self) {
+        if self.patterns.is_empty() {
+            return;
+        }
+
+        let current = self.selected_pattern_index.unwrap_or(0);
+        let new_index = (current + 1) % self.patterns.len();
+        self.selected_pattern_index = Some(new_index);
+    }
+
+    /// Confirm pattern selection
+    pub fn confirm_pattern_selection(&mut self) {
+        if let Some(idx) = self.selected_pattern_index {
+            self.active_pattern = self.patterns.get(idx).cloned();
+            if let Some(ref pattern) = self.active_pattern {
+                self.add_message(format!("Pattern selected: {} ({})", pattern.name, pattern.pattern_type));
+            }
+        }
+        self.dialog_state = DialogState::None;
     }
 
     /// Add a message to conversation
@@ -167,7 +505,8 @@ impl App {
         self.active_tab = match self.active_tab {
             SidebarTab::History => SidebarTab::Todo,
             SidebarTab::Todo => SidebarTab::Bugs,
-            SidebarTab::Bugs => SidebarTab::History,
+            SidebarTab::Bugs => SidebarTab::Patterns,
+            SidebarTab::Patterns => SidebarTab::History,
         };
         self.sidebar_selected = 0;
         self.sidebar_scroll = 0;
@@ -176,9 +515,10 @@ impl App {
     /// Switch to previous tab
     pub fn prev_tab(&mut self) {
         self.active_tab = match self.active_tab {
-            SidebarTab::History => SidebarTab::Bugs,
+            SidebarTab::History => SidebarTab::Patterns,
             SidebarTab::Todo => SidebarTab::History,
             SidebarTab::Bugs => SidebarTab::Todo,
+            SidebarTab::Patterns => SidebarTab::Bugs,
         };
         self.sidebar_selected = 0;
         self.sidebar_scroll = 0;
@@ -423,7 +763,7 @@ impl App {
             MenuState::Closed => 0,
             MenuState::FileOpen => 4,      // New, Open, Save, Quit
             MenuState::EditOpen => 3,      // Clear, Copy, Preferences
-            MenuState::ConfigOpen => 4,    // View Config, Budget, LLM Profile, Editor
+            MenuState::ConfigOpen => 5,    // View Config, Budget, LLM Profile, Pattern, Editor
             MenuState::WorkflowOpen => 4,  // Run, View, Create, Manage
             MenuState::HelpOpen => 3,      // About, Shortcuts, Documentation
         }
@@ -450,7 +790,8 @@ impl App {
                 0 => Some("config_view".to_string()),
                 1 => Some("config_budget".to_string()),
                 2 => Some("config_llm_profile".to_string()),
-                3 => Some("config_editor".to_string()),
+                3 => Some("config_pattern".to_string()),
+                4 => Some("config_editor".to_string()),
                 _ => None,
             },
             MenuState::WorkflowOpen => match self.menu_selected_index {

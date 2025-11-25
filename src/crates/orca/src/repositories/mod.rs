@@ -1,7 +1,7 @@
 //! Database repositories
 //!
 //! Provides repository patterns for database operations on tasks, workflows,
-//! LLM providers, prompts, bugs, permissions, and AST cache.
+//! LLM providers, prompts, bugs, permissions, AST cache, and pattern configs.
 
 // Existing repositories
 pub mod task_repository;
@@ -13,6 +13,7 @@ pub mod prompt_repository;
 pub mod workflow_template_repository;
 pub mod budget_repository;
 pub mod llm_profile_repository;
+pub mod pattern_config_repository;
 
 // Project DB repositories
 pub mod bug_repository;
@@ -28,6 +29,7 @@ pub use prompt_repository::PromptRepository;
 pub use workflow_template_repository::WorkflowTemplateRepository;
 pub use budget_repository::BudgetRepository;
 pub use llm_profile_repository::LlmProfileRepository;
+pub use pattern_config_repository::PatternConfigRepository;
 pub use bug_repository::BugRepository;
 pub use tool_permission_repository::ToolPermissionRepository;
 pub use ast_cache_repository::AstCacheRepository;

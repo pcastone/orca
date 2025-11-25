@@ -10,6 +10,18 @@ use orca::version_info;
 #[command(about = "Orca - Standalone orchestrator for AI agent workflows", long_about = None)]
 #[command(version = env!("CARGO_PKG_VERSION"))]
 struct Cli {
+    /// Send a quick prompt to the configured LLM
+    #[arg(short = 'p', long = "prompt", value_name = "PROMPT")]
+    prompt: Option<String>,
+
+    /// Show LLM thinking/reasoning output (overrides config)
+    #[arg(long = "show-thinking", global = true)]
+    show_thinking: bool,
+
+    /// Hide LLM thinking/reasoning output (overrides config)
+    #[arg(long = "no-thinking", global = true, conflicts_with = "show_thinking")]
+    no_thinking: bool,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -52,6 +64,10 @@ enum Commands {
     /// LLM profile management commands
     #[command(subcommand)]
     LlmProfile(LlmProfileCommands),
+
+    /// Pattern configuration management commands
+    #[command(subcommand)]
+    Pattern(PatternCommands),
 }
 
 #[derive(Subcommand)]
@@ -285,6 +301,9 @@ enum TaskCommands {
     Create {
         /// Task description
         description: String,
+        /// Pattern config ID or name to use for this task
+        #[arg(long, value_name = "PATTERN")]
+        pattern: Option<String>,
     },
     /// List all tasks
     List,
@@ -292,6 +311,9 @@ enum TaskCommands {
     Run {
         /// Task ID
         id: String,
+        /// Override pattern config for this run
+        #[arg(long, value_name = "PATTERN")]
+        pattern: Option<String>,
     },
     /// Cancel a running or pending task
     Cancel {
@@ -357,6 +379,69 @@ enum WorkflowCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum PatternCommands {
+    /// List all pattern configurations
+    List,
+    /// List patterns by type
+    ListType {
+        /// Pattern type to filter by: react, plan_execute, reflection
+        pattern_type: String,
+    },
+    /// Show pattern details
+    Show {
+        /// Pattern ID or name
+        id: String,
+    },
+    /// Create a new pattern configuration
+    Create {
+        /// Pattern name
+        name: String,
+        /// Pattern type: react, plan_execute, reflection
+        #[arg(short = 't', long)]
+        pattern_type: String,
+        /// Maximum iterations (default: 10)
+        #[arg(short = 'i', long)]
+        max_iterations: Option<i64>,
+        /// System prompt for the agent
+        #[arg(short = 's', long)]
+        system_prompt: Option<String>,
+        /// Comma-separated list of allowed tools
+        #[arg(long)]
+        tools: Option<String>,
+        /// Set this pattern as the default
+        #[arg(long)]
+        default: bool,
+    },
+    /// Update a pattern configuration
+    Update {
+        /// Pattern ID
+        id: String,
+        /// New name
+        #[arg(short, long)]
+        name: Option<String>,
+        /// New maximum iterations
+        #[arg(short = 'i', long)]
+        max_iterations: Option<i64>,
+        /// New system prompt
+        #[arg(short = 's', long)]
+        system_prompt: Option<String>,
+        /// New comma-separated tool list
+        #[arg(long)]
+        tools: Option<String>,
+    },
+    /// Delete a pattern configuration
+    Delete {
+        /// Pattern ID
+        id: String,
+    },
+    /// Set a pattern as the default
+    SetDefault {
+        /// Pattern ID
+        id: String,
+    },
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
@@ -367,6 +452,38 @@ async fn main() -> anyhow::Result<()> {
     let _signal_handler = shutdown_coordinator.install_signal_handlers();
 
     let cli = Cli::parse();
+
+    // Handle -p flag first (quick prompt)
+    if let Some(prompt) = cli.prompt {
+        // Check if initialized
+        if !orca::cli::is_initialized() {
+            eprintln!("{}", orca::cli::get_init_instructions());
+            return Err(anyhow::anyhow!("Orca not initialized"));
+        }
+
+        // Load configuration and apply CLI overrides
+        let mut config = orca::load_config().await?;
+
+        // Apply thinking flag overrides
+        if cli.show_thinking {
+            config.execution.show_thinking = true;
+        } else if cli.no_thinking {
+            config.execution.show_thinking = false;
+        }
+
+        let service = orca::PromptService::new(&config)?;
+
+        match service.send_prompt(&prompt).await {
+            Ok(response) => {
+                println!("{}", response);
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                return Err(anyhow::anyhow!("Failed to get response from LLM: {}", e));
+            }
+        }
+    }
 
     match cli.command {
         Some(Commands::Init) => {
@@ -450,13 +567,14 @@ async fn main() -> anyhow::Result<()> {
             );
 
             match task_cmd {
-                TaskCommands::Create { description } => {
-                    orca::cli::task::handle_create(db_manager, description).await?;
+                TaskCommands::Create { description, pattern } => {
+                    orca::cli::task::handle_create(db_manager, description, pattern).await?;
                 }
                 TaskCommands::List => {
                     orca::cli::task::handle_list(db_manager).await?;
                 }
-                TaskCommands::Run { id } => {
+                TaskCommands::Run { id, pattern: _ } => {
+                    // TODO: Pass pattern to handle_run when executor integration is ready
                     orca::cli::task::handle_run(db_manager, id).await?;
                 }
                 TaskCommands::Cancel { id } => {
@@ -668,6 +786,45 @@ async fn main() -> anyhow::Result<()> {
                 }
                 LlmProfileCommands::Activate { name } => {
                     orca::cli::llm_profile::handle_activate(db_manager, name).await?;
+                }
+            }
+            Ok(())
+        }
+        Some(Commands::Pattern(pattern_cmd)) => {
+            // Check if initialized
+            if !orca::cli::is_initialized() {
+                eprintln!("{}", orca::cli::get_init_instructions());
+                return Err(anyhow::anyhow!("Orca not initialized"));
+            }
+
+            // Create database manager (workspace_root = current directory)
+            let db_manager = std::sync::Arc::new(
+                orca::DatabaseManager::new(".").await?
+            );
+
+            match pattern_cmd {
+                PatternCommands::List => {
+                    orca::cli::pattern::handle_list(db_manager).await?;
+                }
+                PatternCommands::ListType { pattern_type } => {
+                    orca::cli::pattern::handle_list_type(db_manager, pattern_type).await?;
+                }
+                PatternCommands::Show { id } => {
+                    orca::cli::pattern::handle_show(db_manager, id).await?;
+                }
+                PatternCommands::Create { name, pattern_type, max_iterations, system_prompt, tools, default } => {
+                    orca::cli::pattern::handle_create(
+                        db_manager, name, pattern_type, max_iterations, system_prompt, tools, default
+                    ).await?;
+                }
+                PatternCommands::Update { id, name, max_iterations, system_prompt, tools } => {
+                    orca::cli::pattern::handle_update(db_manager, id, name, max_iterations, system_prompt, tools).await?;
+                }
+                PatternCommands::Delete { id } => {
+                    orca::cli::pattern::handle_delete(db_manager, id).await?;
+                }
+                PatternCommands::SetDefault { id } => {
+                    orca::cli::pattern::handle_set_default(db_manager, id).await?;
                 }
             }
             Ok(())

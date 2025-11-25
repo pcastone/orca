@@ -127,9 +127,88 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create WebSocket broadcast state
     let broadcast = Arc::new(BroadcastState::new());
 
+    // Connect to user database for LLM provider config
+    let user_db_path = dirs::home_dir()
+        .expect("Failed to get home directory")
+        .join(".orca")
+        .join("user.db");
+
+    let user_db = match orca::db::Database::new(&user_db_path).await {
+        Ok(db) => {
+            tracing::info!("Connected to user database: {}", user_db_path.display());
+            Some(std::sync::Arc::new(db))
+        }
+        Err(e) => {
+            tracing::warn!("Failed to connect to user database: {}. Using server config for LLM.", e);
+            None
+        }
+    };
+
+    // Initialize LLM prompt service from user database or server config
+    let prompt_service = if let Some(ref udb) = user_db {
+        // Try to load from user database
+        let repo = orca::repositories::LlmProviderRepository::new(std::sync::Arc::clone(udb));
+        match repo.get_default().await {
+            Ok(provider) => {
+                // Convert database config to LlmConfig
+                let llm_config = orchestrator::config::LlmConfig {
+                    enabled: true,
+                    provider: provider.provider_type.clone(),
+                    model: provider.model.clone(),
+                    api_key: provider.api_key.clone(),
+                    api_base: provider.api_base.clone(),
+                    temperature: provider.temperature as f32,
+                    max_tokens: provider.max_tokens as u32,
+                };
+                match orchestrator::services::PromptService::new(&llm_config) {
+                    Ok(service) => {
+                        tracing::info!("LLM prompt service enabled from database: {}/{}", provider.provider_type, provider.model);
+                        Some(service)
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to initialize LLM from database config: {}", e);
+                        None
+                    }
+                }
+            }
+            Err(_) => {
+                tracing::info!("No default LLM provider in database, falling back to server config");
+                // Fall back to server config
+                if config.llm.enabled {
+                    match orchestrator::services::PromptService::new(&config.llm) {
+                        Ok(service) => {
+                            tracing::info!("LLM prompt service enabled with provider: {}", config.llm.provider);
+                            Some(service)
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to initialize LLM prompt service: {}", e);
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            }
+        }
+    } else if config.llm.enabled {
+        match orchestrator::services::PromptService::new(&config.llm) {
+            Ok(service) => {
+                tracing::info!("LLM prompt service enabled with provider: {}", config.llm.provider);
+                Some(service)
+            }
+            Err(e) => {
+                tracing::warn!("Failed to initialize LLM prompt service: {}. Prompt endpoint disabled.", e);
+                None
+            }
+        }
+    } else {
+        tracing::info!("LLM prompt service not enabled");
+        None
+    };
+
     // Build the router
     tracing::info!("Building API router");
-    let app = create_router(db, broadcast);
+    let app = create_router(db, broadcast, prompt_service, user_db);
 
     // Create server
     tracing::info!("Starting orchestrator server on {}", addr);

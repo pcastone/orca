@@ -21,6 +21,7 @@
 use crate::config::LocalLlmConfig;
 use crate::error::{LlmError, Result};
 use crate::provider_utils::{ModelInfo, ProviderUtils};
+use crate::streaming;
 use async_trait::async_trait;
 use langgraph_core::error::Result as GraphResult;
 use langgraph_core::llm::{
@@ -29,6 +30,7 @@ use langgraph_core::llm::{
 use langgraph_core::{Message, MessageContent, MessageRole};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::collections::HashMap;
 
 /// Ollama client for local LLM inference.
@@ -182,9 +184,55 @@ impl ChatModel for OllamaClient {
         Ok(self.convert_response(ollama_resp))
     }
 
-    async fn stream(&self, _request: ChatRequest) -> GraphResult<ChatStreamResponse> {
-        // TODO: Implement streaming support
-        Err(LlmError::Other("Streaming not yet implemented for Ollama".to_string()).into())
+    async fn stream(&self, request: ChatRequest) -> GraphResult<ChatStreamResponse> {
+        let url = format!("{}/api/chat", self.config.base_url);
+
+        // Convert messages to JSON format
+        let messages_json: Vec<serde_json::Value> = request
+            .messages
+            .iter()
+            .map(|m| {
+                let msg = self.convert_message(m);
+                json!({
+                    "role": msg.role,
+                    "content": msg.content,
+                })
+            })
+            .collect();
+
+        // Build request body with stream: true
+        let mut req_body = json!({
+            "model": self.config.model,
+            "messages": messages_json,
+            "stream": true,
+        });
+
+        // Add options if present
+        let mut options = serde_json::Map::new();
+        if let Some(temp) = request.config.temperature {
+            options.insert("temperature".to_string(), json!(temp));
+        }
+        if let Some(top_p) = request.config.top_p {
+            options.insert("top_p".to_string(), json!(top_p));
+        }
+        if !options.is_empty() {
+            req_body["options"] = serde_json::Value::Object(options);
+        }
+
+        // Use Ollama streaming helper
+        let (content_stream, reasoning_stream) = streaming::stream_ollama(
+            &self.client,
+            &url,
+            req_body,
+        )
+        .await?;
+
+        Ok(ChatStreamResponse {
+            stream: content_stream,
+            reasoning_stream,
+            usage: None,
+            metadata: HashMap::new(),
+        })
     }
 
     async fn is_available(&self) -> GraphResult<bool> {

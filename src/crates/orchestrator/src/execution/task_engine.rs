@@ -4,9 +4,10 @@
 //! retry logic, and streaming support.
 
 use crate::db::{DatabasePool, repositories::TaskRepository};
-use crate::executor::ExecutorConfig;
-use crate::{OrchestratorError, Result, Task, TaskExecutor};
+use crate::executor::{ExecutorConfig, LlmTaskExecutor};
+use crate::{OrchestratorError, Result, Task, TaskExecutor, TaskStatus};
 use async_trait::async_trait;
+use langgraph_core::llm::ChatModel;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
@@ -27,6 +28,9 @@ pub struct TaskExecutionEngine {
 
     /// Maximum execution time in seconds
     max_execution_time: u64,
+
+    /// LLM client for task execution
+    llm_client: Option<Arc<dyn ChatModel>>,
 }
 
 impl TaskExecutionEngine {
@@ -42,6 +46,7 @@ impl TaskExecutionEngine {
             pool,
             default_config: ExecutorConfig::default(),
             max_execution_time: 300, // 5 minutes default
+            llm_client: None,
         }
     }
 
@@ -55,7 +60,14 @@ impl TaskExecutionEngine {
             pool,
             default_config: config,
             max_execution_time: 300,
+            llm_client: None,
         }
+    }
+
+    /// Set the LLM client for task execution
+    pub fn with_llm_client(mut self, client: Arc<dyn ChatModel>) -> Self {
+        self.llm_client = Some(client);
+        self
     }
 
     /// Set maximum execution time in seconds
@@ -133,9 +145,46 @@ impl TaskExecutionEngine {
 
         debug!("Task {} configuration: {:?}", task_id, executor_config);
 
-        // Simulate task execution (in real implementation, would use LlmTaskExecutor)
-        // This is a placeholder that succeeds after a short delay
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // Execute task using LLM executor if available
+        let execution_result = if let Some(ref llm_client) = self.llm_client {
+            // Create LLM executor with task-specific config
+            let executor = LlmTaskExecutor::with_config(llm_client.clone(), executor_config);
+
+            // Create a task object for the executor
+            // Note: DB model uses 'title', core Task uses 'name'
+            let mut exec_task = Task::new(&task.title);
+            if let Some(desc) = &task.description {
+                exec_task = exec_task.with_description(desc);
+            }
+            exec_task.status = TaskStatus::Running;
+
+            // Execute via LLM
+            match executor.execute(&exec_task).await {
+                Ok(_) => {
+                    info!("Task {} LLM execution completed successfully", task_id);
+                    Ok(())
+                }
+                Err(e) => {
+                    error!("Task {} LLM execution failed: {}", task_id, e);
+                    Err(e)
+                }
+            }
+        } else {
+            // No LLM client configured - this is a warning but not a failure
+            // Fall back to simulated execution for backward compatibility
+            warn!(
+                "No LLM client configured for task {}. Using simulated execution.",
+                task_id
+            );
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            Ok(())
+        };
+
+        // Handle execution result
+        if let Err(e) = execution_result {
+            self.handle_execution_error(task_id, &e.to_string()).await?;
+            return Err(e);
+        }
 
         // Update status to Completed
         TaskRepository::update_status(&self.pool, task_id, "completed")

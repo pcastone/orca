@@ -10,19 +10,30 @@ use std::sync::Arc;
 
 use crate::db::DatabaseConnection;
 use crate::api::{handlers, ws::BroadcastState};
+use crate::services::PromptService;
+use orca::db::Database as UserDatabase;
 
 /// Shared application state
 #[derive(Clone)]
 pub struct AppState {
     pub db: DatabaseConnection,
     pub broadcast: Arc<BroadcastState>,
+    pub prompt_service: Option<Arc<PromptService>>,
+    pub user_db: Option<Arc<UserDatabase>>,
 }
 
 /// Build the complete API router
-pub fn create_router(db: DatabaseConnection, broadcast: Arc<BroadcastState>) -> Router {
+pub fn create_router(
+    db: DatabaseConnection,
+    broadcast: Arc<BroadcastState>,
+    prompt_service: Option<PromptService>,
+    user_db: Option<Arc<UserDatabase>>,
+) -> Router {
     let app_state = AppState {
         db: db.clone(),
         broadcast: broadcast.clone(),
+        prompt_service: prompt_service.map(Arc::new),
+        user_db,
     };
 
     Router::new()
@@ -145,6 +156,11 @@ pub fn create_router(db: DatabaseConnection, broadcast: Arc<BroadcastState>) -> 
             "/api/v1/executions/:execution_id/checkpoints/latest",
             get(handlers::get_latest_checkpoint),
         )
+        // LLM prompt endpoint
+        .route(
+            "/api/v1/prompt",
+            post(handlers::send_prompt),
+        )
         .with_state(app_state)
 }
 
@@ -152,7 +168,7 @@ pub fn create_router(db: DatabaseConnection, broadcast: Arc<BroadcastState>) -> 
 #[cfg(test)]
 pub fn create_test_router(db: DatabaseConnection) -> Router {
     let broadcast = Arc::new(BroadcastState::new());
-    create_router(db, broadcast)
+    create_router(db, broadcast, None, None)
 }
 
 #[cfg(test)]

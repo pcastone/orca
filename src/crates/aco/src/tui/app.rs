@@ -179,7 +179,7 @@ pub struct ExecutionEvent {
     /// Event timestamp
     pub timestamp: String,
 
-    /// Event type (started, progress, output, tool_call, tool_result, completed, failed)
+    /// Event type (started, progress, output, reasoning, tool_call, tool_result, completed, failed)
     pub event_type: String,
 
     /// Event message

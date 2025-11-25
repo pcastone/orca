@@ -2,10 +2,12 @@ use crate::proto::auth::{
     auth_service_server::AuthService,
     AuthenticateRequest, AuthenticateResponse,
 };
-use tonic::{Request, Response, Status};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::Utc;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tonic::{Request, Response, Status};
 use tracing::{debug, error, info};
 
 /// Authentication modes
@@ -75,8 +77,11 @@ impl JwtManager {
         let now = Utc::now();
         let exp = now + chrono::Duration::seconds(3600); // 1 hour expiration
 
-        // Create a simple JWT-like token (simplified - real implementation would use jsonwebtoken crate)
-        let header = base64_encode("{\"alg\":\"HS256\",\"typ\":\"JWT\"}");
+        // Create JWT header
+        let header = r#"{"alg":"HS256","typ":"JWT"}"#;
+        let header_encoded = URL_SAFE_NO_PAD.encode(header);
+
+        // Create JWT payload
         let payload = format!(
             r#"{{"sub":"{}","iss":"{}","iat":{},"exp":{}}}"#,
             username,
@@ -84,25 +89,52 @@ impl JwtManager {
             now.timestamp(),
             exp.timestamp()
         );
-        let payload_encoded = base64_encode(&payload);
+        let payload_encoded = URL_SAFE_NO_PAD.encode(&payload);
 
-        // For simplicity, create a stub signature
-        let signature = base64_encode(&format!("{}:{}", username, self.secret));
+        // Create HMAC-SHA256 signature
+        let message = format!("{}.{}", header_encoded, payload_encoded);
+        let signature = compute_hmac_sha256(&message, &self.secret);
+        let signature_encoded = URL_SAFE_NO_PAD.encode(&signature);
 
-        Ok(format!("{}.{}.{}", header, payload_encoded, signature))
+        Ok(format!("{}.{}.{}", header_encoded, payload_encoded, signature_encoded))
     }
 
-    /// Validate a JWT token (simplified)
+    /// Validate a JWT token
     pub fn validate_token(&self, token: &str) -> Result<String, String> {
         let parts: Vec<&str> = token.split('.').collect();
         if parts.len() != 3 {
             return Err("Invalid token format".to_string());
         }
 
+        let header_encoded = parts[0];
+        let payload_encoded = parts[1];
+        let signature_encoded = parts[2];
+
+        // Verify signature
+        let message = format!("{}.{}", header_encoded, payload_encoded);
+        let expected_signature = compute_hmac_sha256(&message, &self.secret);
+        let expected_signature_encoded = URL_SAFE_NO_PAD.encode(&expected_signature);
+
+        if signature_encoded != expected_signature_encoded {
+            return Err("Invalid token signature".to_string());
+        }
+
         // Decode payload
-        let payload_str = base64_decode(parts[1])?;
+        let payload_bytes = URL_SAFE_NO_PAD
+            .decode(payload_encoded)
+            .map_err(|e| format!("Invalid base64 in payload: {}", e))?;
+        let payload_str = String::from_utf8(payload_bytes)
+            .map_err(|e| format!("Invalid UTF-8 in payload: {}", e))?;
         let payload: HashMap<String, serde_json::Value> = serde_json::from_str(&payload_str)
             .map_err(|e| format!("Invalid token payload: {}", e))?;
+
+        // Check expiration
+        if let Some(exp) = payload.get("exp").and_then(|v| v.as_i64()) {
+            let now = Utc::now().timestamp();
+            if now > exp {
+                return Err("Token has expired".to_string());
+            }
+        }
 
         let username = payload
             .get("sub")
@@ -152,10 +184,13 @@ impl UserPassAuth {
         }
     }
 
-    /// Hash a password (simplified for demo)
+    /// Hash a password using SHA256
+    /// Note: For production, consider using Argon2 or bcrypt instead
     fn hash_password(&self, password: &str) -> String {
-        // This is a simplified hash - real implementation should use Argon2 or bcrypt
-        format!("hashed_{}", password)
+        let mut hasher = Sha256::new();
+        hasher.update(password.as_bytes());
+        let result = hasher.finalize();
+        hex::encode(result)
     }
 }
 
@@ -295,19 +330,24 @@ impl AuthService for AuthServiceImpl {
     }
 }
 
-/// Simple base64 encoding helper
-fn base64_encode(data: &str) -> String {
-    
-    format!("b64_{}", data.len())
+/// Compute HMAC-SHA256 signature
+fn compute_hmac_sha256(message: &str, secret: &str) -> Vec<u8> {
+    // Simple HMAC implementation using SHA256
+    // For production, use the hmac crate for proper HMAC
+    let mut hasher = Sha256::new();
+    hasher.update(secret.as_bytes());
+    hasher.update(message.as_bytes());
+    hasher.finalize().to_vec()
 }
 
-/// Simple base64 decoding helper
-fn base64_decode(encoded: &str) -> Result<String, String> {
-    // For demo purposes, just return the string
-    if let Some(stripped) = encoded.strip_prefix("b64_") {
-        Ok(String::from_utf8_lossy(stripped.as_bytes()).to_string())
-    } else {
-        Ok(encoded.to_string())
+/// Hex encoding helper for password hashing
+mod hex {
+    pub fn encode(bytes: impl AsRef<[u8]>) -> String {
+        bytes
+            .as_ref()
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect()
     }
 }
 

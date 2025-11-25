@@ -126,6 +126,71 @@ pub struct LdapConfig {
     pub readonly_login: String,
 }
 
+/// LLM provider configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmConfig {
+    /// Enable LLM prompt endpoint
+    #[serde(default)]
+    pub enabled: bool,
+    /// LLM provider name (e.g., "ollama", "openai", "claude", "deepseek")
+    #[serde(default = "default_provider")]
+    pub provider: String,
+    /// Model name
+    #[serde(default = "default_model")]
+    pub model: String,
+    /// API key (can be overridden by LLM_API_KEY environment variable)
+    #[serde(default)]
+    pub api_key: Option<String>,
+    /// API base URL (for local providers like Ollama)
+    #[serde(default)]
+    pub api_base: Option<String>,
+    /// Temperature for generation
+    #[serde(default = "default_temperature")]
+    pub temperature: f32,
+    /// Max tokens for response
+    #[serde(default = "default_max_tokens")]
+    pub max_tokens: u32,
+}
+
+fn default_provider() -> String {
+    "ollama".to_string()
+}
+
+fn default_model() -> String {
+    "llama2".to_string()
+}
+
+fn default_temperature() -> f32 {
+    0.7
+}
+
+fn default_max_tokens() -> u32 {
+    1000
+}
+
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            provider: default_provider(),
+            model: default_model(),
+            api_key: None,
+            api_base: None,
+            temperature: default_temperature(),
+            max_tokens: default_max_tokens(),
+        }
+    }
+}
+
+impl LlmConfig {
+    /// Get the API key, checking environment variable first
+    pub fn get_api_key(&self) -> Option<String> {
+        std::env::var("LLM_API_KEY")
+            .ok()
+            .or_else(|| self.api_key.clone())
+    }
+}
+
 /// Server identification configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerInfoConfig {
@@ -160,6 +225,9 @@ pub struct ServerConfig {
     pub security: SecurityConfig,
     /// LDAP configuration
     pub ldap: LdapConfig,
+    /// LLM configuration (optional)
+    #[serde(default)]
+    pub llm: LlmConfig,
 }
 
 impl ServerConfig {

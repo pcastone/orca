@@ -4,6 +4,7 @@
 //! based on input text, context, and conditions.
 
 use crate::config::{ConditionCheck, RouteRule, RuleCondition};
+use crate::expression::ExpressionEvaluator;
 use crate::{OrchestratorError, Result};
 use regex::Regex;
 use serde_json::Value;
@@ -41,12 +42,16 @@ impl EvaluationContext {
 }
 
 /// Rule evaluator for routing decisions
-pub struct RuleEvaluator;
+pub struct RuleEvaluator {
+    expression_evaluator: ExpressionEvaluator,
+}
 
 impl RuleEvaluator {
     /// Create a new rule evaluator
     pub fn new() -> Self {
-        Self
+        Self {
+            expression_evaluator: ExpressionEvaluator::new(),
+        }
     }
 
     /// Evaluate a routing rule against the context
@@ -176,12 +181,19 @@ impl RuleEvaluator {
     }
 
     /// Evaluate custom expression
-    fn evaluate_expression(&self, _expr: &str, _context: &EvaluationContext) -> Result<bool> {
-        // TODO: Implement expression evaluation
-        // For now, return false as expressions are not yet supported
-        Err(OrchestratorError::General(
-            "Expression evaluation not yet implemented".to_string(),
-        ))
+    ///
+    /// Supports expressions like:
+    /// - `context.mode == 'debug'` - context value comparison
+    /// - `context.count > 10` - numeric comparison
+    /// - `context.enabled && context.ready` - logical AND
+    /// - `context.a || context.b` - logical OR
+    fn evaluate_expression(&self, expr: &str, context: &EvaluationContext) -> Result<bool> {
+        // Build a context value that includes both input_text and context values
+        let context_value = serde_json::json!({
+            "input": context.input_text,
+            "context": context.context,
+        });
+        self.expression_evaluator.evaluate(expr, &context_value)
     }
 }
 

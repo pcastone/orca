@@ -1,7 +1,9 @@
 //! Task command handlers
 
+use crate::cli::pattern::find_pattern;
 use crate::error::{OrcaError, Result};
 use crate::repositories::TaskRepository;
+use crate::services::TaskClassifier;
 use crate::workflow::Task;
 use crate::DatabaseManager;
 use chrono::Utc;
@@ -10,7 +12,11 @@ use std::sync::Arc;
 use tracing::info;
 
 /// Handle task create command
-pub async fn handle_create(db_manager: Arc<DatabaseManager>, description: String) -> Result<()> {
+pub async fn handle_create(
+    db_manager: Arc<DatabaseManager>,
+    description: String,
+    pattern: Option<String>,
+) -> Result<()> {
     // Ensure project database exists
     let project_db = db_manager
         .project_db()
@@ -19,7 +25,47 @@ pub async fn handle_create(db_manager: Arc<DatabaseManager>, description: String
     let repo = TaskRepository::new(project_db.clone());
 
     // Create new task
-    let task = Task::new(&description);
+    let mut task = Task::new(&description);
+
+    // If pattern specified, look it up and set the pattern_config_id
+    if let Some(pattern_id_or_name) = pattern {
+        let user_db = db_manager.user_db();
+        match find_pattern(user_db.clone(), &pattern_id_or_name).await {
+            Ok(pattern_config) => {
+                task.pattern_config_id = Some(pattern_config.id.clone());
+                println!(
+                    "  Pattern: {} ({})",
+                    pattern_config.name.cyan(),
+                    pattern_config.pattern_type
+                );
+            }
+            Err(e) => {
+                eprintln!(
+                    "{} Pattern '{}' not found: {}",
+                    "Warning:".yellow(),
+                    pattern_id_or_name,
+                    e
+                );
+                // Show auto-classification instead
+                let classifier = TaskClassifier::new();
+                let (category, confidence) = classifier.classify_with_confidence(&description);
+                println!(
+                    "  Auto-classified as: {} (confidence: {:.0}%)",
+                    category.display_name().cyan(),
+                    confidence * 100.0
+                );
+            }
+        }
+    } else {
+        // Show auto-classification
+        let classifier = TaskClassifier::new();
+        let (category, confidence) = classifier.classify_with_confidence(&description);
+        println!(
+            "  Auto-classified as: {} (confidence: {:.0}%)",
+            category.display_name().cyan(),
+            confidence * 100.0
+        );
+    }
 
     // Save to database using repository
     repo.save(&task).await?;

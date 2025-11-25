@@ -1,6 +1,6 @@
 //! Input event handling for TUI
 
-use super::app::{App, FocusedArea, MenuState};
+use super::app::{App, DialogState, FocusedArea, LlmConfigForm, MenuState, SidebarTab};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tracing::debug;
 
@@ -48,6 +48,106 @@ impl InputHandler {
                     return;
                 }
                 _ => {}
+            }
+        }
+
+        // Handle pattern selection dialog input
+        if app.dialog_state == DialogState::PatternSelect || app.dialog_state == DialogState::PatternList {
+            match key_event.code {
+                KeyCode::Up => {
+                    app.pattern_select_prev();
+                    return;
+                }
+                KeyCode::Down => {
+                    app.pattern_select_next();
+                    return;
+                }
+                KeyCode::Enter => {
+                    app.confirm_pattern_selection();
+                    return;
+                }
+                KeyCode::Esc => {
+                    app.dialog_state = DialogState::None;
+                    return;
+                }
+                _ => return,
+            }
+        }
+
+        // Handle LLM config form input
+        if app.dialog_state == DialogState::LlmProfileEdit || app.dialog_state == DialogState::LlmProfileCreate {
+            match key_event.code {
+                KeyCode::Tab => {
+                    // Move to next field
+                    let field_count = LlmConfigForm::field_count();
+                    app.llm_config_form.selected_field = (app.llm_config_form.selected_field + 1) % field_count;
+                    return;
+                }
+                KeyCode::BackTab => {
+                    // Move to previous field
+                    let field_count = LlmConfigForm::field_count();
+                    if app.llm_config_form.selected_field == 0 {
+                        app.llm_config_form.selected_field = field_count - 1;
+                    } else {
+                        app.llm_config_form.selected_field -= 1;
+                    }
+                    return;
+                }
+                KeyCode::Up => {
+                    // Previous field
+                    if app.llm_config_form.selected_field > 0 {
+                        app.llm_config_form.selected_field -= 1;
+                    }
+                    return;
+                }
+                KeyCode::Down => {
+                    // Next field
+                    let field_count = LlmConfigForm::field_count();
+                    if app.llm_config_form.selected_field < field_count - 1 {
+                        app.llm_config_form.selected_field += 1;
+                    }
+                    return;
+                }
+                KeyCode::Left if app.llm_config_form.selected_field == 0 => {
+                    // Cycle through providers
+                    let providers = LlmConfigForm::providers();
+                    let current_idx = providers.iter().position(|&p| p == app.llm_config_form.provider).unwrap_or(0);
+                    let new_idx = if current_idx == 0 { providers.len() - 1 } else { current_idx - 1 };
+                    app.llm_config_form.provider = providers[new_idx].to_string();
+                    return;
+                }
+                KeyCode::Right if app.llm_config_form.selected_field == 0 => {
+                    // Cycle through providers
+                    let providers = LlmConfigForm::providers();
+                    let current_idx = providers.iter().position(|&p| p == app.llm_config_form.provider).unwrap_or(0);
+                    let new_idx = (current_idx + 1) % providers.len();
+                    app.llm_config_form.provider = providers[new_idx].to_string();
+                    return;
+                }
+                KeyCode::Char(c) if app.llm_config_form.selected_field > 0 => {
+                    // Add character to current field
+                    let field = app.llm_config_form.get_field_value_mut(app.llm_config_form.selected_field);
+                    field.push(c);
+                    return;
+                }
+                KeyCode::Backspace if app.llm_config_form.selected_field > 0 => {
+                    // Remove character from current field
+                    let field = app.llm_config_form.get_field_value_mut(app.llm_config_form.selected_field);
+                    field.pop();
+                    return;
+                }
+                KeyCode::Enter => {
+                    // Mark for async save
+                    app.pending_llm_save = true;
+                    app.dialog_state = DialogState::None;
+                    return;
+                }
+                KeyCode::Esc => {
+                    app.dialog_state = DialogState::None;
+                    app.add_message("LLM configuration cancelled".to_string());
+                    return;
+                }
+                _ => return,
             }
         }
 
@@ -249,6 +349,16 @@ impl InputHandler {
                 app.next_tab();
             }
 
+            // Enter on Patterns tab selects the pattern
+            KeyCode::Enter if app.focused == FocusedArea::Sidebar && app.active_tab == SidebarTab::Patterns => {
+                if !app.patterns.is_empty() {
+                    app.select_pattern(app.sidebar_selected);
+                    if let Some(ref pattern) = app.active_pattern {
+                        app.add_message(format!("Pattern activated: {} ({})", pattern.name, pattern.pattern_type));
+                    }
+                }
+            }
+
             // Newline in prompt (max 3 lines)
             KeyCode::Enter if app.focused == FocusedArea::Prompts => {
                 app.newline_prompt();
@@ -269,6 +379,20 @@ impl InputHandler {
                 if app.focused == FocusedArea::Conversation {
                     app.clear_conversation();
                 }
+            }
+
+            // Ctrl+L: Open LLM config form
+            KeyCode::Char('l') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                app.dialog_state = DialogState::LlmProfileEdit;
+                app.focused = FocusedArea::Menu;
+                // Form will be loaded with current config by UI
+            }
+
+            // Ctrl+P: Open pattern selection
+            KeyCode::Char('p') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                app.dialog_state = DialogState::PatternSelect;
+                app.pending_pattern_load = true;
+                app.focused = FocusedArea::Menu;
             }
 
             // Quit (q or Esc when menu is not open)
@@ -359,15 +483,16 @@ fn execute_menu_action(action: &str, app: &mut App) {
             app.close_menu();
         }
         "config_llm_profile" => {
-            // Show LLM profile management options
-            let profile_options = vec![
-                "List Profiles".to_string(),
-                "Create Profile".to_string(),
-                "Edit Profile".to_string(),
-                "Activate Profile".to_string(),
-            ];
-            let dialog = super::dialog::Dialog::select_list("LLM Profile Management", profile_options);
-            app.show_dialog(dialog);
+            // Open LLM configuration form directly
+            app.dialog_state = DialogState::LlmProfileEdit;
+            app.focused = FocusedArea::Menu;
+            app.close_menu();
+        }
+        "config_pattern" => {
+            // Open pattern selection dialog
+            app.dialog_state = DialogState::PatternSelect;
+            app.pending_pattern_load = true;
+            app.focused = FocusedArea::Menu;
             app.close_menu();
         }
         "config_editor" => {
@@ -456,7 +581,7 @@ fn execute_menu_action(action: &str, app: &mut App) {
         "help_shortcuts" => {
             let dialog = super::dialog::Dialog::info(
                 "Keyboard Shortcuts",
-                "Alt+F - File Menu\nAlt+E - Edit Menu\nAlt+C - Config Menu\nAlt+W - Workflow Menu\nAlt+H - Help Menu\n\nTab - Switch focus\nUp/Down - Navigate\nEnter - Select\nEsc - Close/Quit\nCtrl+Enter - Submit prompt\nCtrl+C - Clear conversation",
+                "Alt+F - File Menu\nAlt+E - Edit Menu\nAlt+C - Config Menu\nAlt+W - Workflow Menu\nAlt+H - Help Menu\n\nTab - Switch focus\nUp/Down - Navigate\nEnter - Select\nEsc - Close/Quit\nCtrl+Enter - Submit prompt\nCtrl+C - Clear conversation\nCtrl+L - LLM Config\nCtrl+P - Pattern Select",
             );
             app.show_dialog(dialog);
             app.close_menu();

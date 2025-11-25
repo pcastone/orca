@@ -1,11 +1,15 @@
 //! Task Executor - Main execution engine for tasks
 //!
 //! Coordinates task execution using LangGraph agents with DirectToolBridge and LLM providers.
+//! Features automatic dynamic pattern selection based on task classification.
 
 use crate::config::OrcaConfig;
+use crate::db::Database;
 use crate::error::{OrcaError, Result};
 use crate::executor::{LlmProvider, ToolAdapter, create_llm_function};
+use crate::models::PatternConfig;
 use crate::pattern::PatternType;
+use crate::services::{PatternRouter, TaskClassifier, TaskCategory};
 use crate::tools::DirectToolBridge;
 use crate::workflow::Task;
 use langgraph_prebuilt::agents::{create_react_agent, create_plan_execute_agent, create_reflection_agent};
@@ -13,7 +17,7 @@ use langgraph_core::{StreamMode, StreamEvent};
 use serde_json::{json, Value};
 use std::sync::Arc;
 use futures::StreamExt;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 /// Result of task execution
 #[derive(Debug, Clone)]
@@ -59,6 +63,17 @@ impl ExecutionResult {
 }
 
 /// Task executor that runs tasks using LangGraph agents
+///
+/// Features automatic dynamic pattern selection based on task classification.
+/// The classifier analyzes task descriptions to determine the optimal pattern:
+/// - SimpleQuery → React (quick, simple tasks)
+/// - CodeGeneration → Reflection (quality-focused code tasks)
+/// - Research/DataAnalysis → PlanExecute (complex multi-step tasks)
+/// - General → React (default fallback)
+///
+/// When a PatternRouter is provided, the executor can use database-backed pattern
+/// configurations for more granular control over pattern settings (max_iterations,
+/// tools, system_prompt, etc.).
 pub struct TaskExecutor {
     /// Direct tool bridge for tool execution
     bridge: Arc<DirectToolBridge>,
@@ -68,6 +83,12 @@ pub struct TaskExecutor {
 
     /// Configuration
     config: OrcaConfig,
+
+    /// Task classifier for automatic pattern selection
+    classifier: TaskClassifier,
+
+    /// Optional pattern router for database-backed pattern configs
+    pattern_router: Option<PatternRouter>,
 }
 
 impl std::fmt::Debug for TaskExecutor {
@@ -76,6 +97,8 @@ impl std::fmt::Debug for TaskExecutor {
             .field("bridge", &self.bridge)
             .field("llm_provider", &self.llm_provider)
             .field("config", &self.config)
+            .field("classifier", &self.classifier)
+            .field("has_pattern_router", &self.pattern_router.is_some())
             .finish()
     }
 }
@@ -88,15 +111,56 @@ impl TaskExecutor {
     /// * `config` - Orca configuration
     ///
     /// # Returns
-    /// A new TaskExecutor instance
+    /// A new TaskExecutor instance with automatic pattern selection enabled
     pub fn new(bridge: Arc<DirectToolBridge>, config: OrcaConfig) -> Result<Self> {
         // Create LLM provider from config
         let llm_provider = Arc::new(LlmProvider::from_config(&config)?);
+
+        // Create task classifier for automatic pattern selection
+        let classifier = TaskClassifier::new();
+
+        info!("TaskExecutor initialized with automatic pattern selection");
 
         Ok(Self {
             bridge,
             llm_provider,
             config,
+            classifier,
+            pattern_router: None,
+        })
+    }
+
+    /// Create a new task executor with database-backed pattern routing
+    ///
+    /// # Arguments
+    /// * `bridge` - DirectToolBridge for tool execution
+    /// * `config` - Orca configuration
+    /// * `user_db` - User database for pattern config lookups
+    ///
+    /// # Returns
+    /// A new TaskExecutor instance with database-backed pattern selection
+    pub fn new_with_router(
+        bridge: Arc<DirectToolBridge>,
+        config: OrcaConfig,
+        user_db: Arc<Database>,
+    ) -> Result<Self> {
+        // Create LLM provider from config
+        let llm_provider = Arc::new(LlmProvider::from_config(&config)?);
+
+        // Create task classifier for automatic pattern selection
+        let classifier = TaskClassifier::new();
+
+        // Create pattern router with database
+        let pattern_router = PatternRouter::new(user_db);
+
+        info!("TaskExecutor initialized with database-backed pattern routing");
+
+        Ok(Self {
+            bridge,
+            llm_provider,
+            config,
+            classifier,
+            pattern_router: Some(pattern_router),
         })
     }
 
@@ -149,40 +213,73 @@ impl TaskExecutor {
 
     /// Internal task execution without timeout (for testing and timeout wrapper)
     async fn execute_task_internal(&self, task: &Task) -> Result<ExecutionResult> {
-        // Parse pattern from task metadata or use default (React)
-        let pattern = self.get_pattern_from_task(task)?;
+        // Try database-backed pattern config first, then fall back to classification
+        let (pattern, max_iterations) = if self.pattern_router.is_some() {
+            // Use database-backed routing
+            if let Some(config) = self.get_pattern_config_from_task(task).await {
+                let pattern = Self::pattern_type_from_config(&config);
+                let max_iter = config.max_iterations as usize;
+                info!(
+                    task_id = %task.id,
+                    pattern = %pattern,
+                    max_iterations = max_iter,
+                    config_name = %config.name,
+                    "Using database-backed pattern config"
+                );
+                (pattern, max_iter)
+            } else {
+                // Fall back to classification
+                let pattern = self.get_pattern_from_task(task)?;
+                (pattern, self.config.execution.max_iterations)
+            }
+        } else {
+            // No router, use classification
+            let pattern = self.get_pattern_from_task(task)?;
+            (pattern, self.config.execution.max_iterations)
+        };
 
         debug!(
             task_id = %task.id,
             pattern = %pattern,
+            max_iterations = max_iterations,
             "Using pattern for execution"
         );
 
-        // Execute based on pattern
+        // Execute based on pattern with specified max_iterations
         match pattern {
-            PatternType::React => self.execute_react(task).await,
-            PatternType::PlanExecute => self.execute_plan_execute(task).await,
-            PatternType::Reflection => self.execute_reflection(task).await,
+            PatternType::React => self.execute_react_with_config(task, max_iterations).await,
+            PatternType::PlanExecute => self.execute_plan_execute_with_config(task, max_iterations).await,
+            PatternType::Reflection => self.execute_reflection_with_config(task, max_iterations).await,
         }
     }
 
-    /// Execute a task using the ReAct pattern
-    async fn execute_react(&self, task: &Task) -> Result<ExecutionResult> {
+    /// Execute a task using the ReAct pattern with configurable max_iterations
+    async fn execute_react_with_config(&self, task: &Task, max_iterations: usize) -> Result<ExecutionResult> {
         // Create tools from bridge
         let tools = ToolAdapter::from_bridge(self.bridge.clone());
 
         debug!(
             task_id = %task.id,
             tool_count = tools.len(),
-            "Created tool adapters"
+            max_iterations = max_iterations,
+            "Created tool adapters for ReAct"
         );
+
+        // If no tools available, use direct LLM call instead of agent
+        if tools.is_empty() {
+            info!(
+                task_id = %task.id,
+                "No tools available, using direct LLM call"
+            );
+            return self.execute_direct_llm(task).await;
+        }
 
         // Create LLM function
         let llm_fn = create_llm_function(self.llm_provider.clone());
 
-        // Create ReAct agent
+        // Create ReAct agent with specified max_iterations
         let agent = create_react_agent(llm_fn, tools)
-            .with_max_iterations(self.config.execution.max_iterations)
+            .with_max_iterations(max_iterations)
             .build()
             .map_err(|e| OrcaError::Execution(format!("Failed to build agent: {}", e)))?;
 
@@ -242,14 +339,15 @@ impl TaskExecutor {
         Ok(ExecutionResult::success(result, final_state, messages))
     }
 
-    /// Execute a task using the Plan-Execute pattern
-    async fn execute_plan_execute(&self, task: &Task) -> Result<ExecutionResult> {
+    /// Execute a task using the Plan-Execute pattern with configurable max_iterations
+    async fn execute_plan_execute_with_config(&self, task: &Task, max_iterations: usize) -> Result<ExecutionResult> {
         // Create tools from bridge
         let tools = ToolAdapter::from_bridge(self.bridge.clone());
 
         debug!(
             task_id = %task.id,
             tool_count = tools.len(),
+            max_iterations = max_iterations,
             "Created tool adapters for Plan-Execute"
         );
 
@@ -257,9 +355,9 @@ impl TaskExecutor {
         let llm_fn = create_llm_function(self.llm_provider.clone());
         let llm_fn_executor = create_llm_function(self.llm_provider.clone());
 
-        // Create Plan-Execute agent
+        // Create Plan-Execute agent with specified max_iterations
         let agent = create_plan_execute_agent(llm_fn, llm_fn_executor, tools)
-            .with_max_steps(self.config.execution.max_iterations)
+            .with_max_steps(max_iterations)
             .build()
             .map_err(|e| OrcaError::Execution(format!("Failed to build Plan-Execute agent: {}", e)))?;
 
@@ -319,14 +417,15 @@ impl TaskExecutor {
         Ok(ExecutionResult::success(result, final_state, messages))
     }
 
-    /// Execute a task using the Reflection pattern
-    async fn execute_reflection(&self, task: &Task) -> Result<ExecutionResult> {
+    /// Execute a task using the Reflection pattern with configurable max_iterations
+    async fn execute_reflection_with_config(&self, task: &Task, max_iterations: usize) -> Result<ExecutionResult> {
         // Create tools from bridge
         let tools = ToolAdapter::from_bridge(self.bridge.clone());
 
         debug!(
             task_id = %task.id,
             tool_count = tools.len(),
+            max_iterations = max_iterations,
             "Created tool adapters for Reflection"
         );
 
@@ -334,9 +433,9 @@ impl TaskExecutor {
         let llm_fn_generator = create_llm_function(self.llm_provider.clone());
         let llm_fn_reflector = create_llm_function(self.llm_provider.clone());
 
-        // Create Reflection agent
+        // Create Reflection agent with specified max_iterations
         let agent = create_reflection_agent(llm_fn_generator, llm_fn_reflector, tools)
-            .with_max_iterations(self.config.execution.max_iterations)
+            .with_max_iterations(max_iterations)
             .build()
             .map_err(|e| OrcaError::Execution(format!("Failed to build Reflection agent: {}", e)))?;
 
@@ -450,6 +549,39 @@ impl TaskExecutor {
                         io::stdout().flush().unwrap_or(());
                     }
                 }
+                StreamEvent::Reasoning { content, tokens, duration_ms, node: _, metadata: _ } => {
+                    // Display thinking/reasoning output if enabled
+                    if self.config.execution.show_thinking {
+                        use colored::Colorize;
+
+                        println!(); // Ensure we're on a new line
+                        println!("{}", "╭─ Model Thinking ─╮".dimmed());
+
+                        // Print thinking content (dimmed)
+                        for line in content.lines() {
+                            println!("{} {}", "│".dimmed(), line.dimmed());
+                        }
+
+                        // Bottom border with metrics
+                        let mut metrics = Vec::new();
+                        metrics.push(format!("{} tokens", tokens));
+                        if let Some(duration) = duration_ms {
+                            metrics.push(format!("{:.2}s", duration as f64 / 1000.0));
+                        }
+
+                        let metrics_str = metrics.join(", ");
+                        println!("{}", format!("╰─ {} ─╯", metrics_str).dimmed());
+                        println!();
+
+                        io::stdout().flush().unwrap_or(());
+
+                        debug!(
+                            task_id = %task.id,
+                            tokens = tokens,
+                            "Displayed reasoning content"
+                        );
+                    }
+                }
                 _ => {
                     // Ignore other event types
                 }
@@ -474,19 +606,129 @@ impl TaskExecutor {
         Ok((final_state, messages))
     }
 
-    /// Get pattern from task metadata or default
+    /// Get pattern configuration from task using database-backed routing
+    ///
+    /// This method is used when PatternRouter is available.
+    /// Returns the full PatternConfig with max_iterations, tools, system_prompt, etc.
+    ///
+    /// Priority order:
+    /// 1. Task's pattern_config_id (explicit config from database)
+    /// 2. Classification-based routing to database config
+    /// 3. Default pattern config from database
+    async fn get_pattern_config_from_task(&self, task: &Task) -> Option<PatternConfig> {
+        let router = self.pattern_router.as_ref()?;
+
+        match router.route(task).await {
+            Ok(config) => {
+                info!(
+                    task_id = %task.id,
+                    config_id = %config.id,
+                    config_name = %config.name,
+                    pattern_type = %config.pattern_type,
+                    max_iterations = config.max_iterations,
+                    "Using database-backed pattern config"
+                );
+                Some(config)
+            }
+            Err(e) => {
+                warn!(
+                    task_id = %task.id,
+                    error = %e,
+                    "Failed to route task to pattern config, falling back to classification"
+                );
+                None
+            }
+        }
+    }
+
+    /// Get pattern from task using automatic classification
+    ///
+    /// Priority order:
+    /// 1. Database-backed pattern config (if PatternRouter available)
+    /// 2. Explicit pattern in task metadata (for backward compatibility)
+    /// 3. Automatic classification based on task description (default behavior)
+    ///
+    /// The automatic classification maps task categories to patterns:
+    /// - SimpleQuery → React (quick, factual tasks)
+    /// - FileOperation → React (tool-focused tasks)
+    /// - CodeGeneration → Reflection (quality-focused code tasks)
+    /// - Research → PlanExecute (complex multi-step research)
+    /// - DataAnalysis → PlanExecute (complex analysis tasks)
+    /// - SystemCommand → React (system operations)
+    /// - General → React (default fallback)
     fn get_pattern_from_task(&self, task: &Task) -> Result<PatternType> {
-        // Try to parse metadata JSON
+        // Priority 1: Explicit pattern in task metadata (backward compatibility)
         if let Ok(metadata) = serde_json::from_str::<Value>(&task.metadata) {
             if let Some(pattern_str) = metadata.get("pattern").and_then(|p| p.as_str()) {
                 if let Some(pattern) = PatternType::from_str(pattern_str) {
+                    debug!(
+                        task_id = %task.id,
+                        pattern = %pattern,
+                        "Using explicit pattern from task metadata"
+                    );
                     return Ok(pattern);
                 }
             }
         }
 
-        // Default to React
-        Ok(PatternType::React)
+        // Priority 2: Automatic classification based on task description
+        let (category, confidence) = self.classifier.classify_with_confidence(&task.description);
+        let pattern = self.category_to_pattern(&category);
+
+        info!(
+            task_id = %task.id,
+            category = %category.as_str(),
+            confidence = confidence,
+            pattern = %pattern,
+            "Auto-classified task to pattern"
+        );
+
+        Ok(pattern)
+    }
+
+    /// Convert pattern type string from database to PatternType enum
+    fn pattern_type_from_config(config: &PatternConfig) -> PatternType {
+        match config.pattern_type.to_lowercase().as_str() {
+            "react" => PatternType::React,
+            "plan_execute" | "planexecute" => PatternType::PlanExecute,
+            "reflection" => PatternType::Reflection,
+            _ => {
+                warn!(
+                    pattern_type = %config.pattern_type,
+                    "Unknown pattern type in config, defaulting to React"
+                );
+                PatternType::React
+            }
+        }
+    }
+
+    /// Map task category to execution pattern
+    ///
+    /// This mapping determines which agent pattern is used for each category:
+    /// - High-quality output (code) → Reflection for iterative improvement
+    /// - Multi-step analysis → PlanExecute for structured planning
+    /// - Quick tasks → React for efficiency
+    fn category_to_pattern(&self, category: &TaskCategory) -> PatternType {
+        match category {
+            TaskCategory::SimpleQuery => PatternType::React,
+            TaskCategory::FileOperation => PatternType::React,
+            TaskCategory::CodeGeneration => PatternType::Reflection,
+            TaskCategory::Research => PatternType::PlanExecute,
+            TaskCategory::DataAnalysis => PatternType::PlanExecute,
+            TaskCategory::SystemCommand => PatternType::React,
+            TaskCategory::General => PatternType::React,
+            TaskCategory::Custom(_) => PatternType::React,
+        }
+    }
+
+    /// Get the task classifier for external use
+    pub fn classifier(&self) -> &TaskClassifier {
+        &self.classifier
+    }
+
+    /// Classify a task description and return the category and confidence
+    pub fn classify_task(&self, description: &str) -> (TaskCategory, f64) {
+        self.classifier.classify_with_confidence(description)
     }
 
     /// Get configuration
@@ -497,6 +739,94 @@ impl TaskExecutor {
     /// Get bridge
     pub fn bridge(&self) -> &Arc<DirectToolBridge> {
         &self.bridge
+    }
+
+    /// Check if database-backed pattern routing is enabled
+    pub fn has_pattern_router(&self) -> bool {
+        self.pattern_router.is_some()
+    }
+
+    /// Get pattern router reference (if available)
+    pub fn pattern_router(&self) -> Option<&PatternRouter> {
+        self.pattern_router.as_ref()
+    }
+
+    /// Display thinking/reasoning output with styled formatting
+    fn display_thinking(&self, reasoning: &langgraph_core::llm::ReasoningContent) {
+        use colored::Colorize;
+
+        // Top border
+        println!();
+        println!("{}", "╭─ Model Thinking ─╮".dimmed());
+
+        // Thinking content (dimmed)
+        for line in reasoning.content.lines() {
+            println!("{} {}", "│".dimmed(), line.dimmed());
+        }
+
+        // Bottom border with metrics
+        let mut metrics = Vec::new();
+        metrics.push(format!("{} tokens", reasoning.tokens));
+        if let Some(duration_ms) = reasoning.duration_ms {
+            metrics.push(format!("{:.2}s", duration_ms as f64 / 1000.0));
+        }
+
+        let metrics_str = metrics.join(", ");
+        println!("{}", format!("╰─ {} ─╯", metrics_str).dimmed());
+        println!();
+    }
+
+    /// Execute a task using direct LLM call (no agent, no tools)
+    /// Used when no tools are available
+    async fn execute_direct_llm(&self, task: &Task) -> Result<ExecutionResult> {
+        use langgraph_core::llm::ChatRequest;
+
+        debug!(
+            task_id = %task.id,
+            "Executing direct LLM call"
+        );
+
+        // Create a simple chat request
+        let message = langgraph_core::Message::human(task.description.clone());
+        let request = ChatRequest::new(vec![message]);
+
+        // Call the LLM directly
+        let response = self.llm_provider.chat(request).await
+            .map_err(|e| OrcaError::Execution(format!("LLM call failed: {}", e)))?;
+
+        // Display thinking if present and enabled
+        if self.config.execution.show_thinking {
+            if let Some(reasoning) = &response.reasoning {
+                self.display_thinking(reasoning);
+            }
+        }
+
+        // Extract response text
+        let response_text = response.message.text().unwrap_or("").to_string();
+
+        info!(
+            task_id = %task.id,
+            response_len = response_text.len(),
+            "Direct LLM call completed"
+        );
+
+        // Build result with messages
+        let messages = vec![
+            json!({
+                "type": "human",
+                "content": task.description.clone()
+            }),
+            json!({
+                "type": "ai",
+                "content": response_text.clone()
+            })
+        ];
+
+        let final_state = json!({
+            "messages": messages.clone()
+        });
+
+        Ok(ExecutionResult::success(response_text, final_state, messages))
     }
 }
 
@@ -1957,4 +2287,398 @@ mod tests {
     // require a running LLM service and are tested manually or in integration
     // tests. These unit tests verify the streaming infrastructure is correctly
     // set up and configured.
+
+    // ============================================================================
+    // Automatic Pattern Classification Tests
+    // ============================================================================
+
+    #[test]
+    fn test_automatic_code_generation_classification() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let config = create_test_config();
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+
+        // Code generation tasks should auto-classify to Reflection pattern
+        let task = Task::new("Write a function to sort an array");
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::Reflection);
+
+        let task = Task::new("Implement unit tests for the auth module");
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::Reflection);
+
+        let task = Task::new("Refactor the database connection code");
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::Reflection);
+    }
+
+    #[test]
+    fn test_automatic_research_classification() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let config = create_test_config();
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+
+        // Research tasks should auto-classify to PlanExecute pattern
+        let task = Task::new("Research how async/await works in Rust");
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::PlanExecute);
+
+        let task = Task::new("Investigate how the caching system works");
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::PlanExecute);
+    }
+
+    #[test]
+    fn test_automatic_simple_query_classification() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let config = create_test_config();
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+
+        // Simple queries should auto-classify to React pattern
+        let task = Task::new("What is 2+2?");
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::React);
+
+        let task = Task::new("How many items are there?");
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::React);
+    }
+
+    #[test]
+    fn test_automatic_data_analysis_classification() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let config = create_test_config();
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+
+        // Data analysis tasks should auto-classify to PlanExecute pattern
+        let task = Task::new("Analyze the data and generate a report");
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::PlanExecute);
+    }
+
+    #[test]
+    fn test_explicit_metadata_overrides_auto_classification() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let config = create_test_config();
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+
+        // A code generation task that would normally get Reflection...
+        // but explicit metadata forces React
+        let task = Task::new("Write a function to sort an array")
+            .with_metadata(r#"{"pattern": "react"}"#);
+
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::React);
+
+        // A simple query that would normally get React...
+        // but explicit metadata forces Reflection
+        let task = Task::new("What is 2+2?")
+            .with_metadata(r#"{"pattern": "reflection"}"#);
+
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::Reflection);
+    }
+
+    #[test]
+    fn test_category_to_pattern_mapping() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let config = create_test_config();
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+
+        // Verify the category to pattern mapping
+        assert_eq!(
+            executor.category_to_pattern(&TaskCategory::SimpleQuery),
+            PatternType::React
+        );
+        assert_eq!(
+            executor.category_to_pattern(&TaskCategory::FileOperation),
+            PatternType::React
+        );
+        assert_eq!(
+            executor.category_to_pattern(&TaskCategory::CodeGeneration),
+            PatternType::Reflection
+        );
+        assert_eq!(
+            executor.category_to_pattern(&TaskCategory::Research),
+            PatternType::PlanExecute
+        );
+        assert_eq!(
+            executor.category_to_pattern(&TaskCategory::DataAnalysis),
+            PatternType::PlanExecute
+        );
+        assert_eq!(
+            executor.category_to_pattern(&TaskCategory::SystemCommand),
+            PatternType::React
+        );
+        assert_eq!(
+            executor.category_to_pattern(&TaskCategory::General),
+            PatternType::React
+        );
+        assert_eq!(
+            executor.category_to_pattern(&TaskCategory::Custom("custom".to_string())),
+            PatternType::React
+        );
+    }
+
+    #[test]
+    fn test_classify_task_method() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let config = create_test_config();
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+
+        // Test the public classify_task method
+        let (category, confidence) = executor.classify_task("Write unit tests for the module");
+        assert_eq!(category, TaskCategory::CodeGeneration);
+        assert!(confidence > 0.5);
+
+        let (category, _) = executor.classify_task("What is the capital of France?");
+        assert_eq!(category, TaskCategory::SimpleQuery);
+    }
+
+    #[test]
+    fn test_classifier_accessor() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let config = create_test_config();
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+
+        // Verify classifier is accessible
+        let classifier = executor.classifier();
+        let category = classifier.classify("Write a function");
+        assert_eq!(category, TaskCategory::CodeGeneration);
+    }
+
+    #[test]
+    fn test_automatic_classification_is_default() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let config = create_test_config();
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+
+        // Without any metadata, automatic classification should kick in
+        // Testing various task types to ensure the default is automatic
+
+        // Generic task that doesn't match any specific pattern
+        let task = Task::new("random xyz abc");
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::React); // General -> React
+
+        // Code task without explicit metadata
+        let task = Task::new("Debug the login issue");
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::Reflection); // CodeGeneration -> Reflection
+
+        // File operation without explicit metadata
+        let task = Task::new("read file config.toml");
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::React); // FileOperation -> React
+    }
+
+    // ============================================================================
+    // Phase 11.3: PatternRouter Integration Tests
+    // ============================================================================
+
+    #[test]
+    fn test_executor_without_router() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let config = create_test_config();
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+
+        // Executor without router should not have pattern_router
+        assert!(!executor.has_pattern_router());
+        assert!(executor.pattern_router().is_none());
+    }
+
+    #[test]
+    fn test_pattern_type_from_config_react() {
+        use crate::models::{PatternConfig, PatternType as ModelPatternType};
+
+        let config = PatternConfig::new("Test", ModelPatternType::React);
+        let pattern = TaskExecutor::pattern_type_from_config(&config);
+        assert_eq!(pattern, PatternType::React);
+    }
+
+    #[test]
+    fn test_pattern_type_from_config_plan_execute() {
+        use crate::models::{PatternConfig, PatternType as ModelPatternType};
+
+        let config = PatternConfig::new("Test", ModelPatternType::PlanExecute);
+        let pattern = TaskExecutor::pattern_type_from_config(&config);
+        assert_eq!(pattern, PatternType::PlanExecute);
+    }
+
+    #[test]
+    fn test_pattern_type_from_config_reflection() {
+        use crate::models::{PatternConfig, PatternType as ModelPatternType};
+
+        let config = PatternConfig::new("Test", ModelPatternType::Reflection);
+        let pattern = TaskExecutor::pattern_type_from_config(&config);
+        assert_eq!(pattern, PatternType::Reflection);
+    }
+
+    #[test]
+    fn test_pattern_type_from_config_unknown_defaults_to_react() {
+        use crate::models::PatternConfig;
+
+        // Create config with unknown pattern type (using raw struct)
+        let config = PatternConfig {
+            id: "test".to_string(),
+            name: "Test".to_string(),
+            pattern_type: "unknown_pattern".to_string(),
+            max_iterations: 10,
+            system_prompt: None,
+            tools: "[]".to_string(),
+            config: "{}".to_string(),
+            is_default: false,
+            usage_count: 0,
+            created_at: 0,
+            updated_at: 0,
+        };
+
+        let pattern = TaskExecutor::pattern_type_from_config(&config);
+        assert_eq!(pattern, PatternType::React); // Unknown should default to React
+    }
+
+    #[test]
+    fn test_pattern_router_accessor_methods() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let config = create_test_config();
+
+        // Without router
+        let executor = TaskExecutor::new(bridge.clone(), config.clone()).unwrap();
+        assert!(!executor.has_pattern_router());
+
+        // The pattern_router() should return None
+        let router = executor.pattern_router();
+        assert!(router.is_none());
+    }
+
+    #[test]
+    fn test_executor_uses_default_config_without_router() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let mut config = create_test_config();
+        config.execution.max_iterations = 15;
+
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+
+        // Without router, should use config.execution.max_iterations
+        assert_eq!(executor.config().execution.max_iterations, 15);
+        assert!(!executor.has_pattern_router());
+    }
+
+    #[test]
+    fn test_config_with_pattern_metadata_still_works() {
+        let temp_dir = TempDir::new().unwrap();
+        let bridge = Arc::new(
+            DirectToolBridge::new(
+                temp_dir.path().to_path_buf(),
+                "test-session".to_string(),
+            )
+            .unwrap()
+        );
+
+        let config = create_test_config();
+        let executor = TaskExecutor::new(bridge, config).unwrap();
+
+        // Task with pattern in metadata should still work (backward compatibility)
+        let task = Task::new("Any description")
+            .with_metadata(r#"{"pattern": "plan_execute"}"#);
+
+        let pattern = executor.get_pattern_from_task(&task).unwrap();
+        assert_eq!(pattern, PatternType::PlanExecute);
+    }
 }

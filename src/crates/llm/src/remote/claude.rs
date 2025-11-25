@@ -27,6 +27,7 @@
 
 use crate::config::RemoteLlmConfig;
 use crate::error::LlmError;
+use crate::streaming;
 use async_trait::async_trait;
 use langgraph_core::error::Result as GraphResult;
 use langgraph_core::llm::{
@@ -35,6 +36,7 @@ use langgraph_core::llm::{
 use langgraph_core::{Message, MessageContent, MessageRole};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::collections::HashMap;
 
 const ANTHROPIC_VERSION: &str = "2023-06-01";
@@ -106,6 +108,22 @@ impl ClaudeClient {
 
     /// Convert Claude response to ChatResponse.
     fn convert_response(&self, claude_resp: ClaudeResponse) -> ChatResponse {
+        use langgraph_core::llm::ReasoningContent;
+
+        // Extract thinking blocks
+        let thinking_blocks: Vec<String> = claude_resp
+            .content
+            .iter()
+            .filter_map(|c| {
+                if c.content_type == "thinking" {
+                    c.thinking.clone()
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Extract text blocks for the final answer
         let content_text = claude_resp
             .content
             .iter()
@@ -134,6 +152,15 @@ impl ClaudeClient {
             claude_resp.usage.output_tokens,
         ));
 
+        // Create reasoning content if thinking blocks were present
+        let reasoning = if !thinking_blocks.is_empty() {
+            let combined_thinking = thinking_blocks.join("\n\n");
+            let thinking_tokens = combined_thinking.split_whitespace().count();
+            Some(ReasoningContent::new(combined_thinking).with_tokens(thinking_tokens))
+        } else {
+            None
+        };
+
         let mut metadata = HashMap::new();
         metadata.insert(
             "model".to_string(),
@@ -147,7 +174,7 @@ impl ClaudeClient {
         ChatResponse {
             message,
             usage,
-            reasoning: None,
+            reasoning,
             metadata,
         }
     }
@@ -208,9 +235,62 @@ impl ChatModel for ClaudeClient {
         Ok(self.convert_response(claude_resp))
     }
 
-    async fn stream(&self, _request: ChatRequest) -> GraphResult<ChatStreamResponse> {
-        // TODO: Implement streaming support
-        Err(LlmError::Other("Streaming not yet implemented for Claude".to_string()).into())
+    async fn stream(&self, request: ChatRequest) -> GraphResult<ChatStreamResponse> {
+        let url = format!("{}/v1/messages", self.config.base_url);
+
+        let (system, messages) = self.convert_messages(&request.messages);
+
+        // Convert messages to JSON for streaming
+        let messages_json: Vec<serde_json::Value> = messages
+            .iter()
+            .map(|m| {
+                json!({
+                    "role": m.role,
+                    "content": m.content,
+                })
+            })
+            .collect();
+
+        // Build request body with stream: true
+        let mut req_body = json!({
+            "model": self.config.model,
+            "messages": messages_json,
+            "max_tokens": request.config.max_tokens.unwrap_or(4096),
+            "stream": true,
+        });
+
+        // Add system prompt if present
+        if let Some(sys) = system {
+            req_body["system"] = json!(sys);
+        }
+
+        // Add optional parameters
+        if let Some(temp) = request.config.temperature {
+            req_body["temperature"] = json!(temp);
+        }
+        if let Some(top_p) = request.config.top_p {
+            req_body["top_p"] = json!(top_p);
+        }
+        if !request.config.stop_sequences.is_empty() {
+            req_body["stop_sequences"] = json!(request.config.stop_sequences);
+        }
+
+        // Use Claude streaming helper
+        let (content_stream, reasoning_stream) = streaming::stream_claude(
+            &self.client,
+            &url,
+            req_body,
+            &self.config.api_key,
+            ANTHROPIC_VERSION,
+        )
+        .await?;
+
+        Ok(ChatStreamResponse {
+            stream: content_stream,
+            reasoning_stream,
+            usage: None,
+            metadata: HashMap::new(),
+        })
     }
 
     fn clone_box(&self) -> Box<dyn ChatModel> {
@@ -259,6 +339,7 @@ struct ClaudeContent {
     #[serde(rename = "type")]
     content_type: String,
     text: Option<String>,
+    thinking: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -424,6 +505,7 @@ mod tests {
             content: vec![ClaudeContent {
                 content_type: "text".to_string(),
                 text: Some("Hello there!".to_string()),
+                thinking: None,
             }],
             model: "claude-3-sonnet-20240229".to_string(),
             stop_reason: Some("end_turn".to_string()),
@@ -462,10 +544,12 @@ mod tests {
                 ClaudeContent {
                     content_type: "text".to_string(),
                     text: Some("First part. ".to_string()),
+                    thinking: None,
                 },
                 ClaudeContent {
                     content_type: "text".to_string(),
                     text: Some("Second part.".to_string()),
+                    thinking: None,
                 },
             ],
             model: "claude-3-opus-20240229".to_string(),
@@ -499,6 +583,7 @@ mod tests {
             content: vec![ClaudeContent {
                 content_type: "text".to_string(),
                 text: Some("Response".to_string()),
+                thinking: None,
             }],
             model: "claude-3-sonnet-20240229".to_string(),
             stop_reason: Some("max_tokens".to_string()),
@@ -628,14 +713,11 @@ mod tests {
         // assert!(response.is_ok());
     }
 
-    /// Test: Extended thinking / thinking tags extraction
+    /// Test: Response conversion with thinking blocks
     ///
-    /// Verifies that Claude extended thinking models properly expose reasoning.
-    ///
-    /// NOTE: Currently ignored - thinking tags extraction not yet implemented.
-    #[tokio::test]
-    #[ignore]
-    async fn test_thinking_tags_extraction() {
+    /// Verifies that Claude extended thinking response properly extracts reasoning.
+    #[test]
+    fn test_response_conversion_with_thinking() {
         let config = RemoteLlmConfig::new(
             "test-key",
             "https://api.anthropic.com",
@@ -643,13 +725,139 @@ mod tests {
         );
         let client = ClaudeClient::new(config);
 
-        let request = ChatRequest::new(vec![Message::human("Complex reasoning task")]);
+        // Simulate Claude response with thinking + text blocks
+        let claude_resp = ClaudeResponse {
+            id: "msg_123".to_string(),
+            response_type: "message".to_string(),
+            role: "assistant".to_string(),
+            content: vec![
+                ClaudeContent {
+                    content_type: "thinking".to_string(),
+                    text: None,
+                    thinking: Some("Let me analyze this step by step. First, I need to...".to_string()),
+                },
+                ClaudeContent {
+                    content_type: "text".to_string(),
+                    text: Some("The answer is 42.".to_string()),
+                    thinking: None,
+                },
+            ],
+            model: "claude-3-opus-20240229".to_string(),
+            stop_reason: Some("end_turn".to_string()),
+            stop_sequence: None,
+            usage: ClaudeUsage {
+                input_tokens: 10,
+                output_tokens: 50,
+            },
+        };
 
-        // TODO: Once thinking tags are supported
-        // let response = client.chat(request).await.unwrap();
-        // if response.message.text().unwrap().contains("<thinking>") {
-        //     assert!(response.reasoning.is_some());
-        // }
+        let response = client.convert_response(claude_resp);
+
+        // Verify thinking was extracted
+        assert!(response.reasoning.is_some());
+        let reasoning = response.reasoning.unwrap();
+        assert_eq!(reasoning.content, "Let me analyze this step by step. First, I need to...");
+        assert!(reasoning.tokens > 0);
+
+        // Verify text was extracted separately
+        assert_eq!(response.message.text().unwrap(), "The answer is 42.");
+    }
+
+    /// Test: Response conversion without thinking blocks
+    ///
+    /// Verifies normal responses without thinking work as before.
+    #[test]
+    fn test_response_conversion_without_thinking() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.anthropic.com",
+            "claude-3-sonnet-20240229",
+        );
+        let client = ClaudeClient::new(config);
+
+        // Simulate standard Claude response (no thinking)
+        let claude_resp = ClaudeResponse {
+            id: "msg_456".to_string(),
+            response_type: "message".to_string(),
+            role: "assistant".to_string(),
+            content: vec![
+                ClaudeContent {
+                    content_type: "text".to_string(),
+                    text: Some("Hello! How can I help you?".to_string()),
+                    thinking: None,
+                },
+            ],
+            model: "claude-3-sonnet-20240229".to_string(),
+            stop_reason: Some("end_turn".to_string()),
+            stop_sequence: None,
+            usage: ClaudeUsage {
+                input_tokens: 5,
+                output_tokens: 10,
+            },
+        };
+
+        let response = client.convert_response(claude_resp);
+
+        // Verify no thinking was extracted
+        assert!(response.reasoning.is_none());
+
+        // Verify text was extracted normally
+        assert_eq!(response.message.text().unwrap(), "Hello! How can I help you?");
+    }
+
+    /// Test: Response conversion with multiple thinking blocks
+    ///
+    /// Verifies multiple thinking blocks are properly combined.
+    #[test]
+    fn test_response_conversion_multiple_thinking() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.anthropic.com",
+            "claude-3-opus-20240229",
+        );
+        let client = ClaudeClient::new(config);
+
+        // Simulate Claude response with multiple thinking blocks
+        let claude_resp = ClaudeResponse {
+            id: "msg_789".to_string(),
+            response_type: "message".to_string(),
+            role: "assistant".to_string(),
+            content: vec![
+                ClaudeContent {
+                    content_type: "thinking".to_string(),
+                    text: None,
+                    thinking: Some("First consideration: ...".to_string()),
+                },
+                ClaudeContent {
+                    content_type: "thinking".to_string(),
+                    text: None,
+                    thinking: Some("Second consideration: ...".to_string()),
+                },
+                ClaudeContent {
+                    content_type: "text".to_string(),
+                    text: Some("Based on my analysis...".to_string()),
+                    thinking: None,
+                },
+            ],
+            model: "claude-3-opus-20240229".to_string(),
+            stop_reason: Some("end_turn".to_string()),
+            stop_sequence: None,
+            usage: ClaudeUsage {
+                input_tokens: 15,
+                output_tokens: 80,
+            },
+        };
+
+        let response = client.convert_response(claude_resp);
+
+        // Verify thinking blocks were combined
+        assert!(response.reasoning.is_some());
+        let reasoning = response.reasoning.unwrap();
+        assert!(reasoning.content.contains("First consideration"));
+        assert!(reasoning.content.contains("Second consideration"));
+
+        // Verify text was extracted
+        assert_eq!(response.message.text().unwrap(), "Based on my analysis...");
     }
 }
 

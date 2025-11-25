@@ -72,11 +72,62 @@ cargo build --release
    api_key = "${ANTHROPIC_API_KEY}"
    ```
 
-3. Create and run a task:
+3. Send a quick prompt:
+   ```bash
+   orca -p "What is the capital of France?"
+   ```
+
+4. Or create and run a task:
    ```bash
    orca task create "Analyze project structure"
    orca task run <task-id>
    ```
+
+## Quick Prompts
+
+Send prompts directly to your configured LLM without creating tasks:
+
+```bash
+# Simple prompt
+orca -p "Explain quantum computing in simple terms"
+
+# With Ollama (local, no API key needed)
+orca -p "Write a haiku about programming"
+```
+
+The `-p` flag sends the prompt to your configured LLM and prints the response directly to stdout.
+
+## Interactive TUI
+
+Launch the interactive terminal user interface:
+
+```bash
+orca
+```
+
+The TUI provides:
+- **Multi-panel layout** - Conversation, prompts, and sidebar views
+- **Real-time LLM interaction** - Type prompts and see responses immediately
+- **LLM Configuration** - Press `Ctrl+L` to configure LLM provider settings
+- **Keyboard navigation** - Tab between panels, arrow keys to navigate
+- **History tracking** - View conversation history and task outputs
+
+### TUI Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Tab` | Switch between panels |
+| `Enter` | Send prompt / Select item |
+| `Ctrl+L` | Open LLM configuration |
+| `Esc` / `q` | Quit |
+| `Up/Down` | Navigate lists |
+
+### Configuring LLM in TUI
+
+1. Press `Ctrl+L` to open the LLM configuration form
+2. Fill in provider, model, API key, etc.
+3. Press `Enter` to save (saves to SQLite database)
+4. Configuration is shared with orchestrator-server
 
 ## Agent Patterns
 

@@ -3,6 +3,7 @@
 //! Executes workflows defined by WorkflowConfig, managing state and transitions.
 
 use crate::config::{StepCondition, StepTransition, WorkflowConfig, WorkflowState, WorkflowStatus, WorkflowStep};
+use crate::expression::ExpressionEvaluator;
 use crate::{OrchestratorError, Result};
 use serde_json::Value;
 
@@ -10,6 +11,7 @@ use serde_json::Value;
 pub struct WorkflowExecutor {
     config: WorkflowConfig,
     state: WorkflowState,
+    expression_evaluator: ExpressionEvaluator,
 }
 
 impl WorkflowExecutor {
@@ -18,6 +20,7 @@ impl WorkflowExecutor {
         Self {
             config,
             state: WorkflowState::new(),
+            expression_evaluator: ExpressionEvaluator::new(),
         }
     }
 
@@ -160,20 +163,16 @@ impl WorkflowExecutor {
         }
     }
 
-    /// Evaluate a condition expression (simplified)
+    /// Evaluate a condition expression against the step result
+    ///
+    /// Supports expressions like:
+    /// - `result.success` - simple field access
+    /// - `result.status == 'pending'` - string comparison
+    /// - `result.score > 0.8` - numeric comparison
+    /// - `result.a && result.b` - logical AND
+    /// - `result.a || result.b` - logical OR
     fn evaluate_condition_expr(&self, expr: &str, result: &Value) -> Result<bool> {
-        // Simple evaluation - check if result has a "success" field
-        // TODO: Implement full expression evaluation
-        if expr == "result.success" {
-            if let Some(success) = result.get("success") {
-                Ok(success.as_bool().unwrap_or(false))
-            } else {
-                Ok(false)
-            }
-        } else {
-            // Default to true for now
-            Ok(true)
-        }
+        self.expression_evaluator.evaluate_with_name(expr, "result", result)
     }
 
     /// Check if a step should execute based on its condition
@@ -207,9 +206,19 @@ impl WorkflowExecutor {
                         Ok(false)
                     }
                 }
-                StepCondition::Expression(_expr) => {
-                    // TODO: Implement expression evaluation
-                    Ok(true)
+                StepCondition::Expression(expr) => {
+                    // Get context from previous step results if available
+                    let context = if self.state.current_step > 0 {
+                        let prev_step = &self.config.steps[self.state.current_step - 1];
+                        self.state
+                            .step_results
+                            .get(&prev_step.name)
+                            .cloned()
+                            .unwrap_or(Value::Null)
+                    } else {
+                        Value::Null
+                    };
+                    self.expression_evaluator.evaluate_with_name(expr, "result", &context)
                 }
             }
         } else {

@@ -139,6 +139,7 @@
 pub mod config;
 pub mod error;
 pub mod provider_utils;
+pub mod streaming;
 
 #[macro_use]
 mod provider_macros;

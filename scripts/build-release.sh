@@ -11,16 +11,48 @@ NC='\033[0m' # No Color
 # Configuration
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RELEASE_DIR="${PROJECT_ROOT}/release"
+DIST_DIR="${RELEASE_DIR}/dist"
 BUILD_DATE=$(date +%Y%m%d_%H%M%S)
 RELEASE_BUILD_DIR="${RELEASE_DIR}/build_${BUILD_DATE}"
+MAX_VERSIONS=3
 
 echo -e "${YELLOW}🔨 Starting Orca Build and Release Process${NC}"
 echo "Project Root: $PROJECT_ROOT"
 echo "Release Directory: $RELEASE_BUILD_DIR"
+echo "Dist Directory: $DIST_DIR"
 echo ""
 
-# Step 1: Clean previous builds
-echo -e "${YELLOW}📦 Cleaning previous builds...${NC}"
+# Step 1: Clean old builds (keep only MAX_VERSIONS)
+echo -e "${YELLOW}🧹 Cleaning old builds (keeping ${MAX_VERSIONS} versions)...${NC}"
+
+# Create dist directory if it doesn't exist
+mkdir -p "${DIST_DIR}"
+
+# Clean old build directories
+cd "${RELEASE_DIR}"
+BUILD_COUNT=$(ls -d build_* 2>/dev/null | wc -l | tr -d ' ')
+if [ "$BUILD_COUNT" -gt "$MAX_VERSIONS" ]; then
+    BUILDS_TO_DELETE=$((BUILD_COUNT - MAX_VERSIONS))
+    ls -dt build_* | tail -n "$BUILDS_TO_DELETE" | xargs rm -rf
+    echo -e "${GREEN}✓ Removed ${BUILDS_TO_DELETE} old build directories${NC}"
+else
+    echo -e "${GREEN}✓ No old build directories to remove${NC}"
+fi
+
+# Clean old tarballs in dist
+cd "${DIST_DIR}"
+TARBALL_COUNT=$(ls orca_*.tar.gz 2>/dev/null | wc -l | tr -d ' ')
+if [ "$TARBALL_COUNT" -gt "$MAX_VERSIONS" ]; then
+    TARBALLS_TO_DELETE=$((TARBALL_COUNT - MAX_VERSIONS))
+    ls -t orca_*.tar.gz | tail -n "$TARBALLS_TO_DELETE" | xargs rm -f
+    echo -e "${GREEN}✓ Removed ${TARBALLS_TO_DELETE} old tarballs${NC}"
+else
+    echo -e "${GREEN}✓ No old tarballs to remove${NC}"
+fi
+echo ""
+
+# Step 2: Clean cargo release artifacts
+echo -e "${YELLOW}📦 Cleaning cargo release artifacts...${NC}"
 cd "$PROJECT_ROOT"
 cargo clean --release 2>/dev/null || true
 echo -e "${GREEN}✓ Clean complete${NC}"
@@ -73,14 +105,14 @@ else
     echo -e "${YELLOW}⚠ Aco binary not found${NC}"
 fi
 
-# Copy orchestrator
-ORCHESTRATOR_SRC="${PROJECT_ROOT}/target/release/orchestrator"
+# Copy orchestrator-server
+ORCHESTRATOR_SRC="${PROJECT_ROOT}/target/release/orchestrator-server"
 if [ -f "$ORCHESTRATOR_SRC" ]; then
     cp "$ORCHESTRATOR_SRC" "${RELEASE_BUILD_DIR}/bin/"
-    chmod +x "${RELEASE_BUILD_DIR}/bin/orchestrator"
-    echo -e "${GREEN}✓ Binary copied: orchestrator${NC}"
+    chmod +x "${RELEASE_BUILD_DIR}/bin/orchestrator-server"
+    echo -e "${GREEN}✓ Binary copied: orchestrator-server${NC}"
 else
-    echo -e "${YELLOW}⚠ Orchestrator binary not found${NC}"
+    echo -e "${YELLOW}⚠ Orchestrator-server binary not found${NC}"
 fi
 
 echo ""
@@ -247,12 +279,12 @@ EOF
 echo -e "${GREEN}✓ Version info created${NC}"
 echo ""
 
-# Step 12: Create tarball
+# Step 12: Create tarball in dist directory
 echo -e "${YELLOW}📦 Creating release tarball...${NC}"
 cd "${RELEASE_DIR}"
 TARBALL_NAME="orca_${BUILD_DATE}.tar.gz"
-tar -czf "$TARBALL_NAME" "build_${BUILD_DATE}/"
-echo -e "${GREEN}✓ Tarball created: ${TARBALL_NAME}${NC}"
+tar -czf "${DIST_DIR}/${TARBALL_NAME}" "build_${BUILD_DATE}/"
+echo -e "${GREEN}✓ Tarball created: dist/${TARBALL_NAME}${NC}"
 echo ""
 
 # Step 13: Create symlink to latest build
@@ -273,10 +305,10 @@ echo -e "${GREEN}✓ Build and Release Complete!${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════════════${NC}"
 echo ""
 echo "Release Location: ${RELEASE_BUILD_DIR}"
-echo "Tarball: ${RELEASE_DIR}/${TARBALL_NAME}"
+echo "Tarball: ${DIST_DIR}/${TARBALL_NAME}"
 echo ""
 echo "Contents:"
-echo "  • Binaries: bin/orca, bin/aco, bin/orchestrator"
+echo "  • Binaries: bin/orca, bin/aco, bin/orchestrator-server"
 echo "  • Configuration: config/orca.toml.sample"
 echo "  • Templates: templates/"
 echo "  • Workflows: workflows/"
@@ -287,14 +319,14 @@ echo ""
 echo -e "${YELLOW}Next steps:${NC}"
 echo "1. Quick access: ${RELEASE_DIR}/lastbuild/bin/"
 echo "2. Review and test the release in ${RELEASE_BUILD_DIR}"
-echo "3. Archive: tar -xzf ${RELEASE_DIR}/${TARBALL_NAME}"
+echo "3. Archive: tar -xzf ${DIST_DIR}/${TARBALL_NAME}"
 echo "4. Install binaries:"
 echo "   cp ${RELEASE_DIR}/lastbuild/bin/orca /usr/local/bin/"
 echo "   cp ${RELEASE_DIR}/lastbuild/bin/aco /usr/local/bin/"
-echo "   cp ${RELEASE_DIR}/lastbuild/bin/orchestrator /usr/local/bin/"
+echo "   cp ${RELEASE_DIR}/lastbuild/bin/orchestrator-server /usr/local/bin/"
 echo ""
 echo -e "${YELLOW}Run commands:${NC}"
 echo "   ./release/lastbuild/bin/orca"
 echo "   ./release/lastbuild/bin/aco"
-echo "   ./release/lastbuild/bin/orchestrator"
+echo "   ./release/lastbuild/bin/orchestrator-server"
 echo ""

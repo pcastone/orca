@@ -32,6 +32,7 @@
 
 use crate::config::RemoteLlmConfig;
 use crate::error::LlmError;
+use crate::streaming;
 use async_trait::async_trait;
 use langgraph_core::error::Result as GraphResult;
 use langgraph_core::llm::{
@@ -40,6 +41,7 @@ use langgraph_core::llm::{
 use langgraph_core::{Message, MessageContent, MessageRole};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::collections::HashMap;
 
 /// Deepseek API client (OpenAI-compatible).
@@ -208,9 +210,60 @@ impl ChatModel for DeepseekClient {
         Ok(self.convert_response(&request, deepseek_resp))
     }
 
-    async fn stream(&self, _request: ChatRequest) -> GraphResult<ChatStreamResponse> {
-        // TODO: Implement streaming support
-        Err(LlmError::Other("Streaming not yet implemented for Deepseek".to_string()).into())
+    async fn stream(&self, request: ChatRequest) -> GraphResult<ChatStreamResponse> {
+        let url = format!("{}/v1/chat/completions", self.config.base_url);
+
+        // Convert messages
+        let messages: Vec<serde_json::Value> = request
+            .messages
+            .iter()
+            .map(|m| {
+                let msg = self.convert_message(m);
+                json!({
+                    "role": msg.role,
+                    "content": msg.content,
+                })
+            })
+            .collect();
+
+        // Build request body with stream: true
+        let mut req_body = json!({
+            "model": self.config.model,
+            "messages": messages,
+            "stream": true,
+        });
+
+        // Add optional parameters
+        if let Some(temp) = request.config.temperature {
+            req_body["temperature"] = json!(temp);
+        }
+        if let Some(max) = request.config.max_tokens {
+            req_body["max_tokens"] = json!(max);
+        }
+        if let Some(top_p) = request.config.top_p {
+            req_body["top_p"] = json!(top_p);
+        }
+
+        // Build headers
+        let headers = vec![("Authorization", format!("Bearer {}", self.config.api_key))];
+
+        // Convert headers to borrowed string slices
+        let header_refs: Vec<(&str, &str)> = headers
+            .iter()
+            .map(|(k, v)| (*k, v.as_str()))
+            .collect();
+
+        // Use common streaming helper
+        let (content_stream, reasoning_stream) =
+            streaming::stream_openai_compatible(&self.client, &url, req_body, header_refs)
+                .await?;
+
+        Ok(ChatStreamResponse {
+            stream: content_stream,
+            reasoning_stream,
+            usage: None,
+            metadata: HashMap::new(),
+        })
     }
 
     fn clone_box(&self) -> Box<dyn ChatModel> {

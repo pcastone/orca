@@ -114,6 +114,14 @@ pub struct UiConfig {
 
     /// Show timestamps in logs
     pub show_timestamps: bool,
+
+    /// Show LLM thinking/reasoning output (default: true)
+    #[serde(default = "default_show_thinking")]
+    pub show_thinking: bool,
+}
+
+fn default_show_thinking() -> bool {
+    true
 }
 
 impl Default for UiConfig {
@@ -123,6 +131,7 @@ impl Default for UiConfig {
             log_level: "info".to_string(),
             colored_output: true,
             show_timestamps: true,
+            show_thinking: default_show_thinking(),
         }
     }
 }

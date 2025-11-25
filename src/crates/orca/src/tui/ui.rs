@@ -5,7 +5,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Tabs, Wrap},
 };
-use super::app::{App, FocusedArea, SidebarTab, MenuState};
+use super::app::{App, DialogState, FocusedArea, SidebarTab, MenuState};
 use super::dialog;
 
 /// Render the complete UI
@@ -49,6 +49,238 @@ pub fn render_ui(f: &mut Frame, app: &App) {
     if let Some(ref dlg) = app.dialog {
         dialog::render_dialog(f, dlg);
     }
+
+    // Render LLM config form if dialog state is LlmProfileEdit or LlmProfileCreate
+    if app.dialog_state == DialogState::LlmProfileEdit || app.dialog_state == DialogState::LlmProfileCreate {
+        render_llm_config_form(f, app);
+    }
+
+    // Render pattern selection dialog
+    if app.dialog_state == DialogState::PatternSelect || app.dialog_state == DialogState::PatternList {
+        render_pattern_select_dialog(f, app);
+    }
+}
+
+/// Render the LLM configuration form
+fn render_llm_config_form(f: &mut Frame, app: &App) {
+    let area = f.area();
+
+    // Calculate form dimensions (centered popup)
+    let form_width = 50.min(area.width.saturating_sub(4));
+    let form_height = 16.min(area.height.saturating_sub(4)); // 7 fields + title + buttons
+    let form_x = (area.width.saturating_sub(form_width)) / 2;
+    let form_y = (area.height.saturating_sub(form_height)) / 2;
+
+    let form_area = Rect {
+        x: form_x,
+        y: form_y,
+        width: form_width,
+        height: form_height,
+    };
+
+    // Clear the area
+    f.render_widget(Clear, form_area);
+
+    // Create form block
+    let title = if app.dialog_state == DialogState::LlmProfileCreate {
+        "Create LLM Configuration"
+    } else {
+        "Edit LLM Configuration"
+    };
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::Cyan));
+
+    f.render_widget(block, form_area);
+
+    // Calculate inner area for fields
+    let inner_area = Rect {
+        x: form_area.x + 2,
+        y: form_area.y + 1,
+        width: form_area.width.saturating_sub(4),
+        height: form_area.height.saturating_sub(2),
+    };
+
+    // Render each field
+    let form = &app.llm_config_form;
+    let fields = [
+        ("Name", form.name.clone(), false),
+        ("Provider", form.provider.clone(), true),  // true = select type
+        ("Model", form.model.clone(), false),
+        ("API Key", if form.api_key.is_empty() { "(optional)".to_string() } else { "*".repeat(form.api_key.len().min(20)) }, false),
+        ("API Base", if form.api_base.is_empty() { "(optional)".to_string() } else { form.api_base.clone() }, false),
+        ("Temperature", form.temperature.clone(), false),
+        ("Max Tokens", form.max_tokens.clone(), false),
+    ];
+
+    for (i, (label, value, is_select)) in fields.iter().enumerate() {
+        if i >= inner_area.height as usize {
+            break;
+        }
+
+        let field_y = inner_area.y + i as u16;
+        let is_selected = i == form.selected_field;
+
+        // Label
+        let label_style = if is_selected {
+            Style::default().fg(Color::Yellow).bold()
+        } else {
+            Style::default().fg(Color::White)
+        };
+
+        let label_text = format!("{}: ", label);
+        let label_para = Paragraph::new(label_text).style(label_style);
+        let label_area = Rect {
+            x: inner_area.x,
+            y: field_y,
+            width: 14,
+            height: 1,
+        };
+        f.render_widget(label_para, label_area);
+
+        // Value
+        let value_style = if is_selected {
+            Style::default().bg(Color::Blue).fg(Color::White)
+        } else if value.starts_with('(') || value.starts_with('*') {
+            Style::default().fg(Color::DarkGray)
+        } else {
+            Style::default().fg(Color::Green)
+        };
+
+        let display_value = if *is_select && is_selected {
+            format!("< {} >", value)
+        } else {
+            value.clone()
+        };
+
+        let value_para = Paragraph::new(display_value).style(value_style);
+        let value_area = Rect {
+            x: inner_area.x + 14,
+            y: field_y,
+            width: inner_area.width.saturating_sub(14),
+            height: 1,
+        };
+        f.render_widget(value_para, value_area);
+    }
+
+    // Render help text at bottom
+    if inner_area.height > 9 {
+        let help_y = inner_area.y + inner_area.height - 2;
+        let help_text = "Tab: Next | Up/Down: Navigate | Enter: Save | Esc: Cancel";
+        let help_para = Paragraph::new(help_text)
+            .style(Style::default().fg(Color::DarkGray))
+            .alignment(Alignment::Center);
+        let help_area = Rect {
+            x: inner_area.x,
+            y: help_y,
+            width: inner_area.width,
+            height: 1,
+        };
+        f.render_widget(help_para, help_area);
+    }
+}
+
+/// Render the pattern selection dialog
+fn render_pattern_select_dialog(f: &mut Frame, app: &App) {
+    let area = f.area();
+
+    // Calculate dialog dimensions (centered popup)
+    let dialog_width = 50.min(area.width.saturating_sub(4));
+    let dialog_height = (app.patterns.len() as u16 + 6).min(area.height.saturating_sub(4));
+    let dialog_x = (area.width.saturating_sub(dialog_width)) / 2;
+    let dialog_y = (area.height.saturating_sub(dialog_height)) / 2;
+
+    let dialog_area = Rect {
+        x: dialog_x,
+        y: dialog_y,
+        width: dialog_width,
+        height: dialog_height,
+    };
+
+    // Clear the area
+    f.render_widget(Clear, dialog_area);
+
+    // Create dialog block
+    let title = if app.dialog_state == DialogState::PatternSelect {
+        "Select Pattern"
+    } else {
+        "Pattern Configurations"
+    };
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::Magenta));
+
+    f.render_widget(block, dialog_area);
+
+    // Calculate inner area for content
+    let inner_area = Rect {
+        x: dialog_area.x + 2,
+        y: dialog_area.y + 1,
+        width: dialog_area.width.saturating_sub(4),
+        height: dialog_area.height.saturating_sub(2),
+    };
+
+    if app.patterns.is_empty() {
+        let empty_msg = Paragraph::new("No patterns configured.\nUse 'orca pattern create' to add patterns.")
+            .style(Style::default().fg(Color::Yellow))
+            .wrap(Wrap { trim: true });
+        f.render_widget(empty_msg, inner_area);
+        return;
+    }
+
+    // Create list of patterns
+    let list_items: Vec<ListItem> = app
+        .patterns
+        .iter()
+        .enumerate()
+        .map(|(idx, pattern)| {
+            let is_selected = app.selected_pattern_index == Some(idx);
+            let is_default = pattern.is_default;
+            let is_active = app.active_pattern.as_ref().map_or(false, |p| p.id == pattern.id);
+
+            let mut line = format!("{:<20} {:<12}", pattern.name, pattern.pattern_type);
+            if is_default {
+                line.push_str(" *");
+            }
+            if is_active {
+                line.push_str(" [active]");
+            }
+
+            let style = if is_selected {
+                Style::default().bg(Color::Magenta).fg(Color::White)
+            } else if is_active {
+                Style::default().fg(Color::Green)
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            ListItem::new(line).style(style)
+        })
+        .collect();
+
+    // Split inner area for list and help text
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(3),
+            Constraint::Length(2),
+        ])
+        .split(inner_area);
+
+    let list = List::new(list_items)
+        .style(Style::default().fg(Color::White));
+    f.render_widget(list, chunks[0]);
+
+    // Help text
+    let help_text = "Up/Down: Navigate | Enter: Select | Esc: Cancel | * = default";
+    let help = Paragraph::new(help_text)
+        .style(Style::default().fg(Color::DarkGray))
+        .alignment(Alignment::Center);
+    f.render_widget(help, chunks[1]);
 }
 
 /// Render the menu bar
@@ -177,11 +409,12 @@ fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
     let is_focused = matches!(app.focused, FocusedArea::Sidebar);
 
     // Tabs
-    let tab_titles = vec!["History", "Todo", "Bugs"];
+    let tab_titles = vec!["History", "Todo", "Bugs", "Patterns"];
     let selected = match app.active_tab {
         SidebarTab::History => 0,
         SidebarTab::Todo => 1,
         SidebarTab::Bugs => 2,
+        SidebarTab::Patterns => 3,
     };
 
     let tabs = Tabs::new(tab_titles)
@@ -264,6 +497,39 @@ fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
                 })
                 .collect()
         }
+        SidebarTab::Patterns => {
+            if app.patterns.is_empty() {
+                vec![ListItem::new("No patterns").style(Style::default().fg(Color::DarkGray))]
+            } else {
+                app.patterns
+                    .iter()
+                    .skip(app.sidebar_scroll as usize)
+                    .take(chunks[1].height.saturating_sub(2) as usize)
+                    .enumerate()
+                    .map(|(i, pattern)| {
+                        let is_active = app.active_pattern.as_ref().map_or(false, |p| p.id == pattern.id);
+                        let is_default = pattern.is_default;
+
+                        let mut display = format!("{}", pattern.name);
+                        if display.len() > 12 {
+                            display = format!("{}...", &display[..9]);
+                        }
+
+                        let indicator = if is_active { "◆" } else if is_default { "*" } else { "○" };
+
+                        let style = if i == app.sidebar_selected {
+                            Style::default().bg(Color::Magenta).fg(Color::White)
+                        } else if is_active {
+                            Style::default().fg(Color::Green)
+                        } else {
+                            Style::default().fg(Color::Magenta)
+                        };
+
+                        ListItem::new(format!("{} {}", indicator, display)).style(style)
+                    })
+                    .collect()
+            }
+        }
     };
 
     let list = List::new(items).block(block);
@@ -302,6 +568,10 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
         status_parts.push(("LLM Profile", llm_info));
     }
 
+    // Add active pattern information
+    let pattern_display = app.get_active_pattern_display();
+    status_parts.push(("Pattern", pattern_display));
+
     // Build status bar with colored spans
     let mut spans = Vec::new();
 
@@ -326,6 +596,7 @@ fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
                 }
             }
             "LLM Profile" => Color::Cyan,
+            "Pattern" => Color::Magenta,
             _ => Color::White,
         };
 
@@ -373,6 +644,7 @@ fn get_menu_items(menu_state: MenuState) -> Vec<(&'static str, &'static str)> {
             ("👁️", "View Config"),
             ("💰", "Budget"),
             ("🤖", "LLM Profile"),
+            ("🔀", "Pattern"),
             ("✎", "Editor"),
         ],
         MenuState::WorkflowOpen => vec![

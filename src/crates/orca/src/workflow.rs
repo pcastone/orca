@@ -93,6 +93,11 @@ pub struct Task {
 
     /// Task metadata as JSON string
     pub metadata: String,
+
+    /// Pattern configuration ID for dynamic workflow selection (optional)
+    /// References pattern_configs table for custom agent behavior
+    #[sqlx(default)]
+    pub pattern_config_id: Option<String>,
 }
 
 impl Task {
@@ -117,6 +122,7 @@ impl Task {
             started_at: None,
             completed_at: None,
             metadata: "{}".to_string(),
+            pattern_config_id: None,
         }
     }
 
@@ -135,6 +141,7 @@ impl Task {
             started_at: None,
             completed_at: None,
             metadata: "{}".to_string(),
+            pattern_config_id: None,
         }
     }
 
@@ -147,6 +154,12 @@ impl Task {
     /// Set task metadata
     pub fn with_metadata(mut self, metadata: impl Into<String>) -> Self {
         self.metadata = metadata.into();
+        self
+    }
+
+    /// Set pattern configuration ID for dynamic workflow selection
+    pub fn with_pattern_config(mut self, config_id: impl Into<String>) -> Self {
+        self.pattern_config_id = Some(config_id.into());
         self
     }
 

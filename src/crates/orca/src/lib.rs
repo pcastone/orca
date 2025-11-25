@@ -114,6 +114,9 @@ pub use health::{HealthChecker, HealthReport, HealthStatus, ComponentHealth};
 // Re-export event types
 pub use events::{ExecutionEvent, EventLogger};
 
+// Re-export prompt service
+pub use services::PromptService;
+
 #[cfg(test)]
 mod tests {
     use super::*;

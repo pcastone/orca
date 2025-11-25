@@ -418,6 +418,7 @@ fn draw_execution_stream(f: &mut Frame, app: &App, area: Rect) {
                 "started" => ("▶", Color::Green),
                 "progress" => ("⋯", Color::Cyan),
                 "output" => ("◉", Color::Yellow),
+                "reasoning" => ("💭", Color::Gray),
                 "tool_call" => ("🔧", Color::Magenta),
                 "tool_result" => ("✓", Color::Blue),
                 "completed" => ("✔", Color::Green),

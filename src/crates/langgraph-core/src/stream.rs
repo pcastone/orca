@@ -646,6 +646,43 @@ pub enum StreamEvent {
         metadata: Option<Value>,
     },
 
+    /// LLM reasoning/thinking output
+    ///
+    /// Emitted by [`StreamMode::Messages`] when LLMs provide thinking or reasoning
+    /// content (e.g., Claude extended thinking, DeepSeek R1, OpenAI o1).
+    ///
+    /// # Fields
+    ///
+    /// * `content` - The reasoning/thinking text
+    /// * `tokens` - Number of tokens in the reasoning
+    /// * `duration_ms` - Optional duration of reasoning generation
+    /// * `node` - Node that produced this reasoning
+    /// * `metadata` - Optional reasoning metadata
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use langgraph_core::stream::StreamEvent;
+    ///
+    /// let reasoning = StreamEvent::reasoning(
+    ///     "llm_node",
+    ///     "Let me analyze this step by step...",
+    ///     150,
+    /// );
+    /// ```
+    Reasoning {
+        /// Reasoning/thinking content
+        content: String,
+        /// Number of tokens in reasoning
+        tokens: usize,
+        /// Optional duration in milliseconds
+        duration_ms: Option<u64>,
+        /// Node that produced this reasoning
+        node: NodeId,
+        /// Optional reasoning metadata
+        metadata: Option<Value>,
+    },
+
     /// Custom application-defined data
     ///
     /// Emitted by [`StreamMode::Custom`]. Allows nodes to emit arbitrary
@@ -705,6 +742,38 @@ impl StreamEvent {
         Self::Message { message, metadata }
     }
 
+    /// Create a new reasoning event
+    pub fn reasoning(
+        node: impl Into<NodeId>,
+        content: impl Into<String>,
+        tokens: usize,
+    ) -> Self {
+        Self::Reasoning {
+            content: content.into(),
+            tokens,
+            duration_ms: None,
+            node: node.into(),
+            metadata: None,
+        }
+    }
+
+    /// Create a new reasoning event with duration and metadata
+    pub fn reasoning_with_metadata(
+        node: impl Into<NodeId>,
+        content: impl Into<String>,
+        tokens: usize,
+        duration_ms: Option<u64>,
+        metadata: Option<Value>,
+    ) -> Self {
+        Self::Reasoning {
+            content: content.into(),
+            tokens,
+            duration_ms,
+            node: node.into(),
+            metadata,
+        }
+    }
+
     /// Check if this event matches the given stream mode
     pub fn matches_mode(&self, mode: StreamMode) -> bool {
         match (mode, self) {
@@ -719,7 +788,8 @@ impl StreamEvent {
             | (StreamMode::Debug, StreamEvent::TaskEnd { .. })
             | (StreamMode::Debug, StreamEvent::TaskError { .. }) => true,
             (StreamMode::Messages, StreamEvent::Message { .. })
-            | (StreamMode::Messages, StreamEvent::MessageChunk { .. }) => true,
+            | (StreamMode::Messages, StreamEvent::MessageChunk { .. })
+            | (StreamMode::Messages, StreamEvent::Reasoning { .. }) => true,
             (StreamMode::Tokens, StreamEvent::MessageChunk { .. }) => true,
             (StreamMode::Custom, StreamEvent::Custom { .. }) => true,
             _ => false,
