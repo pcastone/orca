@@ -109,6 +109,7 @@ impl ClaudeClient {
     /// Convert Claude response to ChatResponse.
     fn convert_response(&self, claude_resp: ClaudeResponse) -> ChatResponse {
         use langgraph_core::llm::ReasoningContent;
+        use langgraph_core::ToolCall;
 
         // Extract thinking blocks
         let thinking_blocks: Vec<String> = claude_resp
@@ -137,12 +138,35 @@ impl ClaudeClient {
             .collect::<Vec<_>>()
             .join("");
 
+        // Extract tool_use blocks for tool calls
+        let tool_calls: Vec<ToolCall> = claude_resp
+            .content
+            .iter()
+            .filter_map(|c| {
+                if c.content_type == "tool_use" {
+                    // tool_use requires id, name, and input
+                    match (c.id.as_ref(), c.name.as_ref(), c.input.as_ref()) {
+                        (Some(id), Some(name), Some(input)) => {
+                            Some(ToolCall {
+                                id: id.clone(),
+                                name: name.clone(),
+                                args: input.clone(),
+                            })
+                        }
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect();
+
         let message = Message {
             id: Some(claude_resp.id),
             role: MessageRole::Assistant,
             content: MessageContent::Text(content_text),
             name: None,
-            tool_calls: None,
+            tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
             tool_call_id: None,
             metadata: None,
         };
@@ -178,6 +202,15 @@ impl ClaudeClient {
             metadata,
         }
     }
+
+    /// Convert ToolDefinition to Claude's tool format
+    fn convert_tools(&self, tools: &[langgraph_core::llm::ToolDefinition]) -> Vec<ClaudeTool> {
+        tools.iter().map(|t| ClaudeTool {
+            name: t.name.clone(),
+            description: t.description.clone(),
+            input_schema: t.parameters.clone(),
+        }).collect()
+    }
 }
 
 #[async_trait]
@@ -186,6 +219,13 @@ impl ChatModel for ClaudeClient {
         let url = format!("{}/v1/messages", self.config.base_url);
 
         let (system, messages) = self.convert_messages(&request.messages);
+
+        // Convert tools if provided
+        let tools = if request.config.tools.is_empty() {
+            None
+        } else {
+            Some(self.convert_tools(&request.config.tools))
+        };
 
         let req_body = ClaudeRequest {
             model: self.config.model.clone(),
@@ -199,6 +239,7 @@ impl ChatModel for ClaudeClient {
             } else {
                 Some(request.config.stop_sequences.clone())
             },
+            tools,
             stream: false,
         };
 
@@ -275,6 +316,21 @@ impl ChatModel for ClaudeClient {
             req_body["stop_sequences"] = json!(request.config.stop_sequences);
         }
 
+        // Add tools if provided
+        if !request.config.tools.is_empty() {
+            let claude_tools: Vec<serde_json::Value> = request.config.tools.iter().map(|t| {
+                let mut tool = json!({
+                    "name": t.name,
+                    "description": t.description,
+                });
+                if let Some(params) = &t.parameters {
+                    tool["input_schema"] = params.clone();
+                }
+                tool
+            }).collect();
+            req_body["tools"] = json!(claude_tools);
+        }
+
         // Use Claude streaming helper
         let (content_stream, reasoning_stream) = streaming::stream_claude(
             &self.client,
@@ -312,7 +368,18 @@ struct ClaudeRequest {
     top_p: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     stop_sequences: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<ClaudeTool>>,
     stream: bool,
+}
+
+/// Claude's tool definition format
+#[derive(Debug, Serialize)]
+struct ClaudeTool {
+    name: String,
+    description: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    input_schema: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -340,6 +407,10 @@ struct ClaudeContent {
     content_type: String,
     text: Option<String>,
     thinking: Option<String>,
+    /// Tool use fields (for tool_use content blocks)
+    id: Option<String>,
+    name: Option<String>,
+    input: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -506,6 +577,9 @@ mod tests {
                 content_type: "text".to_string(),
                 text: Some("Hello there!".to_string()),
                 thinking: None,
+                id: None,
+                name: None,
+                input: None,
             }],
             model: "claude-3-sonnet-20240229".to_string(),
             stop_reason: Some("end_turn".to_string()),
@@ -545,11 +619,17 @@ mod tests {
                     content_type: "text".to_string(),
                     text: Some("First part. ".to_string()),
                     thinking: None,
+                    id: None,
+                    name: None,
+                    input: None,
                 },
                 ClaudeContent {
                     content_type: "text".to_string(),
                     text: Some("Second part.".to_string()),
                     thinking: None,
+                    id: None,
+                    name: None,
+                    input: None,
                 },
             ],
             model: "claude-3-opus-20240229".to_string(),
@@ -584,6 +664,9 @@ mod tests {
                 content_type: "text".to_string(),
                 text: Some("Response".to_string()),
                 thinking: None,
+                id: None,
+                name: None,
+                input: None,
             }],
             model: "claude-3-sonnet-20240229".to_string(),
             stop_reason: Some("max_tokens".to_string()),
@@ -735,11 +818,17 @@ mod tests {
                     content_type: "thinking".to_string(),
                     text: None,
                     thinking: Some("Let me analyze this step by step. First, I need to...".to_string()),
+                    id: None,
+                    name: None,
+                    input: None,
                 },
                 ClaudeContent {
                     content_type: "text".to_string(),
                     text: Some("The answer is 42.".to_string()),
                     thinking: None,
+                    id: None,
+                    name: None,
+                    input: None,
                 },
             ],
             model: "claude-3-opus-20240229".to_string(),
@@ -785,6 +874,9 @@ mod tests {
                     content_type: "text".to_string(),
                     text: Some("Hello! How can I help you?".to_string()),
                     thinking: None,
+                    id: None,
+                    name: None,
+                    input: None,
                 },
             ],
             model: "claude-3-sonnet-20240229".to_string(),
@@ -827,16 +919,25 @@ mod tests {
                     content_type: "thinking".to_string(),
                     text: None,
                     thinking: Some("First consideration: ...".to_string()),
+                    id: None,
+                    name: None,
+                    input: None,
                 },
                 ClaudeContent {
                     content_type: "thinking".to_string(),
                     text: None,
                     thinking: Some("Second consideration: ...".to_string()),
+                    id: None,
+                    name: None,
+                    input: None,
                 },
                 ClaudeContent {
                     content_type: "text".to_string(),
                     text: Some("Based on my analysis...".to_string()),
                     thinking: None,
+                    id: None,
+                    name: None,
+                    input: None,
                 },
             ],
             model: "claude-3-opus-20240229".to_string(),
@@ -858,6 +959,384 @@ mod tests {
 
         // Verify text was extracted
         assert_eq!(response.message.text().unwrap(), "Based on my analysis...");
+    }
+
+    // ============================================================
+    // Additional Gap Tests
+    // ============================================================
+
+    /// Test: Empty message list conversion
+    ///
+    /// Verifies empty message list produces no system prompt and no messages.
+    #[test]
+    fn test_convert_messages_empty_list() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.anthropic.com",
+            "claude-3-sonnet-20240229",
+        );
+        let client = ClaudeClient::new(config);
+
+        let messages: Vec<Message> = vec![];
+        let (system, claude_msgs) = client.convert_messages(&messages);
+
+        assert_eq!(system, None);
+        assert!(claude_msgs.is_empty());
+    }
+
+    /// Test: Only system messages
+    ///
+    /// Verifies only system messages produces system prompt but no conversation.
+    #[test]
+    fn test_convert_messages_only_system() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.anthropic.com",
+            "claude-3-opus-20240229",
+        );
+        let client = ClaudeClient::new(config);
+
+        let messages = vec![Message::system("You are a helpful assistant.")];
+
+        let (system, claude_msgs) = client.convert_messages(&messages);
+
+        assert_eq!(system, Some("You are a helpful assistant.".to_string()));
+        assert!(claude_msgs.is_empty());
+    }
+
+    /// Test: System messages not at start
+    ///
+    /// Verifies system messages are combined even if interleaved.
+    #[test]
+    fn test_convert_messages_interleaved_system() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.anthropic.com",
+            "claude-3-sonnet-20240229",
+        );
+        let client = ClaudeClient::new(config);
+
+        let messages = vec![
+            Message::human("Hello"),
+            Message::system("Be concise"),
+            Message::assistant("Hi!"),
+        ];
+
+        let (system, claude_msgs) = client.convert_messages(&messages);
+
+        // System should be extracted even though it's not first
+        assert_eq!(system, Some("Be concise".to_string()));
+        assert_eq!(claude_msgs.len(), 2);
+        assert_eq!(claude_msgs[0].role, "user");
+        assert_eq!(claude_msgs[1].role, "assistant");
+    }
+
+    /// Test: Response with empty content array
+    ///
+    /// Verifies empty content array doesn't cause panic.
+    #[test]
+    fn test_convert_response_empty_content() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.anthropic.com",
+            "claude-3-sonnet-20240229",
+        );
+        let client = ClaudeClient::new(config);
+
+        let claude_response = ClaudeResponse {
+            id: "msg_empty".to_string(),
+            response_type: "message".to_string(),
+            role: "assistant".to_string(),
+            content: vec![], // Empty content
+            model: "claude-3-sonnet-20240229".to_string(),
+            stop_reason: Some("end_turn".to_string()),
+            stop_sequence: None,
+            usage: ClaudeUsage {
+                input_tokens: 10,
+                output_tokens: 0,
+            },
+        };
+
+        let response = client.convert_response(claude_response);
+
+        // Should handle empty content gracefully
+        assert_eq!(response.message.text(), Some(""));
+        assert_eq!(response.message.role, MessageRole::Assistant);
+    }
+
+    /// Test: Response with missing stop_reason
+    ///
+    /// Verifies None stop_reason is handled gracefully.
+    #[test]
+    fn test_convert_response_missing_stop_reason() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.anthropic.com",
+            "claude-3-opus-20240229",
+        );
+        let client = ClaudeClient::new(config);
+
+        let claude_response = ClaudeResponse {
+            id: "msg_no_stop".to_string(),
+            response_type: "message".to_string(),
+            role: "assistant".to_string(),
+            content: vec![ClaudeContent {
+                content_type: "text".to_string(),
+                text: Some("Response without stop reason".to_string()),
+                thinking: None,
+                id: None,
+                name: None,
+                input: None,
+            }],
+            model: "claude-3-opus-20240229".to_string(),
+            stop_reason: None, // Missing stop_reason
+            stop_sequence: None,
+            usage: ClaudeUsage {
+                input_tokens: 5,
+                output_tokens: 10,
+            },
+        };
+
+        let response = client.convert_response(claude_response);
+
+        // Should handle None stop_reason
+        assert_eq!(
+            response.message.text(),
+            Some("Response without stop reason")
+        );
+        // Metadata should still be populated
+        assert!(response.metadata.contains_key("model"));
+    }
+
+    /// Test: Message with empty content
+    ///
+    /// Verifies messages with empty text are handled.
+    #[test]
+    fn test_convert_messages_empty_content() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.anthropic.com",
+            "claude-3-sonnet-20240229",
+        );
+        let client = ClaudeClient::new(config);
+
+        let messages = vec![
+            Message::human(""),
+            Message::assistant(""),
+        ];
+
+        let (system, claude_msgs) = client.convert_messages(&messages);
+
+        assert_eq!(system, None);
+        assert_eq!(claude_msgs.len(), 2);
+        // Empty strings should be preserved
+        assert_eq!(claude_msgs[0].content, "");
+        assert_eq!(claude_msgs[1].content, "");
+    }
+
+    /// Test: Response conversion preserves message ID
+    ///
+    /// Verifies the Claude message ID is stored in the response.
+    #[test]
+    fn test_response_conversion_preserves_id() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.anthropic.com",
+            "claude-3-sonnet-20240229",
+        );
+        let client = ClaudeClient::new(config);
+
+        let claude_response = ClaudeResponse {
+            id: "msg_unique_id_12345".to_string(),
+            response_type: "message".to_string(),
+            role: "assistant".to_string(),
+            content: vec![ClaudeContent {
+                content_type: "text".to_string(),
+                text: Some("Test".to_string()),
+                thinking: None,
+                id: None,
+                name: None,
+                input: None,
+            }],
+            model: "claude-3-sonnet-20240229".to_string(),
+            stop_reason: Some("end_turn".to_string()),
+            stop_sequence: None,
+            usage: ClaudeUsage {
+                input_tokens: 1,
+                output_tokens: 1,
+            },
+        };
+
+        let response = client.convert_response(claude_response);
+
+        assert_eq!(response.message.id, Some("msg_unique_id_12345".to_string()));
+    }
+
+    /// Test: Usage metadata is correctly populated
+    ///
+    /// Verifies token counts are accurately transferred.
+    #[test]
+    fn test_response_conversion_usage_accuracy() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.anthropic.com",
+            "claude-3-opus-20240229",
+        );
+        let client = ClaudeClient::new(config);
+
+        let claude_response = ClaudeResponse {
+            id: "msg_usage".to_string(),
+            response_type: "message".to_string(),
+            role: "assistant".to_string(),
+            content: vec![ClaudeContent {
+                content_type: "text".to_string(),
+                text: Some("Test".to_string()),
+                thinking: None,
+                id: None,
+                name: None,
+                input: None,
+            }],
+            model: "claude-3-opus-20240229".to_string(),
+            stop_reason: Some("end_turn".to_string()),
+            stop_sequence: None,
+            usage: ClaudeUsage {
+                input_tokens: 1234,
+                output_tokens: 5678,
+            },
+        };
+
+        let response = client.convert_response(claude_response);
+
+        let usage = response.usage.unwrap();
+        assert_eq!(usage.input_tokens, 1234);
+        assert_eq!(usage.output_tokens, 5678);
+        // Total tokens should be sum
+        assert_eq!(usage.total_tokens, 1234 + 5678);
+    }
+
+    // ============================================================
+    // Tool Calling Tests
+    // ============================================================
+
+    #[test]
+    fn test_response_conversion_with_tool_use() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.anthropic.com",
+            "claude-3-sonnet-20240229",
+        );
+        let client = ClaudeClient::new(config);
+
+        let claude_response = ClaudeResponse {
+            id: "msg_tool".to_string(),
+            response_type: "message".to_string(),
+            role: "assistant".to_string(),
+            content: vec![
+                ClaudeContent {
+                    content_type: "text".to_string(),
+                    text: Some("Let me check the weather.".to_string()),
+                    thinking: None,
+                    id: None,
+                    name: None,
+                    input: None,
+                },
+                ClaudeContent {
+                    content_type: "tool_use".to_string(),
+                    text: None,
+                    thinking: None,
+                    id: Some("toolu_123".to_string()),
+                    name: Some("get_weather".to_string()),
+                    input: Some(serde_json::json!({"location": "San Francisco"})),
+                },
+            ],
+            model: "claude-3-sonnet-20240229".to_string(),
+            stop_reason: Some("tool_use".to_string()),
+            stop_sequence: None,
+            usage: ClaudeUsage {
+                input_tokens: 50,
+                output_tokens: 30,
+            },
+        };
+
+        let response = client.convert_response(claude_response);
+
+        // Should extract tool calls
+        assert!(response.message.tool_calls.is_some());
+        let tool_calls = response.message.tool_calls.clone().unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].id, "toolu_123");
+        assert_eq!(tool_calls[0].name, "get_weather");
+        assert_eq!(tool_calls[0].args["location"], "San Francisco");
+
+        // Text should still be extracted
+        assert_eq!(response.message.text(), Some("Let me check the weather."));
+    }
+
+    #[test]
+    fn test_convert_tools() {
+        use langgraph_core::llm::ToolDefinition;
+
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.anthropic.com",
+            "claude-3-sonnet-20240229",
+        );
+        let client = ClaudeClient::new(config);
+
+        let tools = vec![
+            ToolDefinition::new("get_weather", "Get weather for a location")
+                .with_parameters(serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string"}
+                    },
+                    "required": ["location"]
+                })),
+        ];
+
+        let claude_tools = client.convert_tools(&tools);
+
+        assert_eq!(claude_tools.len(), 1);
+        assert_eq!(claude_tools[0].name, "get_weather");
+        assert_eq!(claude_tools[0].description, "Get weather for a location");
+        assert!(claude_tools[0].input_schema.is_some());
+    }
+
+    #[test]
+    fn test_response_no_tool_calls() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.anthropic.com",
+            "claude-3-sonnet-20240229",
+        );
+        let client = ClaudeClient::new(config);
+
+        let claude_response = ClaudeResponse {
+            id: "msg_no_tools".to_string(),
+            response_type: "message".to_string(),
+            role: "assistant".to_string(),
+            content: vec![ClaudeContent {
+                content_type: "text".to_string(),
+                text: Some("Just a regular response".to_string()),
+                thinking: None,
+                id: None,
+                name: None,
+                input: None,
+            }],
+            model: "claude-3-sonnet-20240229".to_string(),
+            stop_reason: Some("end_turn".to_string()),
+            stop_sequence: None,
+            usage: ClaudeUsage {
+                input_tokens: 10,
+                output_tokens: 5,
+            },
+        };
+
+        let response = client.convert_response(claude_response);
+
+        // No tool calls should be present
+        assert!(response.message.tool_calls.is_none());
+        assert_eq!(response.message.text(), Some("Just a regular response"));
     }
 }
 

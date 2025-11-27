@@ -243,6 +243,7 @@ mod tests {
 
     fn create_test_config() -> OrcaConfig {
         OrcaConfig {
+            project_name: Some("test-project".to_string()),
             database: DatabaseConfig {
                 path: "orca.db".to_string(),
             },
@@ -270,6 +271,7 @@ mod tests {
             },
             budget: Default::default(),
             workflow: Default::default(),
+            backup: Default::default(),
         }
     }
 

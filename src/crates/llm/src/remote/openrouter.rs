@@ -349,5 +349,158 @@ mod tests {
         assert_eq!(router_msg.role, "user");
         assert_eq!(router_msg.content, "Hello");
     }
+
+    #[test]
+    fn test_message_conversion_all_roles() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://openrouter.ai/api/v1",
+            "anthropic/claude-3-opus",
+        );
+        let client = OpenRouterClient::new(config);
+
+        // System message
+        let sys_msg = Message::system("System prompt");
+        assert_eq!(client.convert_message(&sys_msg).role, "system");
+
+        // Human message
+        let human_msg = Message::human("User message");
+        assert_eq!(client.convert_message(&human_msg).role, "user");
+
+        // Assistant message
+        let asst_msg = Message::assistant("AI response");
+        assert_eq!(client.convert_message(&asst_msg).role, "assistant");
+
+        // Tool message (converts to user)
+        let mut tool_msg = Message::human("tool result");
+        tool_msg.role = MessageRole::Tool;
+        assert_eq!(client.convert_message(&tool_msg).role, "user");
+
+        // Custom role
+        let mut custom_msg = Message::human("custom");
+        custom_msg.role = MessageRole::Custom("moderator".to_string());
+        assert_eq!(client.convert_message(&custom_msg).role, "moderator");
+    }
+
+    #[test]
+    fn test_response_conversion_basic() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://openrouter.ai/api/v1",
+            "anthropic/claude-3-opus",
+        );
+        let client = OpenRouterClient::new(config);
+
+        let router_response = OpenRouterResponse {
+            id: "gen-123".to_string(),
+            model: "anthropic/claude-3-opus".to_string(),
+            choices: vec![OpenRouterChoice {
+                index: 0,
+                message: OpenRouterMessage {
+                    role: "assistant".to_string(),
+                    content: "Hello there!".to_string(),
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: Some(OpenRouterUsage {
+                prompt_tokens: 10,
+                completion_tokens: 20,
+                total_tokens: 30,
+            }),
+            provider: None,
+        };
+
+        let response = client.convert_response(router_response);
+
+        assert_eq!(response.message.text(), Some("Hello there!"));
+        assert_eq!(response.message.role, MessageRole::Assistant);
+        assert_eq!(response.usage.as_ref().unwrap().input_tokens, 10);
+        assert_eq!(response.usage.as_ref().unwrap().output_tokens, 20);
+        assert!(response.metadata.contains_key("model"));
+        assert!(response.metadata.contains_key("finish_reason"));
+    }
+
+    #[test]
+    fn test_response_conversion_with_provider() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://openrouter.ai/api/v1",
+            "anthropic/claude-3-opus",
+        );
+        let client = OpenRouterClient::new(config);
+
+        let router_response = OpenRouterResponse {
+            id: "gen-456".to_string(),
+            model: "anthropic/claude-3-opus".to_string(),
+            choices: vec![OpenRouterChoice {
+                index: 0,
+                message: OpenRouterMessage {
+                    role: "assistant".to_string(),
+                    content: "Response from specific provider".to_string(),
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: Some(OpenRouterUsage {
+                prompt_tokens: 15,
+                completion_tokens: 25,
+                total_tokens: 40,
+            }),
+            provider: Some("anthropic".to_string()),
+        };
+
+        let response = client.convert_response(router_response);
+
+        assert_eq!(response.message.text(), Some("Response from specific provider"));
+        assert!(response.metadata.contains_key("provider"));
+        assert_eq!(
+            response.metadata.get("provider").and_then(|v| v.as_str()),
+            Some("anthropic")
+        );
+    }
+
+    #[test]
+    fn test_response_conversion_no_usage() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://openrouter.ai/api/v1",
+            "anthropic/claude-3-opus",
+        );
+        let client = OpenRouterClient::new(config);
+
+        let router_response = OpenRouterResponse {
+            id: "gen-789".to_string(),
+            model: "anthropic/claude-3-opus".to_string(),
+            choices: vec![OpenRouterChoice {
+                index: 0,
+                message: OpenRouterMessage {
+                    role: "assistant".to_string(),
+                    content: "Response without usage".to_string(),
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: None,
+            provider: None,
+        };
+
+        let response = client.convert_response(router_response);
+
+        assert!(response.usage.is_none());
+        assert_eq!(response.message.text(), Some("Response without usage"));
+    }
+
+    #[test]
+    fn test_config_with_custom_timeout() {
+        use std::time::Duration;
+
+        let mut config = RemoteLlmConfig::new(
+            "test-key",
+            "https://openrouter.ai/api/v1",
+            "anthropic/claude-3-opus",
+        );
+        config.timeout = Duration::from_secs(120);
+
+        let _client = OpenRouterClient::new(config);
+        // Client should be created successfully with custom timeout
+    }
 }
 

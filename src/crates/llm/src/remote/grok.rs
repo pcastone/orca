@@ -303,5 +303,122 @@ mod tests {
         assert_eq!(grok_msg.role, "user");
         assert_eq!(grok_msg.content, "Hello");
     }
+
+    #[test]
+    fn test_message_conversion_all_roles() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.x.ai/v1",
+            "grok-beta",
+        );
+        let client = GrokClient::new(config);
+
+        // System message
+        let sys_msg = Message::system("System prompt");
+        assert_eq!(client.convert_message(&sys_msg).role, "system");
+
+        // Human message
+        let human_msg = Message::human("User message");
+        assert_eq!(client.convert_message(&human_msg).role, "user");
+
+        // Assistant message
+        let asst_msg = Message::assistant("AI response");
+        assert_eq!(client.convert_message(&asst_msg).role, "assistant");
+
+        // Tool message (converts to user)
+        let mut tool_msg = Message::human("tool result");
+        tool_msg.role = MessageRole::Tool;
+        assert_eq!(client.convert_message(&tool_msg).role, "user");
+
+        // Custom role
+        let mut custom_msg = Message::human("custom");
+        custom_msg.role = MessageRole::Custom("moderator".to_string());
+        assert_eq!(client.convert_message(&custom_msg).role, "moderator");
+    }
+
+    #[test]
+    fn test_response_conversion_basic() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.x.ai/v1",
+            "grok-beta",
+        );
+        let client = GrokClient::new(config);
+
+        let grok_response = GrokResponse {
+            id: "chatcmpl-123".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "grok-beta".to_string(),
+            choices: vec![GrokChoice {
+                index: 0,
+                message: GrokMessage {
+                    role: "assistant".to_string(),
+                    content: "Hello there!".to_string(),
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: Some(GrokUsage {
+                prompt_tokens: 10,
+                completion_tokens: 20,
+                total_tokens: 30,
+            }),
+        };
+
+        let response = client.convert_response(grok_response);
+
+        assert_eq!(response.message.text(), Some("Hello there!"));
+        assert_eq!(response.message.role, MessageRole::Assistant);
+        assert_eq!(response.usage.as_ref().unwrap().input_tokens, 10);
+        assert_eq!(response.usage.as_ref().unwrap().output_tokens, 20);
+        assert!(response.metadata.contains_key("model"));
+        assert!(response.metadata.contains_key("finish_reason"));
+    }
+
+    #[test]
+    fn test_response_conversion_no_usage() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.x.ai/v1",
+            "grok-beta",
+        );
+        let client = GrokClient::new(config);
+
+        let grok_response = GrokResponse {
+            id: "chatcmpl-456".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "grok-beta".to_string(),
+            choices: vec![GrokChoice {
+                index: 0,
+                message: GrokMessage {
+                    role: "assistant".to_string(),
+                    content: "Response without usage".to_string(),
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: None,
+        };
+
+        let response = client.convert_response(grok_response);
+
+        assert!(response.usage.is_none());
+        assert_eq!(response.message.text(), Some("Response without usage"));
+    }
+
+    #[test]
+    fn test_config_with_custom_timeout() {
+        use std::time::Duration;
+
+        let mut config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.x.ai/v1",
+            "grok-beta",
+        );
+        config.timeout = Duration::from_secs(120);
+
+        let _client = GrokClient::new(config);
+        // Client should be created successfully with custom timeout
+    }
 }
 

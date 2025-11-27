@@ -119,8 +119,10 @@ impl GeminiClient {
     }
 
     /// Convert Gemini response to ChatResponse.
-    fn convert_response(&self, gemini_resp: GeminiResponse) -> ChatResponse {
-        let candidate = &gemini_resp.candidates[0];
+    fn convert_response(&self, gemini_resp: GeminiResponse) -> Result<ChatResponse, LlmError> {
+        let candidate = gemini_resp.candidates.first().ok_or_else(|| {
+            LlmError::InvalidResponse("Gemini response contained no candidates".to_string())
+        })?;
         
         let content_text = candidate
             .content
@@ -156,12 +158,12 @@ impl GeminiClient {
             );
         }
 
-        ChatResponse {
+        Ok(ChatResponse {
             message,
             usage,
             reasoning: None,
             metadata,
-        }
+        })
     }
 }
 
@@ -221,7 +223,7 @@ impl ChatModel for GeminiClient {
             .await
             .map_err(|e| LlmError::InvalidResponse(e.to_string()))?;
 
-        Ok(self.convert_response(gemini_resp))
+        self.convert_response(gemini_resp).map_err(|e| e.into())
     }
 
     async fn stream(&self, request: ChatRequest) -> GraphResult<ChatStreamResponse> {
@@ -540,7 +542,7 @@ mod tests {
             }),
         };
 
-        let response = client.convert_response(gemini_response);
+        let response = client.convert_response(gemini_response).unwrap();
 
         assert_eq!(response.message.text(), Some("Hello there!"));
         assert_eq!(response.message.role, MessageRole::Assistant);
@@ -577,7 +579,7 @@ mod tests {
             usage_metadata: None,
         };
 
-        let response = client.convert_response(gemini_response);
+        let response = client.convert_response(gemini_response).unwrap();
 
         // Multiple parts should be concatenated
         assert_eq!(response.message.text(), Some("First part. Second part."));
@@ -610,10 +612,33 @@ mod tests {
             }),
         };
 
-        let response = client.convert_response(gemini_response);
+        let response = client.convert_response(gemini_response).unwrap();
 
         let finish_reason = response.metadata.get("finish_reason").unwrap();
         assert_eq!(finish_reason, &serde_json::Value::String("MAX_TOKENS".to_string()));
+    }
+
+    #[test]
+    fn test_response_conversion_empty_candidates_returns_error() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://generativelanguage.googleapis.com/v1beta",
+            "gemini-pro",
+        );
+        let client = GeminiClient::new(config);
+
+        let gemini_response = GeminiResponse {
+            candidates: vec![], // Empty candidates
+            usage_metadata: None,
+        };
+
+        // Should return an error, not panic
+        let result = client.convert_response(gemini_response);
+        assert!(result.is_err());
+
+        // Verify error message
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("no candidates"), "Expected error about no candidates, got: {}", err_msg);
     }
 
     // ============================================================

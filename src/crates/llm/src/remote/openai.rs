@@ -69,28 +69,33 @@ impl OpenAiClient {
             content: Some(msg.text().unwrap_or("").to_string()),
             name: msg.name.clone(),
             tool_call_id: msg.tool_call_id.clone(),
+            tool_calls: None, // We don't send tool_calls in requests
         }
     }
 
     /// Convert OpenAI response to ChatResponse.
-    fn convert_response(&self, request: &ChatRequest, openai_resp: OpenAiResponse) -> ChatResponse {
-        let choice = &openai_resp.choices[0];
+    fn convert_response(&self, request: &ChatRequest, openai_resp: OpenAiResponse) -> Result<ChatResponse, LlmError> {
+        use langgraph_core::ToolCall;
+
+        let choice = openai_resp.choices.first().ok_or_else(|| {
+            LlmError::InvalidResponse("OpenAI response contained no choices".to_string())
+        })?;
 
         // Check if this is a thinking model (o1, o1-mini)
         let is_thinking_model = self.config.model.starts_with("o1");
-        
+
         let (message_content, reasoning) = if is_thinking_model && request.config.reasoning_mode.should_capture() {
             // For o1 models, reasoning is typically in a separate field or prefixed
             // For now, we'll extract it based on content markers
             let content = choice.message.content.clone().unwrap_or_default();
-            
+
             // Simple reasoning extraction (can be enhanced)
             if content.contains("<think>") && content.contains("</think>") {
                 let parts: Vec<&str> = content.split("</think>").collect();
                 if parts.len() >= 2 {
                     let thinking = parts[0].replace("<think>", "").trim().to_string();
                     let answer = parts[1].trim().to_string();
-                    
+
                     let reasoning_content = ReasoningContent::new(thinking);
                     (answer, Some(reasoning_content))
                 } else {
@@ -103,12 +108,34 @@ impl OpenAiClient {
             (choice.message.content.clone().unwrap_or_default(), None)
         };
 
+        // Extract tool calls from response
+        let tool_calls: Option<Vec<ToolCall>> = choice.message.tool_calls.as_ref().map(|calls| {
+            calls.iter().filter_map(|tc| {
+                // Parse the arguments JSON string
+                match serde_json::from_str::<serde_json::Value>(&tc.function.arguments) {
+                    Ok(args) => Some(ToolCall {
+                        id: tc.id.clone(),
+                        name: tc.function.name.clone(),
+                        args,
+                    }),
+                    Err(_) => {
+                        // If parsing fails, use the raw string as a JSON string value
+                        Some(ToolCall {
+                            id: tc.id.clone(),
+                            name: tc.function.name.clone(),
+                            args: serde_json::json!(tc.function.arguments),
+                        })
+                    }
+                }
+            }).collect()
+        }).filter(|v: &Vec<ToolCall>| !v.is_empty());
+
         let message = Message {
             id: None,
             role: MessageRole::Assistant,
             content: MessageContent::Text(message_content),
             name: None,
-            tool_calls: None,
+            tool_calls,
             tool_call_id: None,
             metadata: None,
         };
@@ -135,12 +162,24 @@ impl OpenAiClient {
             serde_json::Value::String(choice.finish_reason.clone().unwrap_or_default()),
         );
 
-        ChatResponse {
+        Ok(ChatResponse {
             message,
             usage,
             reasoning,
             metadata,
-        }
+        })
+    }
+
+    /// Convert ToolDefinition to OpenAI's tool format
+    fn convert_tools(&self, tools: &[langgraph_core::llm::ToolDefinition]) -> Vec<OpenAiTool> {
+        tools.iter().map(|t| OpenAiTool {
+            tool_type: "function".to_string(),
+            function: OpenAiFunctionDef {
+                name: t.name.clone(),
+                description: t.description.clone(),
+                parameters: t.parameters.clone(),
+            },
+        }).collect()
     }
 }
 
@@ -155,6 +194,13 @@ impl ChatModel for OpenAiClient {
             .map(|m| self.convert_message(m))
             .collect();
 
+        // Convert tools if provided
+        let tools = if request.config.tools.is_empty() {
+            None
+        } else {
+            Some(self.convert_tools(&request.config.tools))
+        };
+
         let req_body = OpenAiRequest {
             model: self.config.model.clone(),
             messages,
@@ -168,6 +214,7 @@ impl ChatModel for OpenAiClient {
             } else {
                 Some(request.config.stop_sequences.clone())
             },
+            tools,
             stream: false,
         };
 
@@ -205,7 +252,7 @@ impl ChatModel for OpenAiClient {
             .await
             .map_err(|e| LlmError::InvalidResponse(e.to_string()))?;
 
-        Ok(self.convert_response(&request, openai_resp))
+        self.convert_response(&request, openai_resp).map_err(|e| e.into())
     }
 
     async fn stream(&self, request: ChatRequest) -> GraphResult<ChatStreamResponse> {
@@ -240,6 +287,24 @@ impl ChatModel for OpenAiClient {
         }
         if let Some(top_p) = request.config.top_p {
             req_body["top_p"] = json!(top_p);
+        }
+
+        // Add tools if provided
+        if !request.config.tools.is_empty() {
+            let openai_tools: Vec<serde_json::Value> = request.config.tools.iter().map(|t| {
+                let mut tool = json!({
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                    }
+                });
+                if let Some(params) = &t.parameters {
+                    tool["function"]["parameters"] = params.clone();
+                }
+                tool
+            }).collect();
+            req_body["tools"] = json!(openai_tools);
         }
 
         // Build headers
@@ -291,7 +356,26 @@ struct OpenAiRequest {
     presence_penalty: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     stop: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<OpenAiTool>>,
     stream: bool,
+}
+
+/// OpenAI tool definition format
+#[derive(Debug, Serialize)]
+struct OpenAiTool {
+    #[serde(rename = "type")]
+    tool_type: String, // Always "function"
+    function: OpenAiFunctionDef,
+}
+
+/// OpenAI function definition within a tool
+#[derive(Debug, Serialize)]
+struct OpenAiFunctionDef {
+    name: String,
+    description: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parameters: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -303,6 +387,25 @@ struct OpenAiMessage {
     name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_call_id: Option<String>,
+    /// Tool calls requested by the assistant
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_calls: Option<Vec<OpenAiToolCall>>,
+}
+
+/// Tool call from OpenAI response
+#[derive(Debug, Serialize, Deserialize)]
+struct OpenAiToolCall {
+    id: String,
+    #[serde(rename = "type")]
+    call_type: String, // "function"
+    function: OpenAiFunctionCall,
+}
+
+/// Function call details in a tool call
+#[derive(Debug, Serialize, Deserialize)]
+struct OpenAiFunctionCall {
+    name: String,
+    arguments: String, // JSON string
 }
 
 #[derive(Debug, Deserialize)]
@@ -464,6 +567,7 @@ mod tests {
                     content: Some("Hi there!".to_string()),
                     name: None,
                     tool_call_id: None,
+                    tool_calls: None,
                 },
                 finish_reason: Some("stop".to_string()),
             }],
@@ -475,7 +579,7 @@ mod tests {
             }),
         };
 
-        let response = client.convert_response(&request, openai_response);
+        let response = client.convert_response(&request, openai_response).unwrap();
 
         assert_eq!(response.message.text(), Some("Hi there!"));
         assert_eq!(response.message.role, MessageRole::Assistant);
@@ -504,6 +608,7 @@ mod tests {
                     content: Some("The answer is 42".to_string()),
                     name: None,
                     tool_call_id: None,
+                    tool_calls: None,
                 },
                 finish_reason: Some("stop".to_string()),
             }],
@@ -517,7 +622,7 @@ mod tests {
             }),
         };
 
-        let response = client.convert_response(&request, openai_response);
+        let response = client.convert_response(&request, openai_response).unwrap();
 
         assert_eq!(response.usage.as_ref().unwrap().input_tokens, 15);
         assert_eq!(response.usage.as_ref().unwrap().output_tokens, 50);
@@ -546,13 +651,14 @@ mod tests {
                     content: Some("<think>Let me analyze this step by step</think>The solution is X".to_string()),
                     name: None,
                     tool_call_id: None,
+                    tool_calls: None,
                 },
                 finish_reason: Some("stop".to_string()),
             }],
             usage: None,
         };
 
-        let response = client.convert_response(&request, openai_response);
+        let response = client.convert_response(&request, openai_response).unwrap();
 
         // Should extract reasoning from <think> tags
         assert!(response.reasoning.is_some());
@@ -582,13 +688,14 @@ mod tests {
                     content: Some("Simple answer without thinking".to_string()),
                     name: None,
                     tool_call_id: None,
+                    tool_calls: None,
                 },
                 finish_reason: Some("stop".to_string()),
             }],
             usage: None,
         };
 
-        let response = client.convert_response(&request, openai_response);
+        let response = client.convert_response(&request, openai_response).unwrap();
 
         // Should not extract reasoning if no tags present
         assert!(response.reasoning.is_none());
@@ -617,13 +724,14 @@ mod tests {
                     content: Some("<think>Hidden reasoning</think>Answer".to_string()),
                     name: None,
                     tool_call_id: None,
+                    tool_calls: None,
                 },
                 finish_reason: Some("stop".to_string()),
             }],
             usage: None,
         };
 
-        let response = client.convert_response(&request, openai_response);
+        let response = client.convert_response(&request, openai_response).unwrap();
 
         // Should not extract reasoning when mode is None
         assert!(response.reasoning.is_none());
@@ -702,6 +810,364 @@ mod tests {
         let response = client.chat(request).await.unwrap();
 
         assert!(response.message.text().is_some());
+    }
+
+    // ============================================================
+    // Additional Gap Tests
+    // ============================================================
+
+    /// Test: Tool message conversion
+    ///
+    /// Verifies tool messages have correct role.
+    #[test]
+    fn test_convert_message_tool_role() {
+        let config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "gpt-4");
+        let client = OpenAiClient::new(config);
+
+        let mut tool_msg = Message::human("Tool result data");
+        tool_msg.role = MessageRole::Tool;
+        tool_msg.tool_call_id = Some("call_123".to_string());
+
+        let openai_msg = client.convert_message(&tool_msg);
+
+        assert_eq!(openai_msg.role, "tool");
+        assert_eq!(openai_msg.tool_call_id, Some("call_123".to_string()));
+    }
+
+    /// Test: Message with empty content
+    ///
+    /// Verifies empty content is handled.
+    #[test]
+    fn test_convert_message_empty_content() {
+        let config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "gpt-4");
+        let client = OpenAiClient::new(config);
+
+        let empty_msg = Message::human("");
+        let openai_msg = client.convert_message(&empty_msg);
+
+        assert_eq!(openai_msg.content, Some("".to_string()));
+    }
+
+    /// Test: Response without usage data
+    ///
+    /// Verifies None usage is handled gracefully.
+    #[test]
+    fn test_convert_response_no_usage() {
+        let config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "gpt-4");
+        let client = OpenAiClient::new(config);
+
+        let request = ChatRequest::new(vec![Message::human("Test")]);
+
+        let openai_response = OpenAiResponse {
+            id: "chatcmpl-no-usage".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "gpt-4".to_string(),
+            choices: vec![OpenAiChoice {
+                index: 0,
+                message: OpenAiMessage {
+                    role: "assistant".to_string(),
+                    content: Some("Response".to_string()),
+                    name: None,
+                    tool_call_id: None,
+                    tool_calls: None,
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: None, // No usage data
+        };
+
+        let response = client.convert_response(&request, openai_response).unwrap();
+
+        // Should not panic on None usage
+        assert!(response.usage.is_none());
+        assert_eq!(response.message.text(), Some("Response"));
+    }
+
+    /// Test: Response with empty choices
+    ///
+    /// Verifies that empty choices returns an error instead of panicking.
+    #[test]
+    fn test_convert_response_empty_choices_returns_error() {
+        let config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "gpt-4");
+        let client = OpenAiClient::new(config);
+
+        let request = ChatRequest::new(vec![Message::human("Test")]);
+
+        let openai_response = OpenAiResponse {
+            id: "chatcmpl-empty".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "gpt-4".to_string(),
+            choices: vec![], // Empty choices
+            usage: Some(OpenAiUsage {
+                prompt_tokens: 10,
+                completion_tokens: 0,
+                total_tokens: 10,
+                completion_tokens_details: None,
+            }),
+        };
+
+        // Should return an error, not panic
+        let result = client.convert_response(&request, openai_response);
+        assert!(result.is_err());
+
+        // Verify error message
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("no choices"), "Expected error about no choices, got: {}", err_msg);
+    }
+
+    /// Test: All message roles conversion
+    ///
+    /// Verifies all MessageRole variants are handled.
+    #[test]
+    fn test_convert_message_all_roles() {
+        let config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "gpt-4");
+        let client = OpenAiClient::new(config);
+
+        // System message
+        let sys_msg = Message::system("System prompt");
+        assert_eq!(client.convert_message(&sys_msg).role, "system");
+
+        // Human message
+        let human_msg = Message::human("User message");
+        assert_eq!(client.convert_message(&human_msg).role, "user");
+
+        // Assistant message
+        let asst_msg = Message::assistant("AI response");
+        assert_eq!(client.convert_message(&asst_msg).role, "assistant");
+
+        // Tool message
+        let mut tool_msg = Message::human("tool result");
+        tool_msg.role = MessageRole::Tool;
+        assert_eq!(client.convert_message(&tool_msg).role, "tool");
+
+        // Custom role
+        let mut custom_msg = Message::human("custom");
+        custom_msg.role = MessageRole::Custom("moderator".to_string());
+        assert_eq!(client.convert_message(&custom_msg).role, "moderator");
+    }
+
+    /// Test: Response preserves model info
+    ///
+    /// Verifies model is stored in metadata.
+    #[test]
+    fn test_convert_response_preserves_model() {
+        let config = RemoteLlmConfig::new("test-key", "https://api.openai.com/v1", "gpt-4");
+        let client = OpenAiClient::new(config);
+
+        let request = ChatRequest::new(vec![Message::human("Test")]);
+
+        let openai_response = OpenAiResponse {
+            id: "chatcmpl-model".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "gpt-4-0125-preview".to_string(),
+            choices: vec![OpenAiChoice {
+                index: 0,
+                message: OpenAiMessage {
+                    role: "assistant".to_string(),
+                    content: Some("Test".to_string()),
+                    name: None,
+                    tool_call_id: None,
+                    tool_calls: None,
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: None,
+        };
+
+        let response = client.convert_response(&request, openai_response).unwrap();
+
+        assert!(response.metadata.contains_key("model"));
+        assert_eq!(
+            response.metadata.get("model").and_then(|v| v.as_str()),
+            Some("gpt-4-0125-preview")
+        );
+    }
+
+    // ============================================================
+    // Tool Calling Tests
+    // ============================================================
+
+    #[test]
+    fn test_response_with_tool_calls() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.openai.com/v1",
+            "gpt-4",
+        );
+        let client = OpenAiClient::new(config);
+        let request = ChatRequest::new(vec![Message::human("What's the weather in SF?")]);
+
+        let openai_response = OpenAiResponse {
+            id: "chatcmpl-tool123".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "gpt-4".to_string(),
+            choices: vec![OpenAiChoice {
+                index: 0,
+                message: OpenAiMessage {
+                    role: "assistant".to_string(),
+                    content: None, // Tool calls often have no content
+                    name: None,
+                    tool_call_id: None,
+                    tool_calls: Some(vec![OpenAiToolCall {
+                        id: "call_abc123".to_string(),
+                        call_type: "function".to_string(),
+                        function: OpenAiFunctionCall {
+                            name: "get_weather".to_string(),
+                            arguments: r#"{"location": "San Francisco"}"#.to_string(),
+                        },
+                    }]),
+                },
+                finish_reason: Some("tool_calls".to_string()),
+            }],
+            usage: Some(OpenAiUsage {
+                prompt_tokens: 50,
+                completion_tokens: 20,
+                total_tokens: 70,
+                completion_tokens_details: None,
+            }),
+        };
+
+        let response = client.convert_response(&request, openai_response).unwrap();
+
+        // Should extract tool calls
+        assert!(response.message.tool_calls.is_some());
+        let tool_calls = response.message.tool_calls.clone().unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].id, "call_abc123");
+        assert_eq!(tool_calls[0].name, "get_weather");
+        assert_eq!(tool_calls[0].args["location"], "San Francisco");
+    }
+
+    #[test]
+    fn test_convert_tools() {
+        use langgraph_core::llm::ToolDefinition;
+
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.openai.com/v1",
+            "gpt-4",
+        );
+        let client = OpenAiClient::new(config);
+
+        let tools = vec![
+            ToolDefinition::new("get_weather", "Get weather for a location")
+                .with_parameters(serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string"}
+                    },
+                    "required": ["location"]
+                })),
+        ];
+
+        let openai_tools = client.convert_tools(&tools);
+
+        assert_eq!(openai_tools.len(), 1);
+        assert_eq!(openai_tools[0].tool_type, "function");
+        assert_eq!(openai_tools[0].function.name, "get_weather");
+        assert_eq!(openai_tools[0].function.description, "Get weather for a location");
+        assert!(openai_tools[0].function.parameters.is_some());
+    }
+
+    #[test]
+    fn test_response_no_tool_calls() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.openai.com/v1",
+            "gpt-4",
+        );
+        let client = OpenAiClient::new(config);
+        let request = ChatRequest::new(vec![Message::human("Hello")]);
+
+        let openai_response = OpenAiResponse {
+            id: "chatcmpl-no-tools".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "gpt-4".to_string(),
+            choices: vec![OpenAiChoice {
+                index: 0,
+                message: OpenAiMessage {
+                    role: "assistant".to_string(),
+                    content: Some("Hello! How can I help you?".to_string()),
+                    name: None,
+                    tool_call_id: None,
+                    tool_calls: None,
+                },
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: Some(OpenAiUsage {
+                prompt_tokens: 10,
+                completion_tokens: 8,
+                total_tokens: 18,
+                completion_tokens_details: None,
+            }),
+        };
+
+        let response = client.convert_response(&request, openai_response).unwrap();
+
+        // No tool calls should be present
+        assert!(response.message.tool_calls.is_none());
+        assert_eq!(response.message.text(), Some("Hello! How can I help you?"));
+    }
+
+    #[test]
+    fn test_response_with_multiple_tool_calls() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.openai.com/v1",
+            "gpt-4",
+        );
+        let client = OpenAiClient::new(config);
+        let request = ChatRequest::new(vec![Message::human("Compare weather in SF and LA")]);
+
+        let openai_response = OpenAiResponse {
+            id: "chatcmpl-multi".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "gpt-4".to_string(),
+            choices: vec![OpenAiChoice {
+                index: 0,
+                message: OpenAiMessage {
+                    role: "assistant".to_string(),
+                    content: None,
+                    name: None,
+                    tool_call_id: None,
+                    tool_calls: Some(vec![
+                        OpenAiToolCall {
+                            id: "call_1".to_string(),
+                            call_type: "function".to_string(),
+                            function: OpenAiFunctionCall {
+                                name: "get_weather".to_string(),
+                                arguments: r#"{"location": "San Francisco"}"#.to_string(),
+                            },
+                        },
+                        OpenAiToolCall {
+                            id: "call_2".to_string(),
+                            call_type: "function".to_string(),
+                            function: OpenAiFunctionCall {
+                                name: "get_weather".to_string(),
+                                arguments: r#"{"location": "Los Angeles"}"#.to_string(),
+                            },
+                        },
+                    ]),
+                },
+                finish_reason: Some("tool_calls".to_string()),
+            }],
+            usage: None,
+        };
+
+        let response = client.convert_response(&request, openai_response).unwrap();
+
+        // Should extract both tool calls
+        assert!(response.message.tool_calls.is_some());
+        let tool_calls = response.message.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 2);
+        assert_eq!(tool_calls[0].args["location"], "San Francisco");
+        assert_eq!(tool_calls[1].args["location"], "Los Angeles");
     }
 }
 

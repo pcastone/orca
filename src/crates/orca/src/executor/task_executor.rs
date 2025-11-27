@@ -9,7 +9,7 @@ use crate::error::{OrcaError, Result};
 use crate::executor::{LlmProvider, ToolAdapter, create_llm_function};
 use crate::models::PatternConfig;
 use crate::pattern::PatternType;
-use crate::services::{PatternRouter, TaskClassifier, TaskCategory};
+use crate::services::{PatternRouter, TaskClassifier, TaskCategory, ExecutionMetricsService, ExecutionTracker};
 use crate::tools::DirectToolBridge;
 use crate::workflow::Task;
 use langgraph_prebuilt::agents::{create_react_agent, create_plan_execute_agent, create_reflection_agent};
@@ -18,6 +18,19 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use futures::StreamExt;
 use tracing::{debug, info, warn};
+
+/// Metrics collected during streaming execution
+#[derive(Debug, Clone, Default)]
+pub struct StreamingMetrics {
+    /// Total reasoning/thinking tokens
+    pub reasoning_tokens: i64,
+    /// Total reasoning duration in milliseconds
+    pub reasoning_duration_ms: i64,
+    /// Number of node updates (proxy for iterations)
+    pub node_update_count: i64,
+    /// Nodes that were updated (for iteration tracking)
+    pub updated_nodes: Vec<String>,
+}
 
 /// Result of task execution
 #[derive(Debug, Clone)]
@@ -89,6 +102,9 @@ pub struct TaskExecutor {
 
     /// Optional pattern router for database-backed pattern configs
     pattern_router: Option<PatternRouter>,
+
+    /// Optional execution metrics service for tracking prompt executions
+    metrics_service: Option<Arc<ExecutionMetricsService>>,
 }
 
 impl std::fmt::Debug for TaskExecutor {
@@ -98,6 +114,7 @@ impl std::fmt::Debug for TaskExecutor {
             .field("llm_provider", &self.llm_provider)
             .field("config", &self.config)
             .field("classifier", &self.classifier)
+            .field("has_metrics_service", &self.metrics_service.is_some())
             .field("has_pattern_router", &self.pattern_router.is_some())
             .finish()
     }
@@ -127,6 +144,7 @@ impl TaskExecutor {
             config,
             classifier,
             pattern_router: None,
+            metrics_service: None,
         })
     }
 
@@ -161,7 +179,53 @@ impl TaskExecutor {
             config,
             classifier,
             pattern_router: Some(pattern_router),
+            metrics_service: None,
         })
+    }
+
+    /// Create a new task executor with metrics tracking
+    ///
+    /// # Arguments
+    /// * `bridge` - DirectToolBridge for tool execution
+    /// * `config` - Orca configuration
+    /// * `user_db` - User database for pattern config lookups and metrics storage
+    ///
+    /// # Returns
+    /// A new TaskExecutor instance with execution metrics tracking enabled
+    pub fn new_with_metrics(
+        bridge: Arc<DirectToolBridge>,
+        config: OrcaConfig,
+        user_db: Arc<Database>,
+    ) -> Result<Self> {
+        // Create LLM provider from config
+        let llm_provider = Arc::new(LlmProvider::from_config(&config)?);
+
+        // Create task classifier for automatic pattern selection
+        let classifier = TaskClassifier::new();
+
+        // Create pattern router with database
+        let pattern_router = PatternRouter::new(user_db.clone());
+
+        // Create execution metrics service
+        let project_name = config.project_name.clone();
+        let metrics_service = ExecutionMetricsService::new(user_db, project_name);
+
+        info!("TaskExecutor initialized with execution metrics tracking");
+
+        Ok(Self {
+            bridge,
+            llm_provider,
+            config,
+            classifier,
+            pattern_router: Some(pattern_router),
+            metrics_service: Some(Arc::new(metrics_service)),
+        })
+    }
+
+    /// Set the metrics service for tracking execution metrics
+    pub fn with_metrics_service(mut self, service: Arc<ExecutionMetricsService>) -> Self {
+        self.metrics_service = Some(service);
+        self
     }
 
     /// Execute a task
@@ -245,16 +309,77 @@ impl TaskExecutor {
             "Using pattern for execution"
         );
 
+        // Start metrics tracking if service is available
+        let tracker = if let Some(ref metrics_service) = self.metrics_service {
+            match metrics_service.start_execution(
+                &task.description,
+                pattern.as_str(),
+                None, // session_id
+                Some(task.id.clone()),
+            ).await {
+                Ok(t) => {
+                    debug!(
+                        task_id = %task.id,
+                        execution_id = %t.execution_id(),
+                        "Started execution metrics tracking"
+                    );
+                    Some(t)
+                }
+                Err(e) => {
+                    warn!(
+                        task_id = %task.id,
+                        error = %e,
+                        "Failed to start execution metrics tracking"
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         // Execute based on pattern with specified max_iterations
-        match pattern {
-            PatternType::React => self.execute_react_with_config(task, max_iterations).await,
+        let result = match pattern {
+            PatternType::React => self.execute_react_with_config(task, max_iterations, tracker.as_ref()).await,
             PatternType::PlanExecute => self.execute_plan_execute_with_config(task, max_iterations).await,
             PatternType::Reflection => self.execute_reflection_with_config(task, max_iterations).await,
+        };
+
+        // Complete metrics tracking
+        if let Some(tracker) = tracker {
+            match &result {
+                Ok(exec_result) => {
+                    let response = exec_result.result.as_deref().unwrap_or("No response");
+                    if let Err(e) = tracker.complete(response).await {
+                        warn!(
+                            task_id = %task.id,
+                            error = %e,
+                            "Failed to complete execution metrics"
+                        );
+                    }
+                }
+                Err(e) => {
+                    if let Err(complete_err) = tracker.fail(&e.to_string()).await {
+                        warn!(
+                            task_id = %task.id,
+                            error = %complete_err,
+                            "Failed to record execution failure"
+                        );
+                    }
+                }
+            }
         }
+
+        result
     }
 
     /// Execute a task using the ReAct pattern with configurable max_iterations
-    async fn execute_react_with_config(&self, task: &Task, max_iterations: usize) -> Result<ExecutionResult> {
+    async fn execute_react_with_config(
+        &self,
+        task: &Task,
+        max_iterations: usize,
+        tracker: Option<&ExecutionTracker>,
+    ) -> Result<ExecutionResult> {
         // Create tools from bridge
         let tools = ToolAdapter::from_bridge(self.bridge.clone());
 
@@ -294,7 +419,9 @@ impl TaskExecutor {
         });
 
         // Execute with or without streaming based on config
-        let (final_state, messages) = if self.config.execution.streaming {
+        let _ = tracker; // Tracker is updated at execute_task_internal level
+
+        let (final_state, messages, _streaming_metrics) = if self.config.execution.streaming {
             debug!(task_id = %task.id, "Streaming agent execution");
             self.execute_with_streaming(&agent, initial_state, task).await?
         } else {
@@ -312,7 +439,7 @@ impl TaskExecutor {
                 .cloned()
                 .unwrap_or_default();
 
-            (final_state, messages)
+            (final_state, messages, StreamingMetrics::default())
         };
 
         // Extract final AI message as result
@@ -372,7 +499,7 @@ impl TaskExecutor {
         });
 
         // Execute with or without streaming based on config
-        let (final_state, messages) = if self.config.execution.streaming {
+        let (final_state, messages, _streaming_metrics) = if self.config.execution.streaming {
             debug!(task_id = %task.id, "Streaming Plan-Execute agent execution");
             self.execute_with_streaming(&agent, initial_state, task).await?
         } else {
@@ -390,7 +517,7 @@ impl TaskExecutor {
                 .cloned()
                 .unwrap_or_default();
 
-            (final_state, messages)
+            (final_state, messages, StreamingMetrics::default())
         };
 
         // Extract final AI message as result
@@ -450,7 +577,7 @@ impl TaskExecutor {
         });
 
         // Execute with or without streaming based on config
-        let (final_state, messages) = if self.config.execution.streaming {
+        let (final_state, messages, _streaming_metrics) = if self.config.execution.streaming {
             debug!(task_id = %task.id, "Streaming Reflection agent execution");
             self.execute_with_streaming(&agent, initial_state, task).await?
         } else {
@@ -468,7 +595,7 @@ impl TaskExecutor {
                 .cloned()
                 .unwrap_or_default();
 
-            (final_state, messages)
+            (final_state, messages, StreamingMetrics::default())
         };
 
         // Extract final AI message as result
@@ -501,7 +628,7 @@ impl TaskExecutor {
         agent: &langgraph_core::CompiledGraph,
         initial_state: Value,
         task: &Task,
-    ) -> Result<(Value, Vec<Value>)> {
+    ) -> Result<(Value, Vec<Value>, StreamingMetrics)> {
         use std::io::{self, Write};
 
         // Create stream with Messages and Updates modes
@@ -515,6 +642,7 @@ impl TaskExecutor {
             .map_err(|e| OrcaError::Execution(format!("Failed to create stream: {}", e)))?;
 
         let mut final_state = json!({});
+        let mut metrics = StreamingMetrics::default();
 
         // Process stream chunks
         while let Some(chunk) = stream.next().await {
@@ -527,6 +655,12 @@ impl TaskExecutor {
                     // Print progress indicator
                     print!(".");
                     io::stdout().flush().unwrap_or(());
+
+                    // Track node updates for metrics
+                    metrics.node_update_count += 1;
+                    if !metrics.updated_nodes.contains(&node) {
+                        metrics.updated_nodes.push(node.clone());
+                    }
 
                     debug!(
                         task_id = %task.id,
@@ -550,6 +684,12 @@ impl TaskExecutor {
                     }
                 }
                 StreamEvent::Reasoning { content, tokens, duration_ms, node: _, metadata: _ } => {
+                    // Capture reasoning metrics
+                    metrics.reasoning_tokens += tokens as i64;
+                    if let Some(duration) = duration_ms {
+                        metrics.reasoning_duration_ms += duration as i64;
+                    }
+
                     // Display thinking/reasoning output if enabled
                     if self.config.execution.show_thinking {
                         use colored::Colorize;
@@ -563,13 +703,13 @@ impl TaskExecutor {
                         }
 
                         // Bottom border with metrics
-                        let mut metrics = Vec::new();
-                        metrics.push(format!("{} tokens", tokens));
+                        let mut display_metrics = Vec::new();
+                        display_metrics.push(format!("{} tokens", tokens));
                         if let Some(duration) = duration_ms {
-                            metrics.push(format!("{:.2}s", duration as f64 / 1000.0));
+                            display_metrics.push(format!("{:.2}s", duration as f64 / 1000.0));
                         }
 
-                        let metrics_str = metrics.join(", ");
+                        let metrics_str = display_metrics.join(", ");
                         println!("{}", format!("╰─ {} ─╯", metrics_str).dimmed());
                         println!();
 
@@ -600,10 +740,12 @@ impl TaskExecutor {
         debug!(
             task_id = %task.id,
             message_count = messages.len(),
-            "Streaming execution completed"
+            reasoning_tokens = metrics.reasoning_tokens,
+            node_updates = metrics.node_update_count,
+            "Streaming execution completed with metrics"
         );
 
-        Ok((final_state, messages))
+        Ok((final_state, messages, metrics))
     }
 
     /// Get pattern configuration from task using database-backed routing
@@ -838,6 +980,7 @@ mod tests {
 
     fn create_test_config() -> OrcaConfig {
         OrcaConfig {
+            project_name: Some("test-project".to_string()),
             database: DatabaseConfig {
                 path: "orca.db".to_string(),
             },
@@ -865,6 +1008,7 @@ mod tests {
             },
             budget: Default::default(),
             workflow: Default::default(),
+            backup: Default::default(),
         }
     }
 

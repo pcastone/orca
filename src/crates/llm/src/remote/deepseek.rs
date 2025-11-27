@@ -100,8 +100,10 @@ impl DeepseekClient {
     }
 
     /// Convert Deepseek response to ChatResponse.
-    fn convert_response(&self, request: &ChatRequest, deepseek_resp: DeepseekResponse) -> ChatResponse {
-        let choice = &deepseek_resp.choices[0];
+    fn convert_response(&self, request: &ChatRequest, deepseek_resp: DeepseekResponse) -> Result<ChatResponse, LlmError> {
+        let choice = deepseek_resp.choices.first().ok_or_else(|| {
+            LlmError::InvalidResponse("Deepseek response contained no choices".to_string())
+        })?;
         let raw_content = choice.message.content.clone();
 
         // Extract reasoning if this is a thinking model and reasoning is requested
@@ -143,12 +145,12 @@ impl DeepseekClient {
             serde_json::Value::String(choice.finish_reason.clone().unwrap_or_default()),
         );
 
-        ChatResponse {
+        Ok(ChatResponse {
             message,
             usage,
             reasoning,
             metadata,
-        }
+        })
     }
 }
 
@@ -207,7 +209,7 @@ impl ChatModel for DeepseekClient {
             .await
             .map_err(|e| LlmError::InvalidResponse(e.to_string()))?;
 
-        Ok(self.convert_response(&request, deepseek_resp))
+        self.convert_response(&request, deepseek_resp).map_err(|e| e.into())
     }
 
     async fn stream(&self, request: ChatRequest) -> GraphResult<ChatStreamResponse> {
@@ -564,7 +566,7 @@ mod tests {
             }),
         };
 
-        let response = client.convert_response(&request, deepseek_response);
+        let response = client.convert_response(&request, deepseek_response).unwrap();
 
         assert_eq!(response.message.text(), Some("Hi there!"));
         assert_eq!(response.message.role, MessageRole::Assistant);
@@ -607,7 +609,7 @@ mod tests {
             }),
         };
 
-        let response = client.convert_response(&request, deepseek_response);
+        let response = client.convert_response(&request, deepseek_response).unwrap();
 
         assert_eq!(response.message.text(), Some("Solution found."));
         assert!(response.reasoning.is_some());
@@ -648,7 +650,7 @@ mod tests {
             usage: None,
         };
 
-        let response = client.convert_response(&request, deepseek_response);
+        let response = client.convert_response(&request, deepseek_response).unwrap();
 
         // When reasoning mode is Disabled, should not extract reasoning
         assert!(response.reasoning.is_none());
@@ -686,7 +688,7 @@ mod tests {
             usage: None,
         };
 
-        let response = client.convert_response(&request, deepseek_response);
+        let response = client.convert_response(&request, deepseek_response).unwrap();
 
         // Non-thinking models should not extract reasoning even if tags present
         assert!(response.reasoning.is_none());
@@ -694,6 +696,35 @@ mod tests {
             response.message.text(),
             Some("<think>Some text</think>Answer")
         );
+    }
+
+    #[test]
+    fn test_response_conversion_empty_choices_returns_error() {
+        let config = RemoteLlmConfig::new(
+            "test-key",
+            "https://api.deepseek.com",
+            "deepseek-chat",
+        );
+        let client = DeepseekClient::new(config);
+
+        let request = ChatRequest::new(vec![Message::human("Test")]);
+
+        let deepseek_response = DeepseekResponse {
+            id: "chatcmpl-empty".to_string(),
+            object: "chat.completion".to_string(),
+            created: 1234567890,
+            model: "deepseek-chat".to_string(),
+            choices: vec![], // Empty choices
+            usage: None,
+        };
+
+        // Should return an error, not panic
+        let result = client.convert_response(&request, deepseek_response);
+        assert!(result.is_err());
+
+        // Verify error message
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("no choices"), "Expected error about no choices, got: {}", err_msg);
     }
 
     // ============================================================
