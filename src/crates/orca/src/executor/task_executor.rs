@@ -19,6 +19,59 @@ use std::sync::Arc;
 use futures::StreamExt;
 use tracing::{debug, info, warn};
 
+/// Extract text content from a message value, handling various formats:
+/// - Direct string: `"content": "text"`
+/// - Tagged enum: `"content": {"Text": "text"}`
+/// - Array of parts: `"content": [{"type": "text", "text": "..."}]`
+fn extract_message_content(msg: &Value) -> Option<String> {
+    let content = msg.get("content")?;
+
+    // Case 1: Direct string
+    if let Some(s) = content.as_str() {
+        return Some(s.to_string());
+    }
+
+    // Case 2: Tagged enum {"Text": "..."}
+    if let Some(obj) = content.as_object() {
+        if let Some(text) = obj.get("Text").and_then(|t| t.as_str()) {
+            return Some(text.to_string());
+        }
+    }
+
+    // Case 3: Array of content parts [{"type": "text", "text": "..."}]
+    if let Some(arr) = content.as_array() {
+        let text_parts: Vec<String> = arr.iter()
+            .filter_map(|part| {
+                // Handle {"type": "text", "text": "..."} format
+                if part.get("type").and_then(|t| t.as_str()) == Some("text") {
+                    part.get("text").and_then(|t| t.as_str()).map(|s| s.to_string())
+                } else {
+                    // Fallback: try to get text directly
+                    part.get("text").and_then(|t| t.as_str()).map(|s| s.to_string())
+                }
+            })
+            .collect();
+        if !text_parts.is_empty() {
+            return Some(text_parts.join(""));
+        }
+    }
+
+    None
+}
+
+/// Check if a message is an AI/assistant message
+fn is_assistant_message(msg: &Value) -> bool {
+    let is_ai_type = msg.get("type")
+        .and_then(|t| t.as_str())
+        .map(|t| t == "ai")
+        .unwrap_or(false);
+    let is_assistant_role = msg.get("role")
+        .and_then(|r| r.as_str())
+        .map(|r| r == "assistant")
+        .unwrap_or(false);
+    is_ai_type || is_assistant_role
+}
+
 /// Metrics collected during streaming execution
 #[derive(Debug, Clone, Default)]
 pub struct StreamingMetrics {
@@ -105,6 +158,9 @@ pub struct TaskExecutor {
 
     /// Optional execution metrics service for tracking prompt executions
     metrics_service: Option<Arc<ExecutionMetricsService>>,
+
+    /// Suppress stdout output (for TUI mode)
+    suppress_stdout: bool,
 }
 
 impl std::fmt::Debug for TaskExecutor {
@@ -116,6 +172,7 @@ impl std::fmt::Debug for TaskExecutor {
             .field("classifier", &self.classifier)
             .field("has_metrics_service", &self.metrics_service.is_some())
             .field("has_pattern_router", &self.pattern_router.is_some())
+            .field("suppress_stdout", &self.suppress_stdout)
             .finish()
     }
 }
@@ -123,36 +180,47 @@ impl std::fmt::Debug for TaskExecutor {
 impl TaskExecutor {
     /// Create a new task executor
     ///
+    /// LLM configuration is now database-only. Callers must provide an LlmProvider
+    /// created from database LlmProviderConfig.
+    ///
     /// # Arguments
     /// * `bridge` - DirectToolBridge for tool execution
-    /// * `config` - Orca configuration
+    /// * `config` - Orca configuration (execution settings, not LLM)
+    /// * `llm_provider` - LLM provider (loaded from database llm_providers table)
     ///
     /// # Returns
     /// A new TaskExecutor instance with automatic pattern selection enabled
-    pub fn new(bridge: Arc<DirectToolBridge>, config: OrcaConfig) -> Result<Self> {
-        // Create LLM provider from config
-        let llm_provider = Arc::new(LlmProvider::from_config(&config)?);
-
+    pub fn new(bridge: Arc<DirectToolBridge>, config: OrcaConfig, llm_provider: Arc<LlmProvider>) -> Self {
         // Create task classifier for automatic pattern selection
         let classifier = TaskClassifier::new();
 
         info!("TaskExecutor initialized with automatic pattern selection");
 
-        Ok(Self {
+        Self {
             bridge,
             llm_provider,
             config,
             classifier,
             pattern_router: None,
             metrics_service: None,
-        })
+            suppress_stdout: false,
+        }
+    }
+
+    /// Set suppress_stdout flag (for TUI mode)
+    pub fn set_suppress_stdout(&mut self, suppress: bool) {
+        self.suppress_stdout = suppress;
     }
 
     /// Create a new task executor with database-backed pattern routing
     ///
+    /// LLM configuration is now database-only. Callers must provide an LlmProvider
+    /// created from database LlmProviderConfig.
+    ///
     /// # Arguments
     /// * `bridge` - DirectToolBridge for tool execution
-    /// * `config` - Orca configuration
+    /// * `config` - Orca configuration (execution settings, not LLM)
+    /// * `llm_provider` - LLM provider (loaded from database llm_providers table)
     /// * `user_db` - User database for pattern config lookups
     ///
     /// # Returns
@@ -160,11 +228,9 @@ impl TaskExecutor {
     pub fn new_with_router(
         bridge: Arc<DirectToolBridge>,
         config: OrcaConfig,
+        llm_provider: Arc<LlmProvider>,
         user_db: Arc<Database>,
-    ) -> Result<Self> {
-        // Create LLM provider from config
-        let llm_provider = Arc::new(LlmProvider::from_config(&config)?);
-
+    ) -> Self {
         // Create task classifier for automatic pattern selection
         let classifier = TaskClassifier::new();
 
@@ -173,21 +239,26 @@ impl TaskExecutor {
 
         info!("TaskExecutor initialized with database-backed pattern routing");
 
-        Ok(Self {
+        Self {
             bridge,
             llm_provider,
             config,
             classifier,
             pattern_router: Some(pattern_router),
             metrics_service: None,
-        })
+            suppress_stdout: false,
+        }
     }
 
     /// Create a new task executor with metrics tracking
     ///
+    /// LLM configuration is now database-only. Callers must provide an LlmProvider
+    /// created from database LlmProviderConfig.
+    ///
     /// # Arguments
     /// * `bridge` - DirectToolBridge for tool execution
-    /// * `config` - Orca configuration
+    /// * `config` - Orca configuration (execution settings, not LLM)
+    /// * `llm_provider` - LLM provider (loaded from database llm_providers table)
     /// * `user_db` - User database for pattern config lookups and metrics storage
     ///
     /// # Returns
@@ -195,11 +266,9 @@ impl TaskExecutor {
     pub fn new_with_metrics(
         bridge: Arc<DirectToolBridge>,
         config: OrcaConfig,
+        llm_provider: Arc<LlmProvider>,
         user_db: Arc<Database>,
-    ) -> Result<Self> {
-        // Create LLM provider from config
-        let llm_provider = Arc::new(LlmProvider::from_config(&config)?);
-
+    ) -> Self {
         // Create task classifier for automatic pattern selection
         let classifier = TaskClassifier::new();
 
@@ -212,14 +281,15 @@ impl TaskExecutor {
 
         info!("TaskExecutor initialized with execution metrics tracking");
 
-        Ok(Self {
+        Self {
             bridge,
             llm_provider,
             config,
             classifier,
             pattern_router: Some(pattern_router),
             metrics_service: Some(Arc::new(metrics_service)),
-        })
+            suppress_stdout: false,
+        }
     }
 
     /// Set the metrics service for tracking execution metrics
@@ -442,24 +512,34 @@ impl TaskExecutor {
             (final_state, messages, StreamingMetrics::default())
         };
 
-        // Extract final AI message as result
+        // DEBUG: Log message structure to diagnose extraction issue
+        debug!(
+            task_id = %task.id,
+            message_count = messages.len(),
+            "DEBUG: Starting message extraction"
+        );
+        for (i, msg) in messages.iter().enumerate() {
+            let is_assistant = is_assistant_message(msg);
+            let content = extract_message_content(msg);
+            debug!(
+                "DEBUG: Message {}: is_assistant={}, content={:?}, raw={}",
+                i, is_assistant, content,
+                serde_json::to_string(msg).unwrap_or_else(|_| "SERIALIZE_ERROR".to_string())
+            );
+        }
+
+        // Extract final AI message as result using helper functions
         let result = messages
             .iter()
             .rev()
-            .find(|msg| {
-                msg.get("type")
-                    .and_then(|t| t.as_str())
-                    .map(|t| t == "ai")
-                    .unwrap_or(false)
-            })
-            .and_then(|msg| msg.get("content"))
-            .and_then(|c| c.as_str())
-            .unwrap_or("No response generated")
-            .to_string();
+            .find(|msg| is_assistant_message(msg))
+            .and_then(|msg| extract_message_content(msg))
+            .unwrap_or_else(|| "No response generated".to_string());
 
         debug!(
             task_id = %task.id,
             message_count = messages.len(),
+            result_preview = %result.chars().take(100).collect::<String>(),
             "Agent execution completed"
         );
 
@@ -520,20 +600,13 @@ impl TaskExecutor {
             (final_state, messages, StreamingMetrics::default())
         };
 
-        // Extract final AI message as result
+        // Extract final AI message as result using helper functions
         let result = messages
             .iter()
             .rev()
-            .find(|msg| {
-                msg.get("type")
-                    .and_then(|t| t.as_str())
-                    .map(|t| t == "ai")
-                    .unwrap_or(false)
-            })
-            .and_then(|msg| msg.get("content"))
-            .and_then(|c| c.as_str())
-            .unwrap_or("No response generated")
-            .to_string();
+            .find(|msg| is_assistant_message(msg))
+            .and_then(|msg| extract_message_content(msg))
+            .unwrap_or_else(|| "No response generated".to_string());
 
         debug!(
             task_id = %task.id,
@@ -598,20 +671,13 @@ impl TaskExecutor {
             (final_state, messages, StreamingMetrics::default())
         };
 
-        // Extract final AI message as result
+        // Extract final AI message as result using helper functions
         let result = messages
             .iter()
             .rev()
-            .find(|msg| {
-                msg.get("type")
-                    .and_then(|t| t.as_str())
-                    .map(|t| t == "ai")
-                    .unwrap_or(false)
-            })
-            .and_then(|msg| msg.get("content"))
-            .and_then(|c| c.as_str())
-            .unwrap_or("No response generated")
-            .to_string();
+            .find(|msg| is_assistant_message(msg))
+            .and_then(|msg| extract_message_content(msg))
+            .unwrap_or_else(|| "No response generated".to_string());
 
         debug!(
             task_id = %task.id,
@@ -643,6 +709,7 @@ impl TaskExecutor {
 
         let mut final_state = json!({});
         let mut metrics = StreamingMetrics::default();
+        let mut collected_messages: Vec<Value> = Vec::new();
 
         // Process stream chunks
         while let Some(chunk) = stream.next().await {
@@ -652,9 +719,11 @@ impl TaskExecutor {
                     final_state = state;
                 }
                 StreamEvent::Updates { node, update: _ } => {
-                    // Print progress indicator
-                    print!(".");
-                    io::stdout().flush().unwrap_or(());
+                    // Print progress indicator (unless suppressed for TUI)
+                    if !self.suppress_stdout {
+                        print!(".");
+                        io::stdout().flush().unwrap_or(());
+                    }
 
                     // Track node updates for metrics
                     metrics.node_update_count += 1;
@@ -669,16 +738,21 @@ impl TaskExecutor {
                     );
                 }
                 StreamEvent::Message { message, metadata: _ } => {
-                    // Print message content in real-time
-                    if let Some(content) = message.get("content").and_then(|c| c.as_str()) {
-                        if !content.is_empty() {
-                            println!("\n{}", content);
+                    // Collect message for later extraction
+                    collected_messages.push(message.clone());
+
+                    // Print message content in real-time (unless suppressed for TUI)
+                    if !self.suppress_stdout {
+                        if let Some(content) = message.get("content").and_then(|c| c.as_str()) {
+                            if !content.is_empty() {
+                                println!("\n{}", content);
+                            }
                         }
                     }
                 }
                 StreamEvent::MessageChunk { chunk, message_id: _, node: _, metadata: _ } => {
-                    // Print token chunks for real-time streaming
-                    if !chunk.is_empty() {
+                    // Print token chunks for real-time streaming (unless suppressed for TUI)
+                    if !self.suppress_stdout && !chunk.is_empty() {
                         print!("{}", chunk);
                         io::stdout().flush().unwrap_or(());
                     }
@@ -690,8 +764,8 @@ impl TaskExecutor {
                         metrics.reasoning_duration_ms += duration as i64;
                     }
 
-                    // Display thinking/reasoning output if enabled
-                    if self.config.execution.show_thinking {
+                    // Display thinking/reasoning output if enabled (unless suppressed for TUI)
+                    if !self.suppress_stdout && self.config.execution.show_thinking {
                         use colored::Colorize;
 
                         println!(); // Ensure we're on a new line
@@ -728,14 +802,20 @@ impl TaskExecutor {
             }
         }
 
-        println!(); // New line after streaming
+        if !self.suppress_stdout {
+            println!(); // New line after streaming
+        }
 
-        // Extract messages from final state
-        let messages = final_state
-            .get("messages")
-            .and_then(|m| m.as_array())
-            .cloned()
-            .unwrap_or_default();
+        // Use collected messages from stream events, or fall back to final state
+        let messages = if !collected_messages.is_empty() {
+            collected_messages
+        } else {
+            final_state
+                .get("messages")
+                .and_then(|m| m.as_array())
+                .cloned()
+                .unwrap_or_default()
+        };
 
         debug!(
             task_id = %task.id,
@@ -895,6 +975,11 @@ impl TaskExecutor {
 
     /// Display thinking/reasoning output with styled formatting
     fn display_thinking(&self, reasoning: &langgraph_core::llm::ReasoningContent) {
+        // Skip display if stdout is suppressed (TUI mode)
+        if self.suppress_stdout {
+            return;
+        }
+
         use colored::Colorize;
 
         // Top border

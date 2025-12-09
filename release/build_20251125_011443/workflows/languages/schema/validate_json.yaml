@@ -1,0 +1,37 @@
+# JSON Schema Validation Workflow
+id: "json_schema_validate"
+description: "Validate JSON against JSON Schema"
+
+steps:
+  - name: "validate_json_schema"
+    pattern: "react_1"
+    config:
+      max_iterations: 4
+      tools: [shell_exec, file_read]
+      system_prompt: |
+        Validate JSON against JSON Schema.
+
+        Tools: ajv-cli, jsonschema (Python)
+
+        Commands:
+        ```bash
+        # ajv-cli (Node.js)
+        npx ajv-cli validate -s schema.json -d data.json
+
+        # jsonschema (Python)
+        jsonschema -i data.json schema.json
+
+        # jq validation
+        jq empty data.json  # Check valid JSON
+        ```
+
+        Report validation errors with paths
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 6
+  timeout: 120

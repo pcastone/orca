@@ -2,6 +2,8 @@
 //!
 //! Standalone server for the orchestrator service, providing REST API
 //! for task management, workflows, and orchestration.
+//!
+//! Note: This binary requires the `orca-integration` feature (enabled by default).
 
 use std::sync::Arc;
 use std::net::SocketAddr;

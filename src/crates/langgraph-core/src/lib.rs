@@ -513,6 +513,7 @@ pub mod functional;
 pub mod llm_stream;
 pub mod messages;
 pub mod llm;
+pub mod context;
 
 // Re-export main types
 pub use builder::StateGraph;
@@ -560,3 +561,4 @@ pub use messages::{
     get_messages_by_id, merge_consecutive_messages, truncate_messages,
     push_message, push_messages, trim_messages, TrimOptions, TrimStrategy
 };
+pub use context::{ContextManager, ContextConfig, SummarizationResult, TokenCounter, TiktokenCounter};

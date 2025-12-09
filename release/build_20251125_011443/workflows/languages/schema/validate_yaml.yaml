@@ -1,0 +1,37 @@
+# YAML Schema Validation Workflow
+id: "yaml_schema_validate"
+description: "Validate YAML syntax and schema"
+
+steps:
+  - name: "validate_yaml_schema"
+    pattern: "react_1"
+    config:
+      max_iterations: 4
+      tools: [shell_exec, file_read]
+      system_prompt: |
+        Validate YAML syntax and schema.
+
+        Tools: yamllint, yq, pykwalify
+
+        Commands:
+        ```bash
+        # yamllint (syntax and style)
+        yamllint data.yaml
+
+        # yq (syntax check)
+        yq eval data.yaml > /dev/null
+
+        # pykwalify (schema validation)
+        pykwalify -d data.yaml -s schema.yaml
+        ```
+
+        Report syntax and validation errors
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 6
+  timeout: 120

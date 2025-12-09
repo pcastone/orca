@@ -1,0 +1,33 @@
+# Angular Test Workflow
+id: "angular_test"
+description: "Run Angular unit tests"
+
+steps:
+  - name: "test_angular"
+    pattern: "react_1"
+    config:
+      max_iterations: 6
+      tools: [shell_exec, file_read, file_patch]
+      system_prompt: |
+        Run Angular tests with Jasmine/Karma or Jest.
+
+        Commands:
+        ```bash
+        ng test
+        ng test --watch=false
+        ng test --code-coverage
+        npm test
+        ```
+
+        Test components, services, directives
+
+        Verify TestBed configuration, component creation
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 10
+  timeout: 600

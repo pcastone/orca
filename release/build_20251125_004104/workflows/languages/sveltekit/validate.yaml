@@ -1,0 +1,65 @@
+# SvelteKit Full Validation Workflow
+id: "sveltekit_validate"
+description: "Complete SvelteKit validation: check, test, and build"
+
+steps:
+  - name: "validate_sveltekit"
+    pattern: "plan_execute"
+    config:
+      max_iterations: 15
+      tools: [shell_exec, file_read, grep]
+
+      system_prompt: |
+        Complete SvelteKit application validation.
+
+        PHASES:
+        1. **SVELTE-CHECK** - Type and syntax checking
+        2. **TESTING** - Vitest/Playwright
+        3. **BUILD** - Production build
+
+        ═══ PHASE 1: SVELTE-CHECK ═══
+        ```bash
+        npm run check
+        # or
+        svelte-check --threshold warning
+        ```
+        Check: TypeScript, Svelte syntax, accessibility
+
+        ═══ PHASE 2: TESTING ═══
+        ```bash
+        # Unit tests
+        vitest run --coverage
+
+        # E2E tests (if configured)
+        npx playwright test
+        ```
+        Requirements:
+        - All tests pass
+        - Coverage >= 80%
+
+        ═══ PHASE 3: BUILD ═══
+        ```bash
+        npm run build
+        # Preview build
+        npm run preview
+        ```
+        Verify:
+        - Build succeeds
+        - Adapter configuration correct
+        - No hydration errors
+
+        ═══ VALIDATION CHECKLIST ═══
+        - [ ] svelte-check passes
+        - [ ] All tests pass
+        - [ ] Coverage >= 80%
+        - [ ] Build succeeds
+        - [ ] No SSR/hydration issues
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 18
+  timeout: 900

@@ -1,0 +1,93 @@
+# Git Commit Changes Workflow
+# Pattern: ReAct (Reasoning + Acting)
+# Purpose: Review and commit changes to git repository
+# Complexity: Low-Medium
+# Use Cases:
+# - Commit code changes after implementation
+# - Create checkpoints during development
+# - Save work with descriptive commit messages
+# - Review changes before committing
+
+id: "git_commit_changes"
+description: "Review changes and commit them to the git repository with a descriptive message"
+
+steps:
+  - name: "review_and_commit"
+    pattern: "react_1"
+    config:
+      # Need a few iterations to check status, review diff, and commit
+      max_iterations: 6
+
+      # Git tools needed for commit workflow
+      tools:
+        - git_status
+        - git_diff
+        - git_add
+        - git_commit
+
+      # System prompt guiding the commit process
+      system_prompt: |
+        You are a git commit assistant following best practices.
+
+        Task: Review current changes and create a well-structured git commit.
+
+        Workflow:
+        1. Use git_status to see what files have changed
+        2. Use git_diff to review the actual changes
+        3. Analyze the changes to understand:
+           - What was added/modified/deleted
+           - The purpose of the changes
+           - Whether changes are related (should be in one commit)
+        4. Use git_add to stage the appropriate files
+        5. Use git_commit with a clear, descriptive message
+
+        Commit Message Format:
+        ```
+        <type>: <short description>
+
+        <optional detailed explanation>
+        ```
+
+        Types:
+        - feat: New feature
+        - fix: Bug fix
+        - refactor: Code restructuring
+        - docs: Documentation changes
+        - test: Test additions/modifications
+        - chore: Maintenance tasks
+        - perf: Performance improvements
+        - style: Code style/formatting
+
+        Best Practices:
+        - Keep the first line under 72 characters
+        - Use imperative mood ("Add feature" not "Added feature")
+        - Explain WHAT and WHY, not HOW
+        - Group related changes in single commits
+        - Don't commit unrelated changes together
+
+        Safety Checks:
+        - Verify no sensitive data (API keys, passwords) in changes
+        - Check for debug code or commented-out blocks
+        - Ensure changes compile/build before committing
+        - Review TODO/FIXME comments added
+
+        If the user provided a specific commit message, use it.
+        Otherwise, generate an appropriate message based on the changes.
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+# Settings for git workflow
+settings:
+  max_total_steps: 8
+  enable_retries: true
+  max_retries: 2
+  timeout: 120  # 2 minutes for reviewing and committing
+
+# Usage Examples:
+# aco workflow execute git_commit_changes --input "Commit my changes with message 'feat: add user authentication'"
+# aco workflow execute git_commit_changes --input "Review and commit the refactoring work"
+# aco workflow execute git_commit_changes --input "Commit these bug fixes"

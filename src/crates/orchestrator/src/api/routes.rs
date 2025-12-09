@@ -11,6 +11,8 @@ use std::sync::Arc;
 use crate::db::DatabaseConnection;
 use crate::api::{handlers, ws::BroadcastState};
 use crate::services::PromptService;
+
+#[cfg(feature = "orca-integration")]
 use orca::db::Database as UserDatabase;
 
 /// Shared application state
@@ -19,24 +21,58 @@ pub struct AppState {
     pub db: DatabaseConnection,
     pub broadcast: Arc<BroadcastState>,
     pub prompt_service: Option<Arc<PromptService>>,
+    /// LLM client for task execution (extracted from prompt_service)
+    pub llm_client: Option<Arc<dyn langgraph_core::llm::ChatModel + Send + Sync>>,
+    #[cfg(feature = "orca-integration")]
     pub user_db: Option<Arc<UserDatabase>>,
 }
 
 /// Build the complete API router
+#[cfg(feature = "orca-integration")]
 pub fn create_router(
     db: DatabaseConnection,
     broadcast: Arc<BroadcastState>,
     prompt_service: Option<PromptService>,
     user_db: Option<Arc<UserDatabase>>,
 ) -> Router {
+    // Extract LLM client from prompt_service for task execution
+    let llm_client = prompt_service.as_ref().map(|ps| ps.llm_client());
     let app_state = AppState {
         db: db.clone(),
         broadcast: broadcast.clone(),
         prompt_service: prompt_service.map(Arc::new),
+        llm_client,
         user_db,
     };
 
-    Router::new()
+    create_router_with_state(db, app_state)
+}
+
+/// Build the complete API router (without orca integration)
+#[cfg(not(feature = "orca-integration"))]
+pub fn create_router(
+    db: DatabaseConnection,
+    broadcast: Arc<BroadcastState>,
+    prompt_service: Option<PromptService>,
+) -> Router {
+    // Extract LLM client from prompt_service for task execution
+    let llm_client = prompt_service.as_ref().map(|ps| ps.llm_client());
+    let app_state = AppState {
+        db: db.clone(),
+        broadcast: broadcast.clone(),
+        prompt_service: prompt_service.map(Arc::new),
+        llm_client,
+    };
+
+    create_router_with_state(db, app_state)
+}
+
+/// Internal router creation with state
+fn create_router_with_state(
+    db: DatabaseConnection,
+    app_state: AppState,
+) -> Router {
+    let base_router = Router::new()
         // Health check endpoints
         .route("/health", get(handlers::health))
         .route(
@@ -160,15 +196,65 @@ pub fn create_router(
         .route(
             "/api/v1/prompt",
             post(handlers::send_prompt),
+        );
+
+    // Add data management routes (requires orca-integration)
+    #[cfg(feature = "orca-integration")]
+    let base_router = base_router
+        .route(
+            "/api/v1/data/backup",
+            post(handlers::backup),
         )
+        .route(
+            "/api/v1/data/backups",
+            get(handlers::list_backups),
+        )
+        .route(
+            "/api/v1/data/restore",
+            post(handlers::restore),
+        )
+        .route(
+            "/api/v1/data/export",
+            post(handlers::export),
+        )
+        .route(
+            "/api/v1/data/import",
+            post(handlers::import),
+        );
+
+    // Get LLM client for gRPC routes
+    let llm_client = app_state.llm_client.clone();
+
+    base_router
         .with_state(app_state)
+        // Merge gRPC-compatible REST endpoints
+        .merge(create_grpc_router(db, llm_client))
+}
+
+/// Create the gRPC-compatible REST router
+fn create_grpc_router(db: DatabaseConnection, llm_client: Option<Arc<dyn langgraph_core::llm::ChatModel + Send + Sync>>) -> Router {
+    use crate::grpc::{create_grpc_routes, GrpcState};
+
+    let grpc_state = if let Some(client) = llm_client {
+        GrpcState::with_llm_client(std::sync::Arc::new(db), client)
+    } else {
+        GrpcState::new(std::sync::Arc::new(db))
+    };
+    create_grpc_routes(grpc_state)
 }
 
 /// Create a router for testing
-#[cfg(test)]
+#[cfg(all(test, feature = "orca-integration"))]
 pub fn create_test_router(db: DatabaseConnection) -> Router {
     let broadcast = Arc::new(BroadcastState::new());
     create_router(db, broadcast, None, None)
+}
+
+/// Create a router for testing (without orca integration)
+#[cfg(all(test, not(feature = "orca-integration")))]
+pub fn create_test_router(db: DatabaseConnection) -> Router {
+    let broadcast = Arc::new(BroadcastState::new());
+    create_router(db, broadcast, None)
 }
 
 #[cfg(test)]

@@ -12,6 +12,7 @@ pub mod configuration_repo;
 pub mod bug_repo;
 pub mod prompt_history_repo;
 pub mod checkpoint_repo;
+pub mod execution_metrics_repo;
 
 // Re-export all repositories for convenient access
 pub use task_repo::TaskRepository;
@@ -23,3 +24,4 @@ pub use configuration_repo::ConfigurationRepository;
 pub use bug_repo::BugRepository;
 pub use prompt_history_repo::PromptHistoryRepository;
 pub use checkpoint_repo::CheckpointRepository;
+pub use execution_metrics_repo::ExecutionMetricsRepository;

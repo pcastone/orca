@@ -21,6 +21,12 @@ pub struct PromptHistory {
     /// Session ID for grouping related prompts
     pub session_id: Option<String>,
 
+    /// Associated prompt execution ID (for metrics tracking)
+    pub prompt_execution_id: Option<String>,
+
+    /// Associated iteration ID within the execution
+    pub iteration_id: Option<String>,
+
     /// Node ID in workflow
     pub node_id: Option<String>,
 
@@ -106,6 +112,8 @@ impl PromptHistory {
             workflow_id: None,
             execution_id: None,
             session_id: None,
+            prompt_execution_id: None,
+            iteration_id: None,
             node_id: None,
             provider,
             model,

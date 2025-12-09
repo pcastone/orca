@@ -122,6 +122,7 @@ pub struct ContextBuilder {
     database: Option<Arc<Database>>,
     config: Option<OrcaConfig>,
     workspace_root: Option<PathBuf>,
+    llm_provider: Option<Arc<LlmProvider>>,
 }
 
 impl ContextBuilder {
@@ -132,6 +133,7 @@ impl ContextBuilder {
             database: None,
             config: None,
             workspace_root: None,
+            llm_provider: None,
         }
     }
 
@@ -156,6 +158,12 @@ impl ContextBuilder {
     /// Set workspace root
     pub fn with_workspace_root(mut self, workspace_root: PathBuf) -> Self {
         self.workspace_root = Some(workspace_root);
+        self
+    }
+
+    /// Set LLM provider (required - loaded from database)
+    pub fn with_llm_provider(mut self, llm_provider: Arc<LlmProvider>) -> Self {
+        self.llm_provider = Some(llm_provider);
         self
     }
 
@@ -196,11 +204,12 @@ impl ContextBuilder {
                 .map_err(|e| OrcaError::ToolExecution(format!("Failed to create tool bridge: {}", e)))?
         );
 
-        // Create LLM provider
-        let llm_provider = Arc::new(LlmProvider::from_config(&config)?);
+        // Get LLM provider (required - loaded from database)
+        let llm_provider = self.llm_provider
+            .ok_or_else(|| OrcaError::Config("LLM provider is required for execution context (load from database llm_providers table)".to_string()))?;
 
-        // Create task executor
-        let task_executor = Arc::new(TaskExecutor::new(tool_bridge.clone(), config.clone())?);
+        // Create task executor with llm_provider
+        let task_executor = Arc::new(TaskExecutor::new(tool_bridge.clone(), config.clone(), llm_provider.clone()));
 
         // Create repositories
         let task_repository = TaskRepository::new(database.clone());

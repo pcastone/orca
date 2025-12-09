@@ -1,0 +1,117 @@
+# Test Failure Investigation Workflow
+# Pattern: Plan-Execute (Planning before execution)
+# Purpose: Investigate and fix failing tests systematically
+# Complexity: High
+# Use Cases:
+# - Debug unit test failures
+# - Fix integration test issues
+# - Investigate test assertion failures
+# - Resolve test environment problems
+
+id: "debug_test_failure"
+description: "Systematically investigate and fix failing tests"
+
+steps:
+  - name: "investigate_failure"
+    pattern: "plan_execute_1"
+    config:
+      # Multi-step investigation requires planning
+      max_steps: 12
+
+      # Enable replanning if initial approach doesn't work
+      replanning_enabled: true
+
+      # Tools needed for test debugging
+      tools:
+        - file_read
+        - grep
+        - shell_exec
+        - git_diff
+        - file_patch
+
+      # System prompt for the planner
+      planner_config:
+        temperature: 0.7
+        system_prompt: |
+          You are a test debugging expert creating a plan to fix failing tests.
+
+          Plan Structure:
+          1. Understand what the test is checking
+          2. Run the test to get the actual error
+          3. Analyze the error message and stack trace
+          4. Examine the implementation being tested
+          5. Search for related code if needed
+          6. Identify the root cause
+          7. Fix the bug
+          8. Verify the fix by running the test again
+
+          Create a detailed, step-by-step plan to debug and fix the test failure.
+
+      # System prompt for the executor
+      executor_config:
+        temperature: 0.5
+        system_prompt: |
+          You are executing a debugging plan to fix a failing test.
+
+          For each step:
+          1. Read the step instructions carefully
+          2. Execute the appropriate tool(s)
+          3. Analyze the results
+          4. Provide clear output about what you found
+
+          Debugging Best Practices:
+          - Read error messages carefully - they often point to the exact problem
+          - Check test assertions to understand expected vs actual behavior
+          - Look for recent changes that might have broken the test
+          - Verify test data and setup are correct
+          - Consider edge cases and boundary conditions
+          - Run the test after fixes to confirm they work
+
+          When you identify the bug:
+          - Explain what's wrong clearly
+          - Show the fix with file_patch
+          - Verify the fix resolves the issue
+
+    on_success:
+      end: true
+
+    on_failure: "fallback_debugging"
+
+  # Fallback: try simpler reactive approach if plan-execute fails
+  - name: "fallback_debugging"
+    pattern: "react_1"
+    config:
+      max_iterations: 10
+      tools:
+        - file_read
+        - shell_exec
+        - grep
+        - file_patch
+
+      system_prompt: |
+        The planned approach didn't work. Use a more flexible, reactive approach.
+
+        1. Run the test to see the current error
+        2. Examine relevant code
+        3. Try fixes iteratively
+        4. Verify each fix by running the test
+
+        Be methodical but flexible in your debugging approach.
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+# Settings for test debugging
+settings:
+  max_total_steps: 20
+  enable_retries: true
+  max_retries: 2
+  timeout: 600  # 10 minutes for complex debugging
+
+# Usage Examples:
+# aco workflow execute debug_test_failure --input "Fix the failing test_user_login test"
+# aco workflow execute debug_test_failure --input "Debug why test_database_connection is failing"
+# aco workflow execute debug_test_failure --input "The test_api_endpoint test is broken, please fix it"

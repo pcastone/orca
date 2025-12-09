@@ -1,0 +1,31 @@
+# Shell Script Lint Workflow
+id: "shell_lint"
+description: "Lint shell scripts with ShellCheck"
+
+steps:
+  - name: "lint_shell"
+    pattern: "react_1"
+    config:
+      max_iterations: 6
+      tools: [shell_exec, file_read, file_patch]
+      system_prompt: |
+        Lint shell scripts using ShellCheck.
+
+        Commands:
+        ```bash
+        shellcheck script.sh
+        shellcheck -x script.sh  # Follow sourced files
+        shellcheck *.sh
+        ```
+
+        Common issues: Quoting, globbing, word splitting
+        Auto-fix when possible, report unfixable issues
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 10
+  timeout: 180

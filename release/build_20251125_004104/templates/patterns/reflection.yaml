@@ -1,0 +1,277 @@
+# Reflection Pattern Configuration Template
+# Reflection: Self-critique and iterative improvement
+# Pattern: Generate → Critique → Refine → Critique → Refine → ...
+
+name: reflection
+type: reflection
+description: Self-critique and iterative improvement for high-quality output
+
+# Pattern Overview
+# The Reflection pattern uses two agents: a generator and a critic. The generator
+# creates an initial solution, the critic evaluates it and provides feedback, then
+# the generator refines based on the critique. This cycle repeats until quality
+# criteria are met or iteration limit is reached.
+
+# When to Use Reflection
+# - Code review and quality assessment
+# - Output quality is critical
+# - Self-critique improves results
+# - Iterative refinement adds value
+# - Documentation writing
+# - Architecture design
+# - Security analysis
+
+# Configuration
+config:
+  # Maximum number of generate-critique-refine cycles
+  max_iterations: 3
+
+  # Quality threshold (0.0-1.0)
+  # Stop when critique score meets or exceeds this
+  quality_threshold: 0.85
+
+  # Generator LLM Configuration
+  # Creates initial output and refinements
+  generator_config:
+    model: "gpt-4"  # Or: claude-3-sonnet, o1
+    temperature: 0.6  # Moderate creativity
+    max_tokens: 3000  # Enough for detailed output
+
+  # Critic LLM Configuration
+  # Evaluates output and provides feedback
+  critic_config:
+    model: "gpt-4"  # Or: claude-3-sonnet
+    temperature: 0.3  # More analytical, less creative
+    max_tokens: 1500  # Critiques are typically shorter
+
+  # Tools available (typically minimal for reflection)
+  tools:
+    - file_read
+    - shell_exec
+
+# System Prompts
+prompts:
+  # Generator system prompt
+  generator: |
+    You are an expert {domain} specialist creating high-quality {output_type}.
+
+    Task: {task_description}
+
+    Requirements:
+    {requirements}
+
+    Create the best possible output following all requirements and best practices.
+
+  # Critic system prompt
+  critic: |
+    You are a rigorous code reviewer and quality assessor.
+
+    Evaluate the following {output_type}:
+    {generated_output}
+
+    Assessment criteria:
+    1. Correctness - Does it work as intended?
+    2. Completeness - Are all requirements met?
+    3. Code quality - Is it well-structured and readable?
+    4. Best practices - Does it follow conventions?
+    5. Edge cases - Are potential issues handled?
+    6. Security - Are there any vulnerabilities?
+    7. Performance - Is it efficient?
+    8. Maintainability - Is it easy to modify?
+
+    Provide:
+    1. Quality score (0.0-1.0)
+    2. Strengths (what's good)
+    3. Weaknesses (what needs improvement)
+    4. Specific actionable feedback for refinement
+
+    Be thorough but constructive.
+
+  # Refinement system prompt
+  refinement: |
+    Your previous output received this critique:
+    {critique}
+
+    Quality score: {score}
+
+    Refine your output addressing all feedback points:
+    {feedback}
+
+    Improve the output while maintaining its strengths.
+
+# Example Reflection Cycle
+example:
+  task: "Write a secure user authentication function"
+
+  iteration_1:
+    generation: |
+      fn authenticate_user(username: &str, password: &str) -> bool {
+          let stored_hash = get_password_hash(username);
+          password == stored_hash
+      }
+
+    critique:
+      score: 0.3
+      strengths:
+        - "Clear function signature"
+        - "Simple to understand"
+      weaknesses:
+        - "Password comparison not secure (timing attack)"
+        - "No error handling"
+        - "Storing plaintext in comparison"
+        - "No rate limiting"
+      feedback:
+        - "Use constant-time comparison"
+        - "Hash the input password before comparing"
+        - "Add Result return type for error handling"
+        - "Consider rate limiting"
+
+  iteration_2:
+    generation: |
+      use subtle::ConstantTimeEq;
+      use argon2::{self, Config};
+
+      fn authenticate_user(username: &str, password: &str) -> Result<bool, AuthError> {
+          let stored_hash = get_password_hash(username)?;
+          let password_hash = argon2::hash_encoded(
+              password.as_bytes(),
+              &get_salt(username)?,
+              &Config::default()
+          )?;
+
+          Ok(password_hash.as_bytes().ct_eq(stored_hash.as_bytes()).into())
+      }
+
+    critique:
+      score: 0.8
+      strengths:
+        - "Constant-time comparison"
+        - "Password hashing with Argon2"
+        - "Error handling with Result"
+        - "Proper types"
+      weaknesses:
+        - "Should verify hash instead of hashing again"
+        - "No rate limiting"
+        - "Could add audit logging"
+      feedback:
+        - "Use argon2::verify_encoded instead"
+        - "Consider adding rate limit check"
+
+  iteration_3:
+    generation: |
+      use subtle::ConstantTimeEq;
+      use argon2;
+
+      fn authenticate_user(username: &str, password: &str) -> Result<bool, AuthError> {
+          rate_limiter::check(username)?;
+
+          let stored_hash = get_password_hash(username)?;
+          let matches = argon2::verify_encoded(&stored_hash, password.as_bytes())?;
+
+          audit_log::record_auth_attempt(username, matches);
+
+          Ok(matches)
+      }
+
+    critique:
+      score: 0.92
+      strengths:
+        - "Proper hash verification"
+        - "Rate limiting"
+        - "Audit logging"
+        - "Secure and maintainable"
+      result: "Quality threshold met (0.92 > 0.85)"
+
+# Performance Characteristics
+performance:
+  speed: "slow"  # Multiple generation + critique cycles
+  latency: "high"  # 3-10 LLM calls typically
+  flexibility: "low"  # Structured, systematic process
+  quality: "very high"  # Iterative refinement yields excellent results
+
+# Use Cases
+use_cases:
+  - name: "Code review"
+    description: "Comprehensive code quality assessment"
+    typical_iterations: "2-3"
+
+  - name: "Security analysis"
+    description: "Finding and fixing security issues"
+    typical_iterations: "2-4"
+
+  - name: "Architecture design"
+    description: "Designing robust system architectures"
+    typical_iterations: "2-3"
+
+  - name: "Documentation writing"
+    description: "Creating clear, comprehensive docs"
+    typical_iterations: "2-3"
+
+  - name: "API design"
+    description: "Designing clean, usable APIs"
+    typical_iterations: "2-4"
+
+# Best Practices
+best_practices:
+  - "Set quality_threshold appropriate to the task (0.75-0.9)"
+  - "Limit iterations to 2-4 to avoid over-refinement"
+  - "Make critique criteria explicit and measurable"
+  - "Generator should incorporate ALL critique feedback"
+  - "Critic should provide specific, actionable feedback"
+  - "Use different temperatures for generator (higher) and critic (lower)"
+
+# Common Pitfalls
+pitfalls:
+  - "Too many iterations leading to over-engineering"
+  - "Critic being too lenient (threshold too low)"
+  - "Critic being too harsh (never meeting threshold)"
+  - "Generator ignoring critique feedback"
+  - "Vague, non-actionable criticism"
+  - "Not preserving strengths during refinement"
+
+# Optimization Tips
+optimization:
+  - "Start with quality_threshold of 0.8, adjust based on results"
+  - "Use max_iterations of 3 for most tasks"
+  - "Critic temperature 0.2-0.4 for consistent evaluation"
+  - "Generator temperature 0.5-0.7 for balance"
+  - "Same model for generator and critic works well"
+  - "Provide clear assessment criteria to critic"
+
+# Quality Threshold Guidelines
+thresholds:
+  experimental: 0.60  # Quick prototypes, learning
+  development: 0.75  # Regular development work
+  production: 0.85  # Production-ready code
+  critical: 0.90  # Security, safety-critical systems
+
+# Comparison with Other Patterns
+vs_react: |
+  Reflection is better when:
+  - Output quality is paramount
+  - Self-critique adds significant value
+  - Time for iteration is available
+
+  ReAct is better when:
+  - Speed matters more than perfection
+  - First attempt usually works
+  - Task is exploratory rather than creative
+
+vs_plan_execute: |
+  Reflection is better when:
+  - Creating artifacts (code, docs, designs)
+  - Quality improvement through critique is valuable
+  - Perfectionism pays off
+
+  Plan-Execute is better when:
+  - Executing procedures rather than creating artifacts
+  - Steps are clear and don't need refinement
+  - Systematic execution more important than quality iteration
+
+# When NOT to Use Reflection
+avoid_when:
+  - "Task is simple and first attempt is usually good enough"
+  - "Time constraints are tight"
+  - "Quality differences between iterations are minimal"
+  - "Critique doesn't actually improve output"
+  - "Task requires action rather than creation"

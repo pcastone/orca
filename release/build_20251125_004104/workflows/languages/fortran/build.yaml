@@ -1,0 +1,32 @@
+# Fortran Build Workflow
+id: "fortran_build"
+description: "Compile Fortran project with gfortran/ifort"
+
+steps:
+  - name: "build_fortran"
+    pattern: "react_1"
+    config:
+      max_iterations: 8
+      tools: [shell_exec, file_read, file_patch, grep]
+      system_prompt: |
+        Compile Fortran code using gfortran or ifort.
+
+        Commands:
+        ```bash
+        gfortran -o program main.f90
+        gfortran -O2 -o program main.f90 module.f90
+        ifort -o program main.f90
+        make  # if Makefile exists
+        ```
+
+        Common errors: Missing modules, type mismatches, syntax errors
+        Fix: Check module imports, fix declarations, verify syntax
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 12
+  timeout: 300

@@ -8,9 +8,11 @@
 
 mod schema;
 mod loader;
+pub mod deep_merge;
 
-pub use schema::{OrcaConfig, DatabaseConfig, LlmConfig, ExecutionConfig, LoggingConfig, BudgetConfig, WorkflowConfig};
+pub use schema::{OrcaConfig, DatabaseConfig, ExecutionConfig, LoggingConfig, BudgetConfig, WorkflowConfig, BackupConfig};
 pub use loader::ConfigLoader;
+pub use deep_merge::{deep_merge, deep_merge_with_options, MergeOptions, ArrayMergeStrategy, NullHandling};
 
 use crate::Result;
 

@@ -1,0 +1,127 @@
+# Regression Testing Workflow
+# Pattern: Plan-Execute (Systematic test execution)
+# Purpose: Verify that existing functionality still works after changes
+# Complexity: High
+# Use Cases:
+# - Validate that bug fixes don't break existing features
+# - Test after refactoring to ensure behavior is preserved
+# - Verify backward compatibility after updates
+# - Run comprehensive test suites before releases
+# - Compare behavior before and after code changes
+
+id: "regression_test"
+description: "Run regression tests to verify existing functionality after changes"
+
+steps:
+  - name: "analyze_and_test"
+    pattern: "plan_execute_1"
+    config:
+      # Plan comprehensive test coverage
+      max_steps: 15
+
+      # Enable replanning if tests reveal issues
+      replanning_enabled: true
+
+      # Tools for regression testing
+      tools:
+        - file_read
+        - grep
+        - shell_exec
+        - git_diff
+        - git_status
+        - fs_list
+
+      # System prompt for the planner
+      planner_config:
+        temperature: 0.6
+        system_prompt: |
+          You are a regression testing expert creating a comprehensive test plan.
+
+          Regression Testing Plan Structure:
+          1. Identify what changed (use git_diff)
+          2. Map changes to affected functionality
+          3. Identify existing tests that cover affected areas
+          4. Run relevant test suites
+          5. Document any failures or unexpected behavior
+          6. Compare results with expected baseline
+          7. Report findings with clear pass/fail status
+
+          Planning Considerations:
+          - Prioritize tests that directly cover modified code
+          - Include tests for dependent modules
+          - Consider edge cases and boundary conditions
+          - Plan for both unit and integration tests
+          - Include smoke tests for critical paths
+
+          Create a systematic plan to validate that changes don't break existing functionality.
+
+      # System prompt for the executor
+      executor_config:
+        temperature: 0.4
+        system_prompt: |
+          You are executing a regression testing plan to verify code stability.
+
+          For each step:
+          1. Execute the test commands precisely
+          2. Capture all output including errors
+          3. Record pass/fail status clearly
+          4. Note any warnings or unexpected behavior
+          5. Document test execution time if relevant
+
+          Test Execution Best Practices:
+          - Run tests in isolation when possible
+          - Clear any cached state that might affect results
+          - Use verbose output to capture details
+          - Save test outputs for comparison
+          - Track flaky tests vs consistent failures
+
+          When reporting results:
+          - Clearly state PASS or FAIL for each test
+          - Include error messages and stack traces for failures
+          - Note any tests that were skipped and why
+          - Summarize overall regression status
+
+    on_success:
+      end: true
+
+    on_failure: "focused_regression"
+
+  # Fallback: run focused tests on critical paths
+  - name: "focused_regression"
+    pattern: "react_1"
+    config:
+      max_iterations: 10
+      tools:
+        - file_read
+        - shell_exec
+        - grep
+        - git_diff
+
+      system_prompt: |
+        The comprehensive regression testing encountered issues. Focus on critical paths.
+
+        Focused Regression Approach:
+        1. Identify the most critical functionality affected by changes
+        2. Run only the essential tests for those areas
+        3. Document what passed and what failed
+        4. Note what tests couldn't be run and why
+
+        Focus on getting clear signal on core functionality rather than comprehensive coverage.
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+# Settings for regression testing
+settings:
+  max_total_steps: 25
+  enable_retries: true
+  max_retries: 2
+  timeout: 900  # 15 minutes for comprehensive testing
+
+# Usage Examples:
+# aco workflow execute regression_test --input "Run regression tests after the auth refactoring"
+# aco workflow execute regression_test --input "Verify all tests pass after upgrading the database library"
+# aco workflow execute regression_test --input "Check for regressions in the payment module after the bug fix"

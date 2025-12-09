@@ -1,0 +1,62 @@
+# Angular Full Validation Workflow
+id: "angular_validate"
+description: "Complete Angular validation: lint, test, and build"
+
+steps:
+  - name: "validate_angular"
+    pattern: "plan_execute"
+    config:
+      max_iterations: 15
+      tools: [shell_exec, file_read, grep]
+
+      system_prompt: |
+        Complete Angular application validation.
+
+        PHASES:
+        1. **LINTING** - ng lint
+        2. **TESTING** - Jasmine/Karma or Jest
+        3. **BUILD** - Production build
+
+        ═══ PHASE 1: LINTING ═══
+        ```bash
+        ng lint
+        # With specific rules
+        ng lint --format stylish
+        ```
+        Check: Angular-specific rules, TypeScript rules
+
+        ═══ PHASE 2: TESTING ═══
+        ```bash
+        ng test --watch=false --code-coverage --browsers=ChromeHeadless
+        ```
+        Requirements:
+        - All tests pass
+        - Coverage >= 80%
+        - No browser console errors
+
+        ═══ PHASE 3: BUILD ═══
+        ```bash
+        ng build --configuration production
+        # Check output
+        ls -lh dist/
+        ```
+        Verify:
+        - AOT compilation succeeds
+        - Build optimization complete
+        - No lazy loading errors
+
+        ═══ VALIDATION CHECKLIST ═══
+        - [ ] ng lint passes
+        - [ ] All unit tests pass
+        - [ ] Coverage >= 80%
+        - [ ] Production build succeeds
+        - [ ] AOT compilation clean
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 18
+  timeout: 900

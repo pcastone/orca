@@ -1,0 +1,38 @@
+[package]
+name = "orca_install"
+version.workspace = true
+edition.workspace = true
+description = "Installation and initialization tool for orca and aco applications"
+
+[[bin]]
+name = "orca_install"
+path = "src/main.rs"
+
+[dependencies]
+# Serialization
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+toml = { workspace = true }
+serde_json = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Database
+sqlx = { version = "0.7", features = ["runtime-tokio", "sqlite"] }
+
+# CLI
+clap = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Utilities
+chrono = { workspace = true }
+uuid = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Directories
+dirs = "5.0"

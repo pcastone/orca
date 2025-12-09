@@ -43,6 +43,9 @@ pub enum OrcaError {
     /// LLM error
     LlmError(String),
 
+    /// Validation error (YAML schema, data format, etc.)
+    Validation(String),
+
     /// IO error
     Io(std::io::Error),
 
@@ -72,6 +75,7 @@ impl fmt::Display for OrcaError {
             Self::NotFound(msg) => write!(f, "Not found: {}", msg),
             Self::BudgetExceeded(msg) => write!(f, "Budget exceeded: {}", msg),
             Self::LlmError(msg) => write!(f, "LLM error: {}", msg),
+            Self::Validation(msg) => write!(f, "Validation error: {}", msg),
             Self::Io(err) => write!(f, "IO error: {}", err),
             Self::Serde(err) => write!(f, "Serialization error: {}", err),
             Self::Sqlx(err) => write!(f, "SQL error: {}", err),

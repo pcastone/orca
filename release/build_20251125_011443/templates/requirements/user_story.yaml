@@ -1,0 +1,174 @@
+# User Story Template
+# Defines standard format and validation for user stories
+
+# Story Format
+format:
+  title:
+    pattern: "[Action] [Object] for [User]"
+    max_length: 80
+    examples:
+      - "Add password reset for registered users"
+      - "Export analytics data for administrators"
+
+  story:
+    template: |
+      As a [user_type]
+      I want [goal]
+      So that [benefit]
+
+    fields:
+      user_type:
+        description: "Specific user role or persona"
+        examples:
+          - "registered user"
+          - "system administrator"
+          - "guest visitor"
+          - "API consumer"
+
+      goal:
+        description: "What the user wants to accomplish"
+        examples:
+          - "reset my password via email"
+          - "export my data in CSV format"
+
+      benefit:
+        description: "Why this is valuable"
+        examples:
+          - "I can regain access to my account"
+          - "I can analyze the data in external tools"
+
+# Acceptance Criteria Format
+acceptance_criteria:
+  format: "gherkin"  # gherkin | checklist
+
+  gherkin_template: |
+    Given [precondition]
+    When [action]
+    Then [expected result]
+
+  example:
+    - "Given a user is on the login page"
+    - "When they click 'Forgot Password'"
+    - "Then they see the password reset form"
+
+  minimum_count: 3
+  maximum_count: 10
+
+# INVEST Validation
+invest_criteria:
+  independent:
+    question: "Can this story be developed without depending on other stories?"
+    pass_criteria: "No hard dependencies on unfinished work"
+
+  negotiable:
+    question: "Are implementation details flexible?"
+    pass_criteria: "Story describes WHAT, not HOW"
+
+  valuable:
+    question: "Does this deliver user or business value?"
+    pass_criteria: "Clear benefit statement"
+
+  estimable:
+    question: "Can the team estimate the effort?"
+    pass_criteria: "Scope is clear enough to estimate"
+
+  small:
+    question: "Can this be completed in one sprint?"
+    pass_criteria: "Estimated at 8 story points or less"
+
+  testable:
+    question: "Can we verify this is complete?"
+    pass_criteria: "Acceptance criteria are specific and measurable"
+
+# Additional Sections
+sections:
+  edge_cases:
+    required: true
+    description: "Unusual or boundary scenarios"
+    minimum_count: 2
+
+  out_of_scope:
+    required: false
+    description: "Explicitly excluded functionality"
+
+  dependencies:
+    required: true
+    description: "External dependencies or prerequisites"
+
+  technical_notes:
+    required: false
+    description: "Implementation hints or constraints"
+
+  mockups:
+    required: false
+    description: "Links to UI mockups or wireframes"
+
+# Estimation
+estimation:
+  method: "story_points"  # story_points | hours | t_shirt
+
+  story_points_scale:
+    - value: 1
+      label: "XS"
+      description: "Trivial change, < 1 hour"
+    - value: 2
+      label: "S"
+      description: "Small, 1-4 hours"
+    - value: 3
+      label: "M"
+      description: "Medium, 4-8 hours"
+    - value: 5
+      label: "L"
+      description: "Large, 1-2 days"
+    - value: 8
+      label: "XL"
+      description: "Extra large, 3-5 days"
+    - value: 13
+      label: "Epic"
+      description: "Too large, needs breakdown"
+
+# Labels/Tags
+labels:
+  types:
+    - feature
+    - enhancement
+    - bug
+    - technical_debt
+    - documentation
+
+  priorities:
+    - critical
+    - high
+    - medium
+    - low
+
+# Output Template
+output_template: |
+  ## User Story: {title}
+
+  ### Story
+  As a {user_type}
+  I want {goal}
+  So that {benefit}
+
+  ### Acceptance Criteria
+  {acceptance_criteria}
+
+  ### Edge Cases
+  {edge_cases}
+
+  ### Out of Scope
+  {out_of_scope}
+
+  ### Dependencies
+  {dependencies}
+
+  ### Technical Notes
+  {technical_notes}
+
+  ### Estimate
+  {estimate} story points
+
+  ### Labels
+  Type: {type}
+  Priority: {priority}

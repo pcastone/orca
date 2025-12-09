@@ -1,0 +1,54 @@
+# JavaScript Full Validation Workflow
+id: "javascript_validate"
+description: "Complete JavaScript validation: lint, test, and build"
+
+steps:
+  - name: "validate_js"
+    pattern: "plan_execute"
+    config:
+      max_iterations: 12
+      tools: [shell_exec, file_read, grep]
+
+      system_prompt: |
+        Complete JavaScript validation pipeline.
+
+        PHASES:
+        1. **LINTING** - ESLint check
+        2. **TESTING** - Jest/Mocha with coverage
+        3. **BUILD** - Production build verification
+
+        ═══ PHASE 1: LINTING ═══
+        ```bash
+        npx eslint . --max-warnings 0
+        npx eslint . --format stylish
+        ```
+        Expected: 0 errors, 0 warnings
+
+        ═══ PHASE 2: TESTING ═══
+        ```bash
+        npm test -- --coverage --watchAll=false
+        # or
+        jest --coverage --ci
+        ```
+        Required: All tests pass, coverage >= 80%
+
+        ═══ PHASE 3: BUILD ═══
+        ```bash
+        npm run build
+        ```
+        Verify: Build succeeds, output exists
+
+        ═══ VALIDATION CHECKLIST ═══
+        - [ ] ESLint passes
+        - [ ] All tests pass
+        - [ ] Coverage >= 80%
+        - [ ] Build succeeds
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 15
+  timeout: 600

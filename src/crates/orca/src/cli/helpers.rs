@@ -1,8 +1,7 @@
 //! Helper functions for CLI budget and LLM profile loading
 
 use crate::error::Result;
-use crate::models::Budget;
-use crate::models::LlmProfile;
+use crate::models::{Budget, LlmProfile};
 use crate::repositories::{BudgetRepository, LlmProfileRepository};
 use crate::DatabaseManager;
 use std::sync::Arc;
@@ -16,26 +15,10 @@ pub async fn load_active_budget(db_manager: Arc<DatabaseManager>) -> Result<Opti
     repo.get_active().await
 }
 
-/// Load the active LLM profile from database
-///
-/// Returns the active profile if one is configured and active, otherwise None
-pub async fn load_active_llm_profile(db_manager: Arc<DatabaseManager>) -> Result<Option<LlmProfile>> {
-    let user_db = db_manager.user_db().clone();
-    let repo = LlmProfileRepository::new(user_db);
-    repo.get_active().await
-}
-
 /// Load a budget by name
 pub async fn load_budget_by_name(db_manager: Arc<DatabaseManager>, name: &str) -> Result<Option<Budget>> {
     let user_db = db_manager.user_db().clone();
     let repo = BudgetRepository::new(user_db);
-    repo.get_by_name(name).await
-}
-
-/// Load an LLM profile by name
-pub async fn load_llm_profile_by_name(db_manager: Arc<DatabaseManager>, name: &str) -> Result<Option<LlmProfile>> {
-    let user_db = db_manager.user_db().clone();
-    let repo = LlmProfileRepository::new(user_db);
     repo.get_by_name(name).await
 }
 
@@ -44,6 +27,22 @@ pub async fn list_all_budgets(db_manager: Arc<DatabaseManager>) -> Result<Vec<Bu
     let user_db = db_manager.user_db().clone();
     let repo = BudgetRepository::new(user_db);
     repo.list_all().await
+}
+
+/// Load the active LLM profile from database
+///
+/// Returns the active LLM profile if one is configured and active, otherwise None
+pub async fn load_active_llm_profile(db_manager: Arc<DatabaseManager>) -> Result<Option<LlmProfile>> {
+    let user_db = db_manager.user_db().clone();
+    let repo = LlmProfileRepository::new(user_db);
+    repo.get_active().await
+}
+
+/// Load an LLM profile by name
+pub async fn load_llm_profile_by_name(db_manager: Arc<DatabaseManager>, name: &str) -> Result<Option<LlmProfile>> {
+    let user_db = db_manager.user_db().clone();
+    let repo = LlmProfileRepository::new(user_db);
+    repo.get_by_name(name).await
 }
 
 /// List all available LLM profiles

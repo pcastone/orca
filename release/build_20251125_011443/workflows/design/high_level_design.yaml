@@ -1,0 +1,204 @@
+# High-Level Design Workflow
+# Pattern: Plan-Execute with Reflection
+# Purpose: Create sequence diagrams, data models, and API sketches
+# Complexity: High
+# Use Cases:
+# - Design new features before implementation
+# - Create architecture documentation
+# - Define API contracts
+# - Model data structures
+
+id: "high_level_design"
+description: "Create high-level design with sequence diagrams, data models, and API sketches"
+
+steps:
+  - name: "create_design"
+    pattern: "plan_execute_1"
+    config:
+      max_steps: 15
+
+      replanning_enabled: true
+
+      tools:
+        - file_read
+        - grep
+        - fs_list
+        - file_write
+        - shell_exec
+
+      planner_config:
+        temperature: 0.7
+        system_prompt: |
+          You are a software architect creating a high-level design plan.
+
+          Design Artifacts to Create:
+
+          1. Component Overview:
+             - Key components involved
+             - Responsibilities of each
+             - Interactions between them
+
+          2. Sequence Diagram (Mermaid):
+             - Main flow
+             - Error flows
+             - Async operations
+
+          3. Data Model:
+             - Entities and relationships
+             - Key attributes
+             - Constraints
+
+          4. API Contract:
+             - Endpoints
+             - Request/response schemas
+             - Error responses
+             - Authentication
+
+          Plan Steps:
+          1. Understand the feature requirements
+          2. Identify components and boundaries
+          3. Map the main interaction flow
+          4. Design data structures
+          5. Define API contracts
+          6. Document error handling
+          7. Note technical decisions and trade-offs
+
+      executor_config:
+        temperature: 0.5
+        system_prompt: |
+          You are creating design documentation.
+
+          Output Format:
+          ```markdown
+          # High-Level Design: [Feature Name]
+
+          ## Overview
+          [Brief description of the feature and its purpose]
+
+          ## Components
+          | Component | Responsibility | Dependencies |
+          |-----------|----------------|--------------|
+          | ...       | ...            | ...          |
+
+          ## Sequence Diagram
+          ```mermaid
+          sequenceDiagram
+              participant User
+              participant API
+              participant Service
+              participant DB
+
+              User->>API: request
+              API->>Service: process
+              Service->>DB: query
+              DB-->>Service: result
+              Service-->>API: response
+              API-->>User: result
+          ```
+
+          ## Data Model
+          ```mermaid
+          erDiagram
+              ENTITY1 ||--o{ ENTITY2 : has
+              ENTITY1 {
+                  id uuid PK
+                  name string
+                  created_at timestamp
+              }
+          ```
+
+          ## API Contract
+          ### POST /api/resource
+          **Request:**
+          ```json
+          {
+            "field": "value"
+          }
+          ```
+          **Response:**
+          ```json
+          {
+            "id": "uuid",
+            "status": "created"
+          }
+          ```
+
+          ## Error Handling
+          | Error | Code | Response |
+          |-------|------|----------|
+          | ...   | ...  | ...      |
+
+          ## Technical Decisions
+          - Decision 1: [rationale]
+          - Decision 2: [rationale]
+
+          ## Open Questions
+          - ...
+          ```
+
+    on_success: "review_design"
+
+    on_failure:
+      end: true
+
+  - name: "review_design"
+    pattern: "reflection_1"
+    config:
+      max_iterations: 3
+
+      critique_enabled: true
+
+      tools:
+        - file_read
+
+      system_prompt: |
+        You are reviewing the high-level design for quality and completeness.
+
+        REVIEW CRITERIA:
+
+        1. Completeness:
+           - All components identified?
+           - All flows covered?
+           - Error cases handled?
+
+        2. Clarity:
+           - Diagrams understandable?
+           - Naming consistent?
+           - Responsibilities clear?
+
+        3. Feasibility:
+           - Can this be implemented?
+           - Are there technical blockers?
+           - Dependencies available?
+
+        4. Scalability:
+           - Will it handle load?
+           - Can it be extended?
+           - Are there bottlenecks?
+
+        5. Security:
+           - Auth/authz considered?
+           - Data protection?
+           - Input validation?
+
+        Provide:
+        - Issues found
+        - Suggestions for improvement
+        - Final assessment (Ready / Needs Work)
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 25
+  enable_retries: true
+  max_retries: 1
+  timeout: 900
+
+# Usage Examples:
+# aco workflow execute high_level_design --input "Design the user authentication system"
+# aco workflow execute high_level_design --input "Create API design for order management"
+# aco workflow execute high_level_design --input "Design the data model for multi-tenancy"

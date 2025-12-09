@@ -11,6 +11,8 @@ members = [
     "src/crates/rtoon",
     "src/crates/tooling",
     "src/crates/utils",
+    "src/crates/playground",
+    "src/crates/orca_install",
 ]
 
 [workspace.package]
@@ -81,7 +83,7 @@ async-stream = "0.3"
 rcgen = "0.11"
 
 # TUI
-ratatui = "0.28"
+ratatui = "0.29"
 crossterm = "0.28"
 parking_lot = "0.12"
 

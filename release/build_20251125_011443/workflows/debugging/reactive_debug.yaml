@@ -1,0 +1,81 @@
+# Reactive Debugging Workflow
+# Pattern: ReAct (Reasoning + Acting)
+# Purpose: Debug errors by analyzing code, running tests, and checking logs
+#
+# This workflow uses the ReAct pattern which combines reasoning with tool execution
+# in a tight loop. The agent will think about what to do, execute tools, observe
+# results, and iterate until the issue is identified.
+#
+# Use Cases:
+# - Debug runtime errors and exceptions
+# - Identify root causes of test failures
+# - Analyze stack traces and error messages
+# - Investigate unexpected behavior
+#
+# Tools Available:
+# - file_read: Read source files to understand code
+# - grep: Search for patterns across the codebase
+# - shell_exec: Run tests, linters, or diagnostic commands
+# - git_diff: View recent changes that might have introduced bugs
+
+id: "reactive_debugging"
+description: "Debug issues using reactive tool calling with ReAct pattern"
+
+steps:
+  - name: "analyze_and_debug"
+    pattern: "react_1"
+    config:
+      # Maximum iterations for the ReAct loop
+      max_iterations: 10
+
+      # Tools available during debugging
+      tools:
+        - file_read
+        - grep
+        - shell_exec
+        - git_diff
+
+      # System prompt to guide the debugging process
+      system_prompt: |
+        You are a debugging assistant powered by the ReAct (Reasoning + Acting) pattern.
+
+        Your task is to identify the root cause of errors by:
+        1. Analyzing error messages and stack traces
+        2. Reading relevant source files to understand the code
+        3. Running diagnostic commands (tests, linters, etc.)
+        4. Examining recent changes that might have introduced the bug
+
+        For each iteration, you should:
+        - THINK: Reason about what information you need next
+        - ACT: Execute the appropriate tool to gather that information
+        - OBSERVE: Analyze the tool output
+        - DECIDE: Either continue investigating or conclude with your findings
+
+        When you identify the root cause, provide:
+        - Clear explanation of what's wrong
+        - File and line number where the issue occurs
+        - Suggested fix or next steps
+
+        Remember:
+        - Read error messages carefully for clues
+        - Use grep to find relevant code patterns
+        - Run tests to reproduce the issue
+        - Check git diff to see recent changes
+        - Be systematic and thorough
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+# Global workflow settings
+settings:
+  # Maximum total steps across all workflow stages
+  max_total_steps: 15
+
+  # Enable automatic retries for transient failures
+  enable_retries: true
+
+  # Maximum number of retries per step
+  max_retries: 2

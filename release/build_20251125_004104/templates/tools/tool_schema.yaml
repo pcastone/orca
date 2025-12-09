@@ -1,0 +1,175 @@
+# Tool Schema Definition Template
+# This template defines the structure for tool definitions in the Orca system
+
+tool_name: "example_tool"
+category: "filesystem"  # Categories: filesystem, git, shell, network, analysis
+description: "Brief description of what this tool does"
+
+# Detailed explanation of the tool's purpose and use cases
+long_description: |
+  Comprehensive explanation of the tool including:
+  - What it does
+  - When to use it
+  - Common use cases
+  - Important notes or warnings
+
+# Tool parameters/arguments
+parameters:
+  - name: "param1"
+    type: "string"  # Types: string, integer, boolean, array, object
+    required: true
+    description: "Description of this parameter"
+    default: null  # Optional default value
+    validation:
+      pattern: "^[a-zA-Z0-9_-]+$"  # Optional regex pattern
+      min_length: 1  # Optional minimum length
+      max_length: 255  # Optional maximum length
+
+  - name: "param2"
+    type: "integer"
+    required: false
+    description: "Optional parameter with default"
+    default: 100
+    validation:
+      min: 0
+      max: 1000
+
+  - name: "param3"
+    type: "boolean"
+    required: false
+    description: "Boolean flag"
+    default: false
+
+  - name: "param4"
+    type: "array"
+    required: false
+    description: "Array of strings"
+    items:
+      type: "string"
+
+  - name: "param5"
+    type: "object"
+    required: false
+    description: "Object with properties"
+    properties:
+      key1:
+        type: "string"
+      key2:
+        type: "integer"
+
+# Return value structure
+returns:
+  type: "object"
+  description: "What the tool returns"
+  properties:
+    status:
+      type: "string"
+      description: "Status of the operation"
+      enum: ["success", "failure"]
+
+    result:
+      type: "string"
+      description: "Main result data"
+
+    metadata:
+      type: "object"
+      description: "Additional metadata"
+      properties:
+        timestamp:
+          type: "integer"
+        duration_ms:
+          type: "integer"
+
+# Possible errors this tool can return
+errors:
+  - code: "E_NOT_FOUND"
+    description: "Resource not found"
+    conditions:
+      - "File does not exist"
+      - "Path is invalid"
+
+  - code: "E_PERMISSION"
+    description: "Permission denied"
+    conditions:
+      - "No read access"
+      - "Path outside sandbox"
+
+  - code: "E_INVALID_INPUT"
+    description: "Invalid input parameters"
+    conditions:
+      - "Parameter validation failed"
+      - "Required parameter missing"
+
+  - code: "E_TIMEOUT"
+    description: "Operation timed out"
+    conditions:
+      - "Exceeded timeout limit"
+
+# Security and safety constraints
+security:
+  sandbox: true  # Runs in sandboxed environment
+  requires_approval: false  # Requires user approval
+  audit_log: true  # Log all executions
+
+  # Path restrictions (for filesystem tools)
+  path_restrictions:
+    allow_parent_traversal: false
+    allowed_paths: ["workspace"]
+    blocked_paths: [".git/config", "*.key"]
+
+  # Command restrictions (for shell tools)
+  command_restrictions:
+    allowlist: ["^cargo\\s", "^git\\s"]
+    denylist: ["rm\\s+-rf\\s+/"]
+
+# Performance characteristics
+performance:
+  timeout_ms: 10000  # Default timeout
+  max_retries: 3  # Maximum retry attempts
+  rate_limit: 100  # Max calls per minute
+
+# Usage examples
+examples:
+  - description: "Basic usage"
+    input:
+      param1: "value1"
+      param2: 50
+    output:
+      status: "success"
+      result: "Operation completed"
+    explanation: "Simple example showing typical usage"
+
+  - description: "Advanced usage with options"
+    input:
+      param1: "advanced"
+      param2: 200
+      param3: true
+      param4: ["item1", "item2"]
+    output:
+      status: "success"
+      result: "Complex operation completed"
+    explanation: "Example with multiple parameters"
+
+  - description: "Error case"
+    input:
+      param1: ""  # Invalid empty string
+    output:
+      error:
+        code: "E_INVALID_INPUT"
+        message: "param1 cannot be empty"
+    explanation: "Example showing error handling"
+
+# Related tools
+related_tools:
+  - "similar_tool_1"
+  - "complementary_tool_2"
+
+# Version and metadata
+metadata:
+  version: "1.0.0"
+  added: "2025-01-15"
+  deprecated: false
+  stability: "stable"  # Options: experimental, beta, stable, deprecated
+  tags:
+    - "file-operations"
+    - "read"

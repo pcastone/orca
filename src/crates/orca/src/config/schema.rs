@@ -6,13 +6,13 @@ use std::path::PathBuf;
 /// Main Orca configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct OrcaConfig {
+    /// User-defined project name for tracking metrics
+    #[serde(default)]
+    pub project_name: Option<String>,
+
     /// Database configuration
     #[serde(default)]
     pub database: DatabaseConfig,
-
-    /// LLM configuration
-    #[serde(default)]
-    pub llm: LlmConfig,
 
     /// Execution configuration
     #[serde(default)]
@@ -29,6 +29,10 @@ pub struct OrcaConfig {
     /// Workflow configuration
     #[serde(default)]
     pub workflow: WorkflowConfig,
+
+    /// Backup configuration
+    #[serde(default)]
+    pub backup: BackupConfig,
 }
 
 /// Database configuration
@@ -42,41 +46,6 @@ impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
             path: "orca.db".to_string(),
-        }
-    }
-}
-
-/// LLM provider configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LlmConfig {
-    /// LLM provider: "openai", "anthropic", "gemini", "ollama", etc.
-    pub provider: String,
-
-    /// Model name
-    pub model: String,
-
-    /// API key (supports environment variable interpolation)
-    pub api_key: Option<String>,
-
-    /// Temperature for generation (0.0-1.0)
-    pub temperature: f32,
-
-    /// Maximum tokens to generate
-    pub max_tokens: u32,
-
-    /// API base URL (for custom endpoints)
-    pub api_base: Option<String>,
-}
-
-impl Default for LlmConfig {
-    fn default() -> Self {
-        Self {
-            provider: "anthropic".to_string(),
-            model: "claude-3-sonnet".to_string(),
-            api_key: None,
-            temperature: 0.7,
-            max_tokens: 4096,
-            api_base: None,
         }
     }
 }
@@ -209,6 +178,18 @@ pub struct LoggingConfig {
 
     /// Show timestamps
     pub timestamps: bool,
+
+    /// Directory for log files (if set, logs are written to files)
+    #[serde(default)]
+    pub log_directory: Option<String>,
+
+    /// Log file name prefix (default: "orca")
+    #[serde(default = "default_log_prefix")]
+    pub log_prefix: String,
+}
+
+fn default_log_prefix() -> String {
+    "orca".to_string()
 }
 
 impl Default for LoggingConfig {
@@ -218,6 +199,8 @@ impl Default for LoggingConfig {
             format: "compact".to_string(),
             colored: true,
             timestamps: true,
+            log_directory: None,
+            log_prefix: "orca".to_string(),
         }
     }
 }
@@ -249,18 +232,24 @@ impl Default for BudgetConfig {
     }
 }
 
+/// Backup configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupConfig {
+    /// Backup directory path (defaults to ~/.orca/backups/)
+    pub backup_dir: Option<PathBuf>,
+}
+
+impl Default for BackupConfig {
+    fn default() -> Self {
+        Self {
+            backup_dir: None, // Will use ~/.orca/backups/ if None
+        }
+    }
+}
+
 /// Workflow configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowConfig {
-    /// Default LLM profile to use for workflows (by name)
-    pub default_llm_profile: Option<String>,
-
-    /// Default planner LLM (format: provider:model)
-    pub default_planner_llm: Option<String>,
-
-    /// Default worker LLM (format: provider:model)
-    pub default_worker_llm: Option<String>,
-
     /// Enable workflow caching
     pub enable_caching: bool,
 
@@ -274,9 +263,6 @@ pub struct WorkflowConfig {
 impl Default for WorkflowConfig {
     fn default() -> Self {
         Self {
-            default_llm_profile: None,
-            default_planner_llm: None,
-            default_worker_llm: None,
             enable_caching: false,
             cache_ttl_secs: 3600,
             max_duration_secs: 3600,
@@ -290,33 +276,31 @@ impl OrcaConfig {
     /// The loader handles priority: defaults → user → project
     pub fn merge(&mut self, other: OrcaConfig) {
         // Simple field replacement - serde fills in defaults for missing fields
+        if other.project_name.is_some() {
+            self.project_name = other.project_name;
+        }
         self.database = other.database;
-        self.llm = other.llm;
         self.execution = other.execution;
         self.logging = other.logging;
         self.budget = other.budget;
         self.workflow = other.workflow;
+        self.backup = other.backup;
     }
 
     /// Resolve environment variables in configuration values
     ///
     /// Supports ${VAR_NAME} syntax in string fields
+    /// Note: LLM configuration is now database-only (llm_profiles table)
     pub fn resolve_env_vars(&mut self) {
-        // Resolve API key environment variable
-        if let Some(ref api_key) = self.llm.api_key {
-            self.llm.api_key = Some(Self::expand_env_var(api_key));
-        }
-
-        // Resolve API base URL if present
-        if let Some(ref api_base) = self.llm.api_base {
-            self.llm.api_base = Some(Self::expand_env_var(api_base));
-        }
+        // No config-based env vars to resolve - LLM config is now database-only
+        // This method is kept for future expansion if needed
     }
 
     /// Expand environment variable in a string
     ///
     /// Supports ${VAR_NAME} syntax
-    fn expand_env_var(value: &str) -> String {
+    /// Public utility for expanding env vars in database values
+    pub fn expand_env_var(value: &str) -> String {
         if value.starts_with("${") && value.ends_with('}') {
             let var_name = &value[2..value.len() - 1];
             std::env::var(var_name).unwrap_or_else(|_| value.to_string())
@@ -341,6 +325,29 @@ impl OrcaConfig {
                 .join(path)
         }
     }
+
+    /// Get the resolved backup directory path
+    ///
+    /// Returns configured path or defaults to ~/.orca/backups/
+    pub fn backup_dir(&self) -> PathBuf {
+        if let Some(ref path) = self.backup.backup_dir {
+            if path.is_absolute() {
+                path.clone()
+            } else {
+                // Resolve relative to ~/.orca
+                dirs::home_dir()
+                    .expect("Failed to get home directory")
+                    .join(".orca")
+                    .join(path)
+            }
+        } else {
+            // Default to ~/.orca/backups/
+            dirs::home_dir()
+                .expect("Failed to get home directory")
+                .join(".orca")
+                .join("backups")
+        }
+    }
 }
 
 #[cfg(test)]
@@ -351,35 +358,34 @@ mod tests {
     fn test_default_config() {
         let config = OrcaConfig::default();
         assert_eq!(config.database.path, "orca.db");
-        assert_eq!(config.llm.provider, "anthropic");
-        assert_eq!(config.llm.model, "claude-3-sonnet");
         assert_eq!(config.execution.max_concurrent_tasks, 5);
         assert_eq!(config.logging.level, "info");
+        // LLM configuration is now database-only (llm_profiles table)
     }
 
     #[test]
     fn test_merge_config() {
         let mut base = OrcaConfig::default();
         let mut override_config = OrcaConfig::default();
-        override_config.llm.model = "claude-3-opus".to_string();
         override_config.execution.max_concurrent_tasks = 10;
 
         base.merge(override_config);
 
-        assert_eq!(base.llm.model, "claude-3-opus");
         assert_eq!(base.execution.max_concurrent_tasks, 10);
-        assert_eq!(base.llm.provider, "anthropic"); // Unchanged
+        // LLM configuration is now database-only (llm_profiles table)
     }
 
     #[test]
     fn test_env_var_expansion() {
-        let mut config = OrcaConfig::default();
-        config.llm.api_key = Some("${TEST_API_KEY}".to_string());
-
+        // Test the expand_env_var utility function
         std::env::set_var("TEST_API_KEY", "test-key-123");
-        config.resolve_env_vars();
 
-        assert_eq!(config.llm.api_key, Some("test-key-123".to_string()));
+        let result = OrcaConfig::expand_env_var("${TEST_API_KEY}");
+        assert_eq!(result, "test-key-123");
+
+        // Test non-env var string passes through
+        let result = OrcaConfig::expand_env_var("plain-string");
+        assert_eq!(result, "plain-string");
 
         std::env::remove_var("TEST_API_KEY");
     }

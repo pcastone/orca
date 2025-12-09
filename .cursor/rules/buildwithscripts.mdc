@@ -1,0 +1,4 @@
+---
+alwaysApply: false
+---
+Build programs with scripts a much as possiable; Unless debugging or trouble shooting.  After debugging and trouble shooting rerun with scripts. 

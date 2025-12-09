@@ -131,13 +131,8 @@ impl HealthChecker {
         // Basic validation checks
         let mut issues = Vec::new();
 
-        if config.llm.model.is_empty() {
-            issues.push("LLM model not configured");
-        }
-
-        if config.llm.api_key.is_none() && config.llm.provider != "ollama" {
-            issues.push("API key not set for non-local provider");
-        }
+        // LLM configuration is now database-only (llm_profiles table)
+        // LLM health checks should be done via check_llm_profile()
 
         if config.execution.max_concurrent_tasks == 0 {
             issues.push("max_concurrent_tasks is 0");

@@ -17,6 +17,11 @@ crate-type = ["cdylib", "rlib"]
 [[bin]]
 name = "orchestrator-server"
 path = "src/bin/orchestrator-server.rs"
+required-features = ["orca-integration"]
+
+[features]
+default = ["orca-integration"]
+orca-integration = ["dep:orca"]
 
 [dependencies]
 tokio = { workspace = true }
@@ -39,10 +44,13 @@ regex = { workspace = true }
 sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio", "migrate"] }
 tiktoken-rs = "0.5"
 rand = "0.8"
+tar = "0.4"
+hex = "0.4"
 
 # gRPC
 tonic = "0.11"
 prost = "0.12"
+async-stream = "0.3"
 
 # LDAP
 ldap3 = "0.11"
@@ -65,12 +73,18 @@ langgraph-core = { workspace = true }
 langgraph-prebuilt = { workspace = true }
 tooling = { workspace = true }
 llm = { path = "../llm" }
-orca = { path = "../orca" }
+orca = { path = "../orca", optional = true }
 dirs = "5.0"
 
 # Authentication
 base64 = "0.22"
 sha2 = "0.10"
+
+# AST parsing with tree-sitter
+tree-sitter = "0.24"
+tree-sitter-rust = "0.23"
+tree-sitter-python = "0.23"
+walkdir = "2.4"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "macros"] }

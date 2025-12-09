@@ -2,7 +2,7 @@
 
 use crate::db::Database;
 use crate::error::{OrcaError, Result};
-use crate::models::Bug;
+use crate::models::{Bug, BugStats};
 use chrono::Utc;
 use sqlx::Row;
 use std::sync::Arc;
@@ -239,5 +239,51 @@ impl BugRepository {
             .map_err(|e| OrcaError::Database(format!("Failed to count bugs: {}", e)))?;
 
         Ok(row.get("count"))
+    }
+
+    /// Get bug statistics
+    pub async fn get_stats(&self) -> Result<BugStats> {
+        // Count by status
+        let status_row = sqlx::query(
+            "SELECT
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) as open,
+                SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
+                SUM(CASE WHEN status = 'fixed' THEN 1 ELSE 0 END) as fixed,
+                SUM(CASE WHEN status = 'wontfix' THEN 1 ELSE 0 END) as wontfix,
+                SUM(CASE WHEN status = 'duplicate' THEN 1 ELSE 0 END) as duplicate
+             FROM bugs"
+        )
+        .fetch_one(self.db.pool())
+        .await
+        .map_err(|e| OrcaError::Database(format!("Failed to get bug stats: {}", e)))?;
+
+        // Count by priority
+        let priority_row = sqlx::query(
+            "SELECT
+                SUM(CASE WHEN priority = 1 THEN 1 ELSE 0 END) as critical,
+                SUM(CASE WHEN priority = 2 THEN 1 ELSE 0 END) as high,
+                SUM(CASE WHEN priority = 3 THEN 1 ELSE 0 END) as medium,
+                SUM(CASE WHEN priority = 4 THEN 1 ELSE 0 END) as low,
+                SUM(CASE WHEN priority = 5 THEN 1 ELSE 0 END) as trivial
+             FROM bugs"
+        )
+        .fetch_one(self.db.pool())
+        .await
+        .map_err(|e| OrcaError::Database(format!("Failed to get bug priority stats: {}", e)))?;
+
+        Ok(BugStats {
+            total: status_row.get("total"),
+            open: status_row.get("open"),
+            in_progress: status_row.get("in_progress"),
+            fixed: status_row.get("fixed"),
+            wontfix: status_row.get("wontfix"),
+            duplicate: status_row.get("duplicate"),
+            critical: priority_row.get("critical"),
+            high: priority_row.get("high"),
+            medium: priority_row.get("medium"),
+            low: priority_row.get("low"),
+            trivial: priority_row.get("trivial"),
+        })
     }
 }

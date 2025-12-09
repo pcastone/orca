@@ -43,7 +43,7 @@ impl Database {
             }
         }
 
-        let database_url = format!("sqlite:{}", path_str);
+        let database_url = format!("sqlite:{}?mode=rwc", path_str);
         debug!(url = %database_url, "Connecting to database");
 
         let pool = SqlitePoolOptions::new()
@@ -82,7 +82,7 @@ impl Database {
             }
         }
 
-        let database_url = format!("sqlite:{}", path_str);
+        let database_url = format!("sqlite:{}?mode=rwc", path_str);
 
         let pool = SqlitePoolOptions::new()
             .max_connections(max_connections)
@@ -167,13 +167,12 @@ impl Database {
         info!("Database connection closed");
     }
 
-    /// Initialize the database with schema
+    /// Initialize the database connection (creates file if needed)
     ///
-    /// This creates a new database and runs all migrations
+    /// Note: This only creates the connection. Migrations should be run
+    /// separately via DatabaseManager which knows the database type.
     pub async fn initialize<P: AsRef<Path>>(database_path: P) -> Result<Self> {
-        let db = Self::new(database_path).await?;
-        db.run_migrations().await?;
-        Ok(db)
+        Self::new(database_path).await
     }
 
     /// Create an in-memory test database with migrations applied

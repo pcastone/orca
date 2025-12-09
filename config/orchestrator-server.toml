@@ -1,0 +1,30 @@
+[server]
+name = "Test Orchestrator"
+
+[database]
+path = "/Users/pcastone/.orca/orchestrator.db"
+
+[ssl]
+cipher = "AES256-GCM-SHA384"
+version = "1.3"
+mac = "SHA384"
+mode = "auto"
+
+[security]
+mode = "open"
+
+[ldap]
+enabled = false
+server_url = "ldap://localhost:389"
+dn = "cn=admin,dc=example,dc=com"
+suffix = "dc=example,dc=com"
+group = "cn=users"
+readonly_login = "admin:password"
+
+[llm]
+enabled = true
+provider = "ollama"
+model = "gemma3:1b"
+api_base = "http://localhost:11434"
+temperature = 0.7
+max_tokens = 4096

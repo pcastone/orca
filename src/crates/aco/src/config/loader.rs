@@ -78,6 +78,20 @@ impl ConfigLoader {
         self.load_from_path(&self.project_config_path).await
     }
 
+    /// Save configuration to user config file (~/.aco/aco.toml)
+    pub async fn save_user_config(&self, config: &AcoConfig) -> Result<()> {
+        // Ensure parent directory exists
+        if let Some(parent) = self.user_config_path.parent() {
+            fs::create_dir_all(parent).await?;
+        }
+
+        let toml_str = toml::to_string_pretty(config)
+            .map_err(|e| AcoError::Config(format!("Failed to serialize config: {}", e)))?;
+
+        fs::write(&self.user_config_path, toml_str).await?;
+        Ok(())
+    }
+
     /// Get user config path
     pub fn get_user_config_path(&self) -> &PathBuf {
         &self.user_config_path

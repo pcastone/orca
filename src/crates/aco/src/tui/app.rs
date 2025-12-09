@@ -19,6 +19,10 @@ pub enum View {
     WorkflowList,
     /// Workflow details view
     WorkflowDetail,
+    /// Bug list view
+    BugList,
+    /// Bug details view
+    BugDetail,
     /// Execution streaming view
     ExecutionStream,
     /// Help/about view
@@ -38,6 +42,8 @@ impl std::fmt::Display for View {
             View::TaskDetail => write!(f, "Task Detail"),
             View::WorkflowList => write!(f, "Workflow List"),
             View::WorkflowDetail => write!(f, "Workflow Detail"),
+            View::BugList => write!(f, "Bug List"),
+            View::BugDetail => write!(f, "Bug Detail"),
             View::ExecutionStream => write!(f, "Execution Stream"),
             View::Help => write!(f, "Help"),
         }
@@ -55,6 +61,9 @@ pub struct AppState {
 
     /// Selected workflow ID (if any)
     pub selected_workflow_id: Option<String>,
+
+    /// Selected bug ID (if any)
+    pub selected_bug_id: Option<String>,
 
     /// Server URL
     pub server_url: String,
@@ -84,6 +93,7 @@ impl Default for AppState {
             view: View::default(),
             selected_task_id: None,
             selected_workflow_id: None,
+            selected_bug_id: None,
             server_url: "http://localhost:50051".to_string(),
             auth: ConnectAuth::None,
             last_update: Instant::now(),
@@ -110,6 +120,9 @@ pub struct App {
     /// Workflow list items
     pub workflows: Vec<WorkflowItem>,
 
+    /// Bug list items
+    pub bugs: Vec<BugItem>,
+
     /// Execution events
     pub execution_events: Vec<ExecutionEvent>,
 
@@ -121,6 +134,18 @@ pub struct App {
 
     /// Selected item index
     pub selected: usize,
+
+    /// Pending backup operation
+    pub pending_backup: bool,
+
+    /// Pending restore operation
+    pub pending_restore: bool,
+
+    /// Pending export operation
+    pub pending_export: bool,
+
+    /// Pending import operation
+    pub pending_import: bool,
 }
 
 /// Task list item
@@ -189,6 +214,40 @@ pub struct ExecutionEvent {
     pub status: String,
 }
 
+/// Bug list item
+#[derive(Debug, Clone)]
+pub struct BugItem {
+    /// Bug ID
+    pub id: String,
+
+    /// Bug title
+    pub title: String,
+
+    /// Bug description
+    pub description: Option<String>,
+
+    /// Bug status (open, in_progress, fixed, wontfix, duplicate)
+    pub status: String,
+
+    /// Bug priority (1=Critical, 2=High, 3=Medium, 4=Low, 5=Trivial)
+    pub priority: i64,
+
+    /// Severity
+    pub severity: Option<String>,
+
+    /// Assignee
+    pub assignee: Option<String>,
+
+    /// Reporter
+    pub reporter: Option<String>,
+
+    /// Bug created at
+    pub created_at: String,
+
+    /// Bug updated at
+    pub updated_at: String,
+}
+
 impl App {
     /// Create a new app instance from config
     pub fn new(config: TuiConfig) -> Self {
@@ -203,11 +262,143 @@ impl App {
             grpc_client,
             tasks: Vec::new(),
             workflows: Vec::new(),
+            bugs: Vec::new(),
             execution_events: Vec::new(),
             executing_id: None,
             scroll: 0,
             selected: 0,
+            pending_backup: false,
+            pending_restore: false,
+            pending_export: false,
+            pending_import: false,
         }
+    }
+
+    /// Handle backup operation via orchestrator API
+    pub async fn handle_backup(&mut self) -> Result<()> {
+        self.set_status("Creating backup...".to_string());
+
+        let url = format!("{}/api/v1/data/backup", self.state.server_url);
+        let client = reqwest::Client::new();
+
+        match client.post(&url)
+            .json(&serde_json::json!({ "include_project": true }))
+            .send()
+            .await
+        {
+            Ok(response) => {
+                if response.status().is_success() {
+                    let result: serde_json::Value = response.json().await
+                        .map_err(|e| crate::error::AcoError::General(format!("Failed to parse response: {}", e)))?;
+                    let path = result.get("path")
+                        .and_then(|p| p.as_str())
+                        .unwrap_or("unknown");
+                    self.set_status(format!("Backup created: {}", path));
+                } else {
+                    let error_text = response.text().await.unwrap_or_default();
+                    self.set_error(format!("Backup failed: {}", error_text));
+                }
+            }
+            Err(e) => {
+                self.set_error(format!("Backup failed: {}", e));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Handle restore operation via orchestrator API
+    pub async fn handle_restore(&mut self) -> Result<()> {
+        self.set_status("Listing backups...".to_string());
+
+        let url = format!("{}/api/v1/data/backups", self.state.server_url);
+        let client = reqwest::Client::new();
+
+        match client.get(&url).send().await {
+            Ok(response) => {
+                if response.status().is_success() {
+                    let backups: Vec<serde_json::Value> = response.json().await
+                        .map_err(|e| crate::error::AcoError::General(format!("Failed to parse response: {}", e)))?;
+
+                    if backups.is_empty() {
+                        self.set_status("No backups available to restore".to_string());
+                        return Ok(());
+                    }
+
+                    // Restore the most recent backup
+                    let latest = &backups[0];
+                    let backup_path = latest.get("path")
+                        .and_then(|p| p.as_str())
+                        .ok_or_else(|| crate::error::AcoError::General("No backup path found".to_string()))?;
+
+                    let restore_url = format!("{}/api/v1/data/restore", self.state.server_url);
+                    match client.post(&restore_url)
+                        .json(&serde_json::json!({ "backup_file": backup_path }))
+                        .send()
+                        .await
+                    {
+                        Ok(resp) => {
+                            if resp.status().is_success() {
+                                self.set_status(format!("Restored from: {}", backup_path));
+                            } else {
+                                let error_text = resp.text().await.unwrap_or_default();
+                                self.set_error(format!("Restore failed: {}", error_text));
+                            }
+                        }
+                        Err(e) => {
+                            self.set_error(format!("Restore failed: {}", e));
+                        }
+                    }
+                } else {
+                    let error_text = response.text().await.unwrap_or_default();
+                    self.set_error(format!("Failed to list backups: {}", error_text));
+                }
+            }
+            Err(e) => {
+                self.set_error(format!("Failed to list backups: {}", e));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Handle export operation via orchestrator API
+    pub async fn handle_export(&mut self) -> Result<()> {
+        self.set_status("Exporting data...".to_string());
+
+        let url = format!("{}/api/v1/data/export", self.state.server_url);
+        let client = reqwest::Client::new();
+
+        match client.post(&url)
+            .json(&serde_json::json!({ "tables": ["all"] }))
+            .send()
+            .await
+        {
+            Ok(response) => {
+                if response.status().is_success() {
+                    let content = response.text().await.unwrap_or_default();
+                    let lines = content.lines().count();
+                    self.set_status(format!("Export completed: {} lines exported", lines));
+                } else {
+                    let error_text = response.text().await.unwrap_or_default();
+                    self.set_error(format!("Export failed: {}", error_text));
+                }
+            }
+            Err(e) => {
+                self.set_error(format!("Export failed: {}", e));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Handle import operation via orchestrator API
+    pub async fn handle_import(&mut self) -> Result<()> {
+        self.set_status("Import requires SQL file content...".to_string());
+        // Note: Import in TUI would need file picker dialog
+        // For now, just show a message
+        self.set_status("Import not available in TUI. Use CLI: aco data import <file>".to_string());
+        Ok(())
     }
 
     /// Refresh tasks from server
@@ -266,6 +457,40 @@ impl App {
             }
             Err(e) => {
                 let err_msg = format!("Failed to refresh workflows: {}", e);
+                self.set_error(err_msg.clone());
+                Err(e)
+            }
+        }
+    }
+
+    /// Refresh bugs from server
+    pub async fn refresh_bugs(&mut self) -> Result<()> {
+        debug!("Refreshing bugs");
+        self.set_status("Refreshing bugs...".to_string());
+
+        match self.grpc_client.fetch_bugs().await {
+            Ok(bug_infos) => {
+                self.clear_bugs();
+                for bug_info in bug_infos {
+                    self.add_bug(BugItem {
+                        id: bug_info.id,
+                        title: bug_info.title,
+                        description: bug_info.description,
+                        status: bug_info.status,
+                        priority: bug_info.priority,
+                        severity: bug_info.severity,
+                        assignee: bug_info.assignee,
+                        reporter: bug_info.reporter,
+                        created_at: bug_info.created_at,
+                        updated_at: bug_info.updated_at,
+                    });
+                }
+                self.state.last_refresh = Instant::now();
+                self.set_status(format!("Loaded {} bugs", self.bugs.len()));
+                Ok(())
+            }
+            Err(e) => {
+                let err_msg = format!("Failed to refresh bugs: {}", e);
                 self.set_error(err_msg.clone());
                 Err(e)
             }
@@ -338,10 +563,12 @@ impl App {
         use View::*;
         let new_view = match self.state.view {
             TaskList => WorkflowList,
-            WorkflowList => Help,
+            WorkflowList => BugList,
+            BugList => Help,
             Help => TaskList,
             TaskDetail => WorkflowDetail,
-            WorkflowDetail => ExecutionStream,
+            WorkflowDetail => BugDetail,
+            BugDetail => ExecutionStream,
             ExecutionStream => TaskDetail,
         };
         self.set_view(new_view);
@@ -353,10 +580,12 @@ impl App {
         let new_view = match self.state.view {
             TaskList => Help,
             WorkflowList => TaskList,
-            Help => WorkflowList,
+            BugList => WorkflowList,
+            Help => BugList,
             TaskDetail => ExecutionStream,
             WorkflowDetail => TaskDetail,
-            ExecutionStream => WorkflowDetail,
+            BugDetail => WorkflowDetail,
+            ExecutionStream => BugDetail,
         };
         self.set_view(new_view);
     }
@@ -386,6 +615,12 @@ impl App {
                     self.set_view(View::WorkflowDetail);
                 }
             }
+            View::BugList => {
+                if let Some(bug) = self.selected_bug() {
+                    self.state.selected_bug_id = Some(bug.id.clone());
+                    self.set_view(View::BugDetail);
+                }
+            }
             _ => {}
         }
     }
@@ -400,6 +635,10 @@ impl App {
             View::WorkflowDetail => {
                 self.state.selected_workflow_id = None;
                 self.set_view(View::WorkflowList);
+            }
+            View::BugDetail => {
+                self.state.selected_bug_id = None;
+                self.set_view(View::BugList);
             }
             _ => {}
         }
@@ -468,6 +707,7 @@ impl App {
         let max = match self.state.view {
             View::TaskList => self.tasks.len(),
             View::WorkflowList => self.workflows.len(),
+            View::BugList => self.bugs.len(),
             _ => 0,
         };
 
@@ -498,6 +738,7 @@ impl App {
         let max = match self.state.view {
             View::TaskList => self.tasks.len(),
             View::WorkflowList => self.workflows.len(),
+            View::BugList => self.bugs.len(),
             _ => 0,
         };
         if max > 0 {
@@ -517,6 +758,7 @@ impl App {
         let max = match self.state.view {
             View::TaskList => self.tasks.len(),
             View::WorkflowList => self.workflows.len(),
+            View::BugList => self.bugs.len(),
             _ => 0,
         };
         if max > 0 {
@@ -538,6 +780,11 @@ impl App {
     /// Get current selected workflow
     pub fn selected_workflow(&self) -> Option<&WorkflowItem> {
         self.workflows.get(self.selected)
+    }
+
+    /// Get current selected bug
+    pub fn selected_bug(&self) -> Option<&BugItem> {
+        self.bugs.get(self.selected)
     }
 
     /// Get selected task ID
@@ -572,6 +819,28 @@ impl App {
         self.workflows.clear();
         self.selected = 0;
         self.scroll = 0;
+    }
+
+    /// Add a bug to the list
+    pub fn add_bug(&mut self, bug: BugItem) {
+        self.bugs.push(bug);
+    }
+
+    /// Clear all bugs
+    pub fn clear_bugs(&mut self) {
+        self.bugs.clear();
+        self.selected = 0;
+        self.scroll = 0;
+    }
+
+    /// Set selected bug ID
+    pub fn set_selected_bug_id(&mut self, id: Option<String>) {
+        self.state.selected_bug_id = id;
+    }
+
+    /// Get selected bug ID
+    pub fn selected_bug_id(&self) -> Option<&str> {
+        self.state.selected_bug_id.as_deref()
     }
 
     /// Get server URL

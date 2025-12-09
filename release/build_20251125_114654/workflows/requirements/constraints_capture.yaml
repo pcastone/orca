@@ -1,0 +1,127 @@
+# Constraints Capture Workflow
+# Pattern: Plan-Execute (Systematic gathering)
+# Purpose: Capture performance, security, and dependency constraints
+# Complexity: Medium
+# Use Cases:
+# - Document non-functional requirements
+# - Identify performance targets
+# - Capture security requirements
+# - Map external dependencies
+
+id: "constraints_capture"
+description: "Capture performance, security, and dependency constraints for a feature"
+
+steps:
+  - name: "gather_constraints"
+    pattern: "plan_execute_1"
+    config:
+      max_steps: 12
+
+      replanning_enabled: true
+
+      tools:
+        - file_read
+        - grep
+        - fs_list
+        - shell_exec
+        - file_write
+
+      planner_config:
+        temperature: 0.6
+        system_prompt: |
+          You are a requirements analyst creating a plan to capture all constraints.
+
+          Constraint Categories to Investigate:
+
+          1. Performance Constraints:
+             - Response time / latency targets
+             - Throughput requirements
+             - Concurrent user limits
+             - Data volume expectations
+             - Resource limits (CPU, memory)
+
+          2. Security Constraints:
+             - Authentication requirements
+             - Authorization / access control
+             - Data encryption needs
+             - Compliance requirements (GDPR, HIPAA, etc.)
+             - Audit logging needs
+
+          3. Dependencies:
+             - External services / APIs
+             - Database requirements
+             - Third-party libraries
+             - Infrastructure needs
+             - Other team dependencies
+
+          4. Operational Constraints:
+             - Deployment requirements
+             - Monitoring needs
+             - Backup/recovery
+             - Maintenance windows
+
+          Plan Steps:
+          1. Review existing documentation for stated constraints
+          2. Analyze similar features for patterns
+          3. Check configuration for limits
+          4. Identify external service dependencies
+          5. Document all constraints found
+          6. Flag constraints that need clarification
+
+      executor_config:
+        temperature: 0.4
+        system_prompt: |
+          You are executing a plan to capture constraints.
+
+          For each constraint found, document:
+          - Category (performance/security/dependency/operational)
+          - Specific requirement
+          - Source (where you found it)
+          - Current value or target
+          - Priority (must-have vs nice-to-have)
+          - Notes or concerns
+
+          Output Format:
+          ```markdown
+          ## Constraints Document
+
+          ### Performance
+          | Constraint | Target | Source | Priority |
+          |------------|--------|--------|----------|
+          | ...        | ...    | ...    | ...      |
+
+          ### Security
+          | Requirement | Details | Compliance | Priority |
+          |-------------|---------|------------|----------|
+          | ...         | ...     | ...        | ...      |
+
+          ### Dependencies
+          | Dependency | Type | Version | Notes |
+          |------------|------|---------|-------|
+          | ...        | ...  | ...     | ...   |
+
+          ### Operational
+          | Constraint | Requirement | Notes |
+          |------------|-------------|-------|
+          | ...        | ...         | ...   |
+
+          ### Needs Clarification
+          - ...
+          ```
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 15
+  enable_retries: true
+  max_retries: 1
+  timeout: 600
+
+# Usage Examples:
+# aco workflow execute constraints_capture --input "Capture constraints for the new payment processing feature"
+# aco workflow execute constraints_capture --input "Document security requirements for user data export"
+# aco workflow execute constraints_capture --input "What are the performance targets for the search API?"

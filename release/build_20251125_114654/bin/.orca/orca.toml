@@ -1,0 +1,37 @@
+[database]
+path = "orca.db"
+
+[execution]
+max_concurrent_tasks = 5
+task_timeout = 300
+streaming = true
+max_iterations = 10
+default_pattern = "react"
+reflection_quality_threshold = 0.75
+plan_execute_max_steps = 10
+retry_enabled = false
+max_retries = 3
+initial_retry_delay_secs = 1
+max_retry_delay_secs = 60
+retry_multiplier = 2.0
+show_thinking = true
+
+[logging]
+level = "debug"
+format = "compact"
+colored = true
+timestamps = true
+log_directory = "../log"
+log_prefix = "orca"
+
+[budget]
+enforce_budgets = true
+log_usage = true
+alert_threshold = 80.0
+
+[workflow]
+enable_caching = false
+cache_ttl_secs = 3600
+max_duration_secs = 3600
+
+[backup]

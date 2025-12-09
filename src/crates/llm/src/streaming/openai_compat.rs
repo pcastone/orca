@@ -342,7 +342,9 @@ mod tests {
 
         assert_eq!(body["model"], "gpt-4");
         assert_eq!(body["stream"], true);
-        assert_eq!(body["temperature"], 0.7);
+        // Use approximate comparison for floating point
+        let temp = body["temperature"].as_f64().unwrap();
+        assert!((temp - 0.7).abs() < 0.001, "Expected ~0.7, got {}", temp);
         assert_eq!(body["max_tokens"], 100);
     }
 }

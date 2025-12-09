@@ -5,7 +5,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Tabs, Wrap},
 };
-use super::app::{App, DialogState, FocusedArea, SidebarTab, MenuState};
+use super::app::{App, DialogState, FocusedArea, SidebarTab, MenuState, ViewMode, ConfigSection, ConfigEditorForm, LlmFocusArea, LlmProfileEntry};
 use super::dialog;
 
 /// Render the complete UI
@@ -50,135 +50,9 @@ pub fn render_ui(f: &mut Frame, app: &App) {
         dialog::render_dialog(f, dlg);
     }
 
-    // Render LLM config form if dialog state is LlmProfileEdit or LlmProfileCreate
-    if app.dialog_state == DialogState::LlmProfileEdit || app.dialog_state == DialogState::LlmProfileCreate {
-        render_llm_config_form(f, app);
-    }
-
     // Render pattern selection dialog
     if app.dialog_state == DialogState::PatternSelect || app.dialog_state == DialogState::PatternList {
         render_pattern_select_dialog(f, app);
-    }
-}
-
-/// Render the LLM configuration form
-fn render_llm_config_form(f: &mut Frame, app: &App) {
-    let area = f.area();
-
-    // Calculate form dimensions (centered popup)
-    let form_width = 50.min(area.width.saturating_sub(4));
-    let form_height = 16.min(area.height.saturating_sub(4)); // 7 fields + title + buttons
-    let form_x = (area.width.saturating_sub(form_width)) / 2;
-    let form_y = (area.height.saturating_sub(form_height)) / 2;
-
-    let form_area = Rect {
-        x: form_x,
-        y: form_y,
-        width: form_width,
-        height: form_height,
-    };
-
-    // Clear the area
-    f.render_widget(Clear, form_area);
-
-    // Create form block
-    let title = if app.dialog_state == DialogState::LlmProfileCreate {
-        "Create LLM Configuration"
-    } else {
-        "Edit LLM Configuration"
-    };
-
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .style(Style::default().fg(Color::Cyan));
-
-    f.render_widget(block, form_area);
-
-    // Calculate inner area for fields
-    let inner_area = Rect {
-        x: form_area.x + 2,
-        y: form_area.y + 1,
-        width: form_area.width.saturating_sub(4),
-        height: form_area.height.saturating_sub(2),
-    };
-
-    // Render each field
-    let form = &app.llm_config_form;
-    let fields = [
-        ("Name", form.name.clone(), false),
-        ("Provider", form.provider.clone(), true),  // true = select type
-        ("Model", form.model.clone(), false),
-        ("API Key", if form.api_key.is_empty() { "(optional)".to_string() } else { "*".repeat(form.api_key.len().min(20)) }, false),
-        ("API Base", if form.api_base.is_empty() { "(optional)".to_string() } else { form.api_base.clone() }, false),
-        ("Temperature", form.temperature.clone(), false),
-        ("Max Tokens", form.max_tokens.clone(), false),
-    ];
-
-    for (i, (label, value, is_select)) in fields.iter().enumerate() {
-        if i >= inner_area.height as usize {
-            break;
-        }
-
-        let field_y = inner_area.y + i as u16;
-        let is_selected = i == form.selected_field;
-
-        // Label
-        let label_style = if is_selected {
-            Style::default().fg(Color::Yellow).bold()
-        } else {
-            Style::default().fg(Color::White)
-        };
-
-        let label_text = format!("{}: ", label);
-        let label_para = Paragraph::new(label_text).style(label_style);
-        let label_area = Rect {
-            x: inner_area.x,
-            y: field_y,
-            width: 14,
-            height: 1,
-        };
-        f.render_widget(label_para, label_area);
-
-        // Value
-        let value_style = if is_selected {
-            Style::default().bg(Color::Blue).fg(Color::White)
-        } else if value.starts_with('(') || value.starts_with('*') {
-            Style::default().fg(Color::DarkGray)
-        } else {
-            Style::default().fg(Color::Green)
-        };
-
-        let display_value = if *is_select && is_selected {
-            format!("< {} >", value)
-        } else {
-            value.clone()
-        };
-
-        let value_para = Paragraph::new(display_value).style(value_style);
-        let value_area = Rect {
-            x: inner_area.x + 14,
-            y: field_y,
-            width: inner_area.width.saturating_sub(14),
-            height: 1,
-        };
-        f.render_widget(value_para, value_area);
-    }
-
-    // Render help text at bottom
-    if inner_area.height > 9 {
-        let help_y = inner_area.y + inner_area.height - 2;
-        let help_text = "Tab: Next | Up/Down: Navigate | Enter: Save | Esc: Cancel";
-        let help_para = Paragraph::new(help_text)
-            .style(Style::default().fg(Color::DarkGray))
-            .alignment(Alignment::Center);
-        let help_area = Rect {
-            x: inner_area.x,
-            y: help_y,
-            width: inner_area.width,
-            height: 1,
-        };
-        f.render_widget(help_para, help_area);
     }
 }
 
@@ -316,18 +190,25 @@ fn render_menu(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(menu, area);
 }
 
-/// Render left side (conversation + prompts)
+/// Render left side (conversation + prompts OR config editor)
 fn render_left_side(f: &mut Frame, app: &App, area: Rect) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(5),     // Conversation
-            Constraint::Length(6),  // Prompts (3 lines + 2 for borders + 1 padding)
-        ])
-        .split(area);
+    match app.view_mode {
+        ViewMode::Conversation => {
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Min(5),     // Conversation
+                    Constraint::Length(6),  // Prompts (3 lines + 2 for borders + 1 padding)
+                ])
+                .split(area);
 
-    render_conversation(f, app, chunks[0]);
-    render_prompts(f, app, chunks[1]);
+            render_conversation(f, app, chunks[0]);
+            render_prompts(f, app, chunks[1]);
+        }
+        ViewMode::ConfigEditor => {
+            render_config_editor(f, app, area);
+        }
+    }
 }
 
 /// Render conversation area
@@ -343,21 +224,21 @@ fn render_conversation(f: &mut Frame, app: &App, area: Rect) {
             Style::default()
         });
 
-    let messages: Vec<ListItem> = app
+    // Join all messages with double newlines for visual separation
+    let content: String = app
         .conversation
         .iter()
-        .rev()
-        .skip(app.conversation_scroll as usize)
-        .take(area.height.saturating_sub(2) as usize)
-        .rev()
-        .map(|msg| ListItem::new(msg.clone()).style(Style::default().fg(Color::White)))
-        .collect();
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n\n");
 
-    let list = List::new(messages)
+    let paragraph = Paragraph::new(content)
         .block(block)
-        .style(Style::default());
+        .style(Style::default().fg(Color::White))
+        .wrap(Wrap { trim: true })
+        .scroll((app.conversation_scroll as u16, 0));
 
-    f.render_widget(list, area);
+    f.render_widget(paragraph, area);
 }
 
 /// Render prompts input area (supports up to 3 lines)
@@ -365,7 +246,7 @@ fn render_prompts(f: &mut Frame, app: &App, area: Rect) {
     let is_focused = matches!(app.focused, FocusedArea::Prompts);
 
     let block = Block::default()
-        .title("Prompts (Enter for newline, Ctrl+Enter to submit)")
+        .title("Prompts (Enter to submit)")
         .borders(Borders::ALL)
         .style(if is_focused {
             Style::default().fg(Color::Cyan).bold()
@@ -540,7 +421,7 @@ fn render_sidebar(f: &mut Frame, app: &App, area: Rect) {
 fn render_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let tokens_str = app.tokens_used.to_string();
     let mut status_parts: Vec<(&str, String)> = vec![
-        ("Status", "Ready".to_string()),
+        ("Status", app.status.clone()),
         ("Model", app.current_model.clone()),
         ("Runtime", app.runtime.clone()),
         ("Tokens", tokens_str),
@@ -630,20 +511,25 @@ fn get_menu_items(menu_state: MenuState) -> Vec<(&'static str, &'static str)> {
     match menu_state {
         MenuState::Closed => vec![],
         MenuState::FileOpen => vec![
-            ("📄", "New"),
-            ("📂", "Open"),
+            ("🔍", "Init"),
+            ("🔄", "Update"),
             ("💾", "Save"),
+            ("📦", "Backup"),
+            ("♻️", "Restore"),
+            ("📤", "Export"),
+            ("📥", "Import"),
             ("🚪", "Quit"),
         ],
         MenuState::EditOpen => vec![
-            ("🗑️", "Clear"),
-            ("📋", "Copy"),
-            ("⚙️", "Preferences"),
+            ("🔨", "Build"),
+            ("🔄", "Update"),
+            ("🔍", "Refine"),
+            ("🗑️", "Purge"),
+            ("🔎", "Search"),
         ],
         MenuState::ConfigOpen => vec![
             ("👁️", "View Config"),
             ("💰", "Budget"),
-            ("🤖", "LLM Profile"),
             ("🔀", "Pattern"),
             ("✎", "Editor"),
         ],
@@ -716,5 +602,630 @@ fn render_dropdown_menu(f: &mut Frame, app: &App, menu_area: Rect) {
         .block(Block::default().borders(Borders::ALL).style(Style::default().fg(Color::Cyan)));
 
     f.render_widget(list, popup_area);
+}
+
+/// Render the config editor in the main content area
+fn render_config_editor(f: &mut Frame, app: &App, area: Rect) {
+    // Create main layout with header bar and content
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),  // Header with Save/Cancel buttons
+            Constraint::Min(5),     // Config content
+        ])
+        .split(area);
+
+    // Render header with Save/Cancel buttons
+    render_config_header(f, app, chunks[0]);
+
+    // Render section tabs and content
+    let content_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(14), // Section tabs
+            Constraint::Min(20),    // Config fields
+        ])
+        .split(chunks[1]);
+
+    // Render section tabs
+    render_config_sections(f, app, content_chunks[0]);
+
+    // Render fields for current section
+    render_config_fields(f, app, content_chunks[1]);
+}
+
+/// Render config editor header with Save/Cancel buttons
+fn render_config_header(f: &mut Frame, app: &App, area: Rect) {
+    let form = &app.config_editor;
+
+    // Create layout for title and buttons
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Min(20),     // Title
+            Constraint::Length(25),  // Buttons
+        ])
+        .split(area);
+
+    // Title with modified indicator
+    let title = if form.modified {
+        "Configuration Editor *"
+    } else {
+        "Configuration Editor"
+    };
+
+    let title_block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::Cyan));
+
+    let help_text = "Tab: Section | Up/Down: Fields | Enter: Edit | Esc: Cancel";
+    let help_para = Paragraph::new(help_text)
+        .block(title_block)
+        .style(Style::default().fg(Color::DarkGray));
+    f.render_widget(help_para, chunks[0]);
+
+    // Buttons
+    let button_block = Block::default()
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::Cyan));
+
+    let save_style = if form.button_focus == 1 {
+        Style::default().bg(Color::Green).fg(Color::Black).bold()
+    } else {
+        Style::default().fg(Color::Green)
+    };
+
+    let cancel_style = if form.button_focus == 2 {
+        Style::default().bg(Color::Red).fg(Color::White).bold()
+    } else {
+        Style::default().fg(Color::Red)
+    };
+
+    let buttons = Line::from(vec![
+        Span::styled(" [Save] ", save_style),
+        Span::raw(" "),
+        Span::styled(" [Cancel] ", cancel_style),
+    ]);
+
+    let buttons_para = Paragraph::new(buttons)
+        .block(button_block)
+        .alignment(Alignment::Right);
+    f.render_widget(buttons_para, chunks[1]);
+}
+
+/// Render config section tabs on the left
+fn render_config_sections(f: &mut Frame, app: &App, area: Rect) {
+    let form = &app.config_editor;
+
+    let block = Block::default()
+        .title("Sections")
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::Cyan));
+
+    let sections: Vec<ListItem> = ConfigSection::all()
+        .iter()
+        .map(|section| {
+            let is_selected = *section == form.section;
+            let style = if is_selected {
+                Style::default().bg(Color::Blue).fg(Color::White).bold()
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            let marker = if is_selected { "▶ " } else { "  " };
+            ListItem::new(format!("{}{}", marker, section.name())).style(style)
+        })
+        .collect();
+
+    let list = List::new(sections).block(block);
+    f.render_widget(list, area);
+}
+
+/// Render config fields for the current section
+fn render_config_fields(f: &mut Frame, app: &App, area: Rect) {
+    let form = &app.config_editor;
+
+    // Special rendering for LLM section - table + detail view
+    if form.section == ConfigSection::Llm {
+        render_llm_section(f, app, area);
+        return;
+    }
+
+    let title = format!("{} Settings", form.section.name());
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::Cyan));
+
+    // Calculate inner area
+    let inner_area = Rect {
+        x: area.x + 2,
+        y: area.y + 2,
+        width: area.width.saturating_sub(4),
+        height: area.height.saturating_sub(3),
+    };
+
+    f.render_widget(block, area);
+
+    // Render each field
+    let field_count = form.field_count();
+    for i in 0..field_count {
+        if i >= inner_area.height as usize {
+            break;
+        }
+
+        let field_y = inner_area.y + i as u16;
+        let is_selected = i == form.field_index && form.button_focus == 0;
+        let is_editing = is_selected && form.editing;
+        let is_bool = form.is_bool_field(i);
+
+        // Field label
+        let label = form.field_name(i);
+        let label_width = 20.min(inner_area.width / 2) as usize;
+        let label_text = format!("{:width$}", label, width = label_width);
+
+        let label_style = if is_selected {
+            Style::default().fg(Color::Yellow).bold()
+        } else {
+            Style::default().fg(Color::White)
+        };
+
+        let label_area = Rect {
+            x: inner_area.x,
+            y: field_y,
+            width: label_width as u16,
+            height: 1,
+        };
+        f.render_widget(Paragraph::new(label_text).style(label_style), label_area);
+
+        // Check if field is a dropdown (for workflow section)
+        let is_dropdown = form.section == ConfigSection::Workflow
+            && ConfigEditorForm::is_workflow_dropdown_field(i);
+
+        // Field value
+        let value = if is_editing {
+            format!("{}│", form.edit_buffer)
+        } else {
+            form.field_value(i)
+        };
+
+        let value_style = if is_editing {
+            Style::default().bg(Color::Blue).fg(Color::White)
+        } else if is_selected {
+            Style::default().fg(Color::Cyan).bold()
+        } else if is_bool {
+            let bool_val = form.field_value(i);
+            if bool_val == "true" {
+                Style::default().fg(Color::Green)
+            } else {
+                Style::default().fg(Color::Red)
+            }
+        } else {
+            Style::default().fg(Color::Gray)
+        };
+
+        // Add toggle hint for boolean fields or dropdown indicator
+        let display_value = if is_bool && is_selected && !is_editing {
+            format!("{} (Space to toggle)", value)
+        } else if is_dropdown {
+            format!("{} ▼", value)
+        } else {
+            value
+        };
+
+        let value_area = Rect {
+            x: inner_area.x + label_width as u16 + 1,
+            y: field_y,
+            width: inner_area.width.saturating_sub(label_width as u16 + 1),
+            height: 1,
+        };
+        f.render_widget(Paragraph::new(display_value).style(value_style), value_area);
+    }
+
+    // Render dropdown overlay if open (for workflow section)
+    if form.section == ConfigSection::Workflow && form.dropdown_open {
+        render_workflow_dropdown(f, form, inner_area);
+    }
+}
+
+/// Render dropdown overlay for workflow section (planner/worker LLM selection)
+fn render_workflow_dropdown(f: &mut Frame, form: &ConfigEditorForm, form_area: Rect) {
+    let Some(field_index) = form.dropdown_field else {
+        return;
+    };
+
+    if form.dropdown_options.is_empty() {
+        return;
+    }
+
+    // Get field name for title
+    let field_name = form.field_name(field_index);
+
+    // Calculate dropdown position - below the field
+    let label_width = 20.min(form_area.width / 2) as u16;
+    let dropdown_x = form_area.x + label_width + 1;
+    let dropdown_y = form_area.y + field_index as u16 + 1;  // +1 to position below field
+
+    // Calculate dropdown size
+    let max_option_len = form.dropdown_options.iter()
+        .map(|s| s.len())
+        .max()
+        .unwrap_or(10);
+    let dropdown_width = (max_option_len + 4).min(40) as u16;  // +4 for padding and borders
+    let dropdown_height = (form.dropdown_options.len() + 2).min(10) as u16;  // +2 for borders
+
+    // Ensure dropdown fits on screen
+    let available_height = f.area().height.saturating_sub(dropdown_y);
+    let actual_height = dropdown_height.min(available_height);
+
+    let dropdown_area = Rect {
+        x: dropdown_x,
+        y: dropdown_y,
+        width: dropdown_width.min(form_area.width.saturating_sub(label_width + 1)),
+        height: actual_height,
+    };
+
+    // Only render if we have space
+    if dropdown_area.height < 3 || dropdown_area.width < 5 {
+        return;
+    }
+
+    // Clear the area
+    f.render_widget(Clear, dropdown_area);
+
+    // Create dropdown block
+    let block = Block::default()
+        .title(format!("Select {}", field_name))
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::Cyan));
+
+    // Create list items with highlighting
+    let visible_items = (actual_height - 2) as usize;  // -2 for borders
+    let scroll_offset = if form.dropdown_selected >= visible_items {
+        form.dropdown_selected - visible_items + 1
+    } else {
+        0
+    };
+
+    let list_items: Vec<ListItem> = form.dropdown_options
+        .iter()
+        .enumerate()
+        .skip(scroll_offset)
+        .take(visible_items)
+        .map(|(idx, option)| {
+            let is_selected = idx == form.dropdown_selected;
+            let style = if is_selected {
+                Style::default().bg(Color::Blue).fg(Color::White).bold()
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            let marker = if is_selected { "▶ " } else { "  " };
+            ListItem::new(format!("{}{}", marker, option)).style(style)
+        })
+        .collect();
+
+    let list = List::new(list_items).block(block);
+    f.render_widget(list, dropdown_area);
+
+    // Show scroll indicator if needed
+    if form.dropdown_options.len() > visible_items {
+        let scroll_info = format!("{}/{}", form.dropdown_selected + 1, form.dropdown_options.len());
+        let scroll_area = Rect {
+            x: dropdown_area.x + dropdown_area.width.saturating_sub(scroll_info.len() as u16 + 2),
+            y: dropdown_area.y + dropdown_area.height - 1,
+            width: scroll_info.len() as u16 + 1,
+            height: 1,
+        };
+        f.render_widget(
+            Paragraph::new(scroll_info).style(Style::default().fg(Color::DarkGray)),
+            scroll_area
+        );
+    }
+}
+
+/// Render LLM section with table at top and detail form at bottom
+fn render_llm_section(f: &mut Frame, app: &App, area: Rect) {
+    let form = &app.config_editor;
+
+    // Split into table (top) and detail (bottom)
+    let table_height = std::cmp::min(form.llm_profiles.len() as u16 + 3, 8);  // Header + profiles + borders
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(table_height),  // Profile table
+            Constraint::Min(5),                 // Detail form
+        ])
+        .split(area);
+
+    // Render profile table
+    render_llm_profile_table(f, app, chunks[0]);
+
+    // Render detail form for selected profile
+    render_llm_detail_form(f, app, chunks[1]);
+}
+
+/// Render LLM profile table
+fn render_llm_profile_table(f: &mut Frame, app: &App, area: Rect) {
+    let form = &app.config_editor;
+    let is_table_focused = form.llm_focus == LlmFocusArea::Table && form.button_focus == 0;
+
+    let border_color = if is_table_focused { Color::Yellow } else { Color::Cyan };
+    let block = Block::default()
+        .title("LLM Profiles [n=New c=Copy d=Delete Enter=Edit Tab=Switch]")
+        .borders(Borders::ALL)
+        .style(Style::default().fg(border_color));
+
+    // Handle empty state - no profiles configured
+    if form.llm_profiles.is_empty() {
+        let empty_msg = vec![
+            ListItem::new(""),
+            ListItem::new("  No LLM profiles configured.").style(Style::default().fg(Color::Yellow)),
+            ListItem::new(""),
+            ListItem::new("  Run 'orca_install init' to set up defaults,").style(Style::default().fg(Color::Gray)),
+            ListItem::new("  or press 'n' to create a new profile.").style(Style::default().fg(Color::Gray)),
+        ];
+        let list = List::new(empty_msg).block(block);
+        f.render_widget(list, area);
+        return;
+    }
+
+    // Create header row
+    let header_style = Style::default().fg(Color::Cyan).bold();
+    let header = format!("{:<15} {:<20} {:<12} {:<10}", "Name", "Model", "Provider", "Budget");
+
+    // Create profile rows
+    let mut rows: Vec<ListItem> = vec![ListItem::new(header).style(header_style)];
+
+    for (idx, profile) in form.llm_profiles.iter().enumerate() {
+        let is_selected = idx == form.llm_selected_index;
+        let style = if is_selected && is_table_focused {
+            Style::default().bg(Color::Blue).fg(Color::White)
+        } else if is_selected {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default().fg(Color::White)
+        };
+
+        let default_marker = if profile.is_default { "*" } else { " " };
+        let budget_display = if profile.budget.is_empty() { "-" } else { &profile.budget };
+        let row = format!("{}{:<14} {:<20} {:<12} {:<10}",
+            default_marker,
+            truncate_str(&profile.name, 14),
+            truncate_str(&profile.model, 20),
+            truncate_str(&profile.provider, 12),
+            truncate_str(budget_display, 10),
+        );
+        rows.push(ListItem::new(row).style(style));
+    }
+
+    let list = List::new(rows).block(block);
+    f.render_widget(list, area);
+}
+
+/// Render detail form for selected LLM profile
+fn render_llm_detail_form(f: &mut Frame, app: &App, area: Rect) {
+    let form = &app.config_editor;
+    let is_detail_focused = form.llm_focus == LlmFocusArea::Detail && form.button_focus == 0;
+
+    let border_color = if is_detail_focused { Color::Yellow } else { Color::Cyan };
+    let title = if let Some(profile) = form.selected_llm_profile() {
+        format!("Profile: {} [Tab to switch]", profile.name)
+    } else {
+        "Profile Details".to_string()
+    };
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .style(Style::default().fg(border_color));
+
+    // Calculate inner area
+    let inner_area = Rect {
+        x: area.x + 2,
+        y: area.y + 2,
+        width: area.width.saturating_sub(4),
+        height: area.height.saturating_sub(3),
+    };
+
+    f.render_widget(block, area);
+
+    let Some(profile) = form.selected_llm_profile() else {
+        return;
+    };
+
+    // Render profile fields
+    let field_count = LlmProfileEntry::field_count();
+    for i in 0..field_count {
+        if i >= inner_area.height as usize {
+            break;
+        }
+
+        let field_y = inner_area.y + i as u16;
+        let is_selected = i == form.llm_detail_field && is_detail_focused;
+        let is_editing = is_selected && form.editing;
+        let is_bool = LlmProfileEntry::is_bool_field(i);
+
+        // Field label
+        let label = LlmProfileEntry::field_name(i);
+        let label_width = 15.min(inner_area.width / 3) as usize;
+        let label_text = format!("{:width$}", label, width = label_width);
+
+        let label_style = if is_selected {
+            Style::default().fg(Color::Yellow).bold()
+        } else {
+            Style::default().fg(Color::White)
+        };
+
+        let label_area = Rect {
+            x: inner_area.x,
+            y: field_y,
+            width: label_width as u16,
+            height: 1,
+        };
+        f.render_widget(Paragraph::new(label_text).style(label_style), label_area);
+
+        // Field value
+        let value = if is_editing {
+            format!("{}│", form.edit_buffer)
+        } else {
+            profile.field_value(i)
+        };
+
+        let value_style = if is_editing {
+            Style::default().bg(Color::Blue).fg(Color::White)
+        } else if is_selected {
+            Style::default().fg(Color::Cyan).bold()
+        } else if is_bool {
+            if profile.field_value(i) == "true" {
+                Style::default().fg(Color::Green)
+            } else {
+                Style::default().fg(Color::Red)
+            }
+        } else {
+            Style::default().fg(Color::Gray)
+        };
+
+        // Check if this is a dropdown field
+        let is_dropdown = LlmProfileEntry::is_dropdown_field(i);
+
+        // Add hints and dropdown indicator for special fields
+        let display_value = if is_selected && !is_editing {
+            if is_bool {
+                format!("{} (Space to toggle)", value)
+            } else if is_dropdown {
+                format!("{} ▼", value)  // Dropdown indicator
+            } else {
+                value
+            }
+        } else if is_dropdown && !is_editing {
+            format!("{} ▼", value)  // Show dropdown indicator even when not selected
+        } else {
+            value
+        };
+
+        let value_area = Rect {
+            x: inner_area.x + label_width as u16 + 1,
+            y: field_y,
+            width: inner_area.width.saturating_sub(label_width as u16 + 1),
+            height: 1,
+        };
+        f.render_widget(Paragraph::new(display_value).style(value_style), value_area);
+    }
+
+    // Render dropdown overlay if open
+    if form.dropdown_open {
+        render_field_dropdown(f, app, inner_area);
+    }
+}
+
+/// Truncate string to fit width
+fn truncate_str(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else if max_len > 3 {
+        format!("{}...", &s[..max_len - 3])
+    } else {
+        s[..max_len].to_string()
+    }
+}
+
+/// Render dropdown overlay for field selection
+fn render_field_dropdown(f: &mut Frame, app: &App, form_area: Rect) {
+    let form = &app.config_editor;
+
+    let Some(field_index) = form.dropdown_field else {
+        return;
+    };
+
+    if form.dropdown_options.is_empty() {
+        return;
+    }
+
+    // Get field name for title
+    let field_name = LlmProfileEntry::field_name(field_index);
+
+    // Calculate dropdown position - below the field
+    let label_width = 15.min(form_area.width / 3) as u16;
+    let dropdown_x = form_area.x + label_width + 1;
+    let dropdown_y = form_area.y + field_index as u16 + 1;  // +1 to position below field
+
+    // Calculate dropdown size
+    let max_option_len = form.dropdown_options.iter()
+        .map(|s| s.len())
+        .max()
+        .unwrap_or(10);
+    let dropdown_width = (max_option_len + 4).min(40) as u16;  // +4 for padding and borders
+    let dropdown_height = (form.dropdown_options.len() + 2).min(10) as u16;  // +2 for borders
+
+    // Ensure dropdown fits on screen
+    let available_height = f.area().height.saturating_sub(dropdown_y);
+    let actual_height = dropdown_height.min(available_height);
+
+    let dropdown_area = Rect {
+        x: dropdown_x,
+        y: dropdown_y,
+        width: dropdown_width.min(form_area.width.saturating_sub(label_width + 1)),
+        height: actual_height,
+    };
+
+    // Only render if we have space
+    if dropdown_area.height < 3 || dropdown_area.width < 5 {
+        return;
+    }
+
+    // Clear the area
+    f.render_widget(Clear, dropdown_area);
+
+    // Create dropdown block
+    let block = Block::default()
+        .title(format!("Select {}", field_name))
+        .borders(Borders::ALL)
+        .style(Style::default().fg(Color::Cyan));
+
+    // Create list items with highlighting
+    let visible_items = (actual_height - 2) as usize;  // -2 for borders
+    let scroll_offset = if form.dropdown_selected >= visible_items {
+        form.dropdown_selected - visible_items + 1
+    } else {
+        0
+    };
+
+    let list_items: Vec<ListItem> = form.dropdown_options
+        .iter()
+        .enumerate()
+        .skip(scroll_offset)
+        .take(visible_items)
+        .map(|(idx, option)| {
+            let is_selected = idx == form.dropdown_selected;
+            let style = if is_selected {
+                Style::default().bg(Color::Blue).fg(Color::White).bold()
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            let marker = if is_selected { "▶ " } else { "  " };
+            ListItem::new(format!("{}{}", marker, option)).style(style)
+        })
+        .collect();
+
+    let list = List::new(list_items).block(block);
+    f.render_widget(list, dropdown_area);
+
+    // Show scroll indicator if needed
+    if form.dropdown_options.len() > visible_items {
+        let scroll_info = format!("{}/{}", form.dropdown_selected + 1, form.dropdown_options.len());
+        let scroll_area = Rect {
+            x: dropdown_area.x + dropdown_area.width.saturating_sub(scroll_info.len() as u16 + 2),
+            y: dropdown_area.y + dropdown_area.height - 1,
+            width: scroll_info.len() as u16 + 1,
+            height: 1,
+        };
+        f.render_widget(
+            Paragraph::new(scroll_info).style(Style::default().fg(Color::DarkGray)),
+            scroll_area
+        );
+    }
 }
 

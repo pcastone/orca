@@ -1,0 +1,23 @@
+version: "1.0"
+aco:
+  toml:
+    server:
+      host: "127.0.0.1"
+      port: 8080
+      ws_path: "/ws"
+      enable_tls: false
+    client:
+      orchestrator_url: "ws://127.0.0.1:8080/ws"
+      auto_connect: false
+      session_timeout: 3600
+      reconnect_attempts: 5
+      reconnect_delay_ms: 1000
+    tools:
+      enabled_tools: []
+      execution_timeout: 300
+    ui:
+      enable_tui: false
+      log_level: "info"
+      colored_output: true
+      show_timestamps: true
+      show_thinking: true

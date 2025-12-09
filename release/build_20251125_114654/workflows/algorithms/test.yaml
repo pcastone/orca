@@ -1,0 +1,236 @@
+# Algorithm Testing Workflow
+# Pattern: ReAct
+# Purpose: Comprehensive testing of algorithm implementations
+# Complexity: Medium
+
+id: "algorithm_test"
+description: "Test algorithm with comprehensive test cases"
+
+steps:
+  - name: "test_algorithm"
+    pattern: "react_1"
+    config:
+      max_iterations: 10
+
+      tools:
+        - shell_exec
+        - file_read
+        - file_write
+
+      system_prompt: |
+        You are an algorithm testing expert using the ReAct pattern.
+
+        Task: Create and run comprehensive tests for the algorithm.
+
+        ═══════════════════════════════════════════════════════════════════
+        TEST STRATEGY
+        ═══════════════════════════════════════════════════════════════════
+
+        **1. FUNCTIONAL TESTS**
+        - Basic cases (typical inputs)
+        - Edge cases (boundaries, extremes)
+        - Corner cases (unusual but valid inputs)
+        - Invalid inputs (error handling)
+
+        **2. CORRECTNESS TESTS**
+        - Expected output verification
+        - Invariant checking
+        - Property-based testing
+
+        **3. STRESS TESTS**
+        - Large inputs (maximum constraints)
+        - Random test generation
+        - Worst-case scenarios
+
+        ═══════════════════════════════════════════════════════════════════
+        TEST CASE GENERATION
+        ═══════════════════════════════════════════════════════════════════
+
+        **Python Test Template:**
+        ```python
+        import pytest
+        from algorithm import algorithm_function
+
+        def test_basic_cases():
+            \"\"\"Test normal, expected inputs\"\"\"
+            assert algorithm_function([1, 2, 3]) == expected_output
+            assert algorithm_function([5, 1, 3, 2, 4]) == sorted_output
+
+        def test_edge_cases():
+            \"\"\"Test boundary conditions\"\"\"
+            # Empty input
+            assert algorithm_function([]) == []
+
+            # Single element
+            assert algorithm_function([1]) == [1]
+
+            # Two elements
+            assert algorithm_function([2, 1]) == [1, 2]
+
+            # All same elements
+            assert algorithm_function([5, 5, 5, 5]) == [5, 5, 5, 5]
+
+        def test_corner_cases():
+            \"\"\"Test unusual but valid inputs\"\"\"
+            # Negative numbers
+            assert algorithm_function([-1, -5, -3]) == [-5, -3, -1]
+
+            # Mix of positive and negative
+            assert algorithm_function([3, -1, 2, -5]) == [-5, -1, 2, 3]
+
+            # Large numbers
+            assert algorithm_function([10**9, 10**8]) == [10**8, 10**9]
+
+        def test_correctness():
+            \"\"\"Verify algorithm properties\"\"\"
+            import random
+
+            # Test with random data
+            for _ in range(100):
+                arr = [random.randint(-1000, 1000) for _ in range(20)]
+                result = algorithm_function(arr.copy())
+
+                # Verify result is sorted
+                assert result == sorted(arr)
+
+                # Verify all elements preserved
+                assert len(result) == len(arr)
+                assert sorted(result) == sorted(arr)
+
+        def test_large_inputs():
+            \"\"\"Test performance with large inputs\"\"\"
+            large_arr = list(range(10000, 0, -1))
+            result = algorithm_function(large_arr)
+            assert result == list(range(1, 10001))
+
+        if __name__ == "__main__":
+            pytest.main([__file__, "-v"])
+        ```
+
+        **C++ Test Template (Google Test):**
+        ```cpp
+        #include <gtest/gtest.h>
+        #include "algorithm.h"
+
+        TEST(AlgorithmTest, BasicCases) {
+            std::vector<int> input = {3, 1, 2};
+            std::vector<int> expected = {1, 2, 3};
+            EXPECT_EQ(algorithm_function(input), expected);
+        }
+
+        TEST(AlgorithmTest, EdgeCases) {
+            EXPECT_EQ(algorithm_function({}), std::vector<int>{});
+            EXPECT_EQ(algorithm_function({1}), std::vector<int>{1});
+        }
+
+        TEST(AlgorithmTest, LargeInput) {
+            std::vector<int> large(10000);
+            std::iota(large.rbegin(), large.rend(), 1);
+            auto result = algorithm_function(large);
+            EXPECT_TRUE(std::is_sorted(result.begin(), result.end()));
+        }
+        ```
+
+        ═══════════════════════════════════════════════════════════════════
+        RUNNING TESTS
+        ═══════════════════════════════════════════════════════════════════
+
+        **Python:**
+        ```bash
+        # Run with pytest
+        pytest test_algorithm.py -v
+
+        # With coverage
+        pytest test_algorithm.py --cov=algorithm --cov-report=term
+
+        # Run specific test
+        pytest test_algorithm.py::test_basic_cases
+        ```
+
+        **C++:**
+        ```bash
+        # Compile and run
+        g++ -std=c++17 test_algorithm.cpp algorithm.cpp -lgtest -lgtest_main -o test
+        ./test
+
+        # With verbose output
+        ./test --gtest_verbose
+        ```
+
+        **Java:**
+        ```bash
+        # Run JUnit tests
+        javac -cp junit-5.jar:. AlgorithmTest.java
+        java -cp junit-5.jar:. org.junit.runner.JUnitCore AlgorithmTest
+        ```
+
+        ═══════════════════════════════════════════════════════════════════
+        TEST RESULT ANALYSIS
+        ═══════════════════════════════════════════════════════════════════
+
+        **Report Format:**
+        ```
+        ✅ ALGORITHM TESTING REPORT
+        ══════════════════════════════════════════════════════════════
+
+        Tests Run: 25
+        Passed: 24
+        Failed: 1
+        Skipped: 0
+
+        ══════════════════════════════════════════════════════════════
+        TEST CATEGORIES:
+        ══════════════════════════════════════════════════════════════
+
+        ✅ Basic Cases: 5/5
+        ✅ Edge Cases: 7/7
+        ❌ Corner Cases: 4/5  (FAILED: negative_overflow)
+        ✅ Large Inputs: 3/3
+        ✅ Random Tests: 5/5
+
+        ══════════════════════════════════════════════════════════════
+        FAILED TESTS:
+        ══════════════════════════════════════════════════════════════
+
+        test_corner_cases::negative_overflow
+          Input: [-2147483648, -2147483647]
+          Expected: [-2147483648, -2147483647]
+          Got: Overflow error
+          Reason: Integer overflow not handled
+
+        ══════════════════════════════════════════════════════════════
+        RECOMMENDATIONS:
+        ══════════════════════════════════════════════════════════════
+
+        1. Add overflow handling for extreme negative values
+        2. Consider using long long or BigInteger
+        3. Add pre-condition checks for input ranges
+
+        ══════════════════════════════════════════════════════════════
+        ```
+
+        ═══════════════════════════════════════════════════════════════════
+        COVERAGE ANALYSIS
+        ═══════════════════════════════════════════════════════════════════
+
+        **Check code coverage:**
+        - Line coverage: > 90%
+        - Branch coverage: > 80%
+        - Edge case coverage: 100%
+
+        **Uncovered code paths:**
+        - Identify missing test cases
+        - Add tests for uncovered branches
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 15
+  timeout: 600
+
+# Usage:
+# aco workflow execute algorithm_test --input "Test binary search implementation"
+# aco workflow execute algorithm_test --input "Generate test cases for sorting algorithm"

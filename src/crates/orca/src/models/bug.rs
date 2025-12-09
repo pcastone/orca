@@ -187,3 +187,30 @@ impl Bug {
         self.updated_at = Utc::now().timestamp();
     }
 }
+
+/// Bug statistics summary
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct BugStats {
+    /// Total number of bugs
+    pub total: i64,
+    /// Open bugs count
+    pub open: i64,
+    /// In progress bugs count
+    pub in_progress: i64,
+    /// Fixed bugs count
+    pub fixed: i64,
+    /// Won't fix bugs count
+    pub wontfix: i64,
+    /// Duplicate bugs count
+    pub duplicate: i64,
+    /// Critical priority count
+    pub critical: i64,
+    /// High priority count
+    pub high: i64,
+    /// Medium priority count
+    pub medium: i64,
+    /// Low priority count
+    pub low: i64,
+    /// Trivial priority count
+    pub trivial: i64,
+}

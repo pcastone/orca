@@ -98,6 +98,7 @@ pub use repositories::{
     TaskRepository, WorkflowRepository,
     LlmProviderRepository, PromptRepository, WorkflowTemplateRepository,
     BugRepository, ToolPermissionRepository, AstCacheRepository, ProjectRuleRepository,
+    ExecutionMetricsRepository,
 };
 
 // Re-export models
@@ -106,6 +107,10 @@ pub use models::{
     Bug, BugStatus, BugPriority,
     ToolPermission, PermissionLevel,
     AstCache, ProjectRule,
+    // Execution metrics models
+    PromptExecution, ExecutionIteration, LlmCall,
+    AggregatedMetrics, IterationMetrics, LlmMetrics,
+    ExecutionSummary, ExecutionDetails,
 };
 
 // Re-export health types
@@ -114,8 +119,8 @@ pub use health::{HealthChecker, HealthReport, HealthStatus, ComponentHealth};
 // Re-export event types
 pub use events::{ExecutionEvent, EventLogger};
 
-// Re-export prompt service
-pub use services::PromptService;
+// Re-export services
+pub use services::{PromptService, ExecutionMetricsService, ExecutionTracker};
 
 #[cfg(test)]
 mod tests {

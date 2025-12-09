@@ -141,19 +141,38 @@ impl Dialog {
 
 /// Render a dialog centered on screen
 pub fn render_dialog(f: &mut Frame, dialog: &Dialog) {
+    let screen_area = f.area();
+
     // Calculate dialog size based on content
     let title_len = dialog.title.len();
-    let message_len = dialog.message.len();
+
+    // For multi-line messages, find the longest line
+    let max_line_len = dialog.message
+        .lines()
+        .map(|l| l.len())
+        .max()
+        .unwrap_or(0);
+
     let _max_option_len = dialog.options.iter().map(|s| s.len()).max().unwrap_or(5);
     let buttons_width = dialog.options.iter().map(|s| s.len() + 2).sum::<usize>() + (dialog.options.len() - 1) * 3;
 
-    let width = std::cmp::max(
-        std::cmp::max(title_len + 4, message_len + 4),
+    // Calculate width but clamp to screen width minus margin
+    let max_width = screen_area.width.saturating_sub(4);
+    let desired_width = std::cmp::max(
+        std::cmp::max(title_len + 4, max_line_len + 4),
         std::cmp::max(buttons_width + 4, 30),
     ) as u16;
+    let width = std::cmp::min(desired_width, max_width);
 
+    // Calculate height based on message lines for Information dialogs
+    let message_lines = dialog.message.lines().count();
     let height = match dialog.dialog_type {
-        DialogType::Information => 7,
+        DialogType::Information => {
+            // Base height (borders + button) + message lines, clamped
+            let base_height = 4u16;
+            let content_height = (message_lines as u16).saturating_add(base_height);
+            std::cmp::min(content_height, screen_area.height.saturating_sub(4))
+        }
         DialogType::Confirmation => 7,
         DialogType::TextInput => 8,
         DialogType::SelectList => {
@@ -161,13 +180,23 @@ pub fn render_dialog(f: &mut Frame, dialog: &Dialog) {
         }
     };
 
-    // Center dialog on screen
-    let screen_area = f.area();
+    // Ensure minimum dimensions
+    let width = std::cmp::max(width, 10);
+    let height = std::cmp::max(height, 5);
+
+    // Center dialog on screen, ensuring it fits
+    let x = (screen_area.width.saturating_sub(width)) / 2;
+    let y = (screen_area.height.saturating_sub(height)) / 2;
+
+    // Final safety clamp to ensure we don't exceed screen bounds
+    let final_width = std::cmp::min(width, screen_area.width.saturating_sub(x));
+    let final_height = std::cmp::min(height, screen_area.height.saturating_sub(y));
+
     let dialog_area = Rect {
-        x: (screen_area.width.saturating_sub(width)) / 2,
-        y: (screen_area.height.saturating_sub(height)) / 2,
-        width,
-        height,
+        x,
+        y,
+        width: final_width,
+        height: final_height,
     };
 
     // Clear background

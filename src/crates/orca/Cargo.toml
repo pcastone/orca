@@ -40,10 +40,14 @@ chrono = { workspace = true }
 regex = { workspace = true }
 rand = { workspace = true }
 sha2 = "0.10"
+tar = "0.4"
+hex = "0.4"
+walkdir = "2.5"
 
 # Logging
 tracing = { workspace = true }
-tracing-subscriber = "0.3"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
 
 # CLI
 clap = { workspace = true }
@@ -70,6 +74,9 @@ llm = { workspace = true, features = ["local", "remote"] }
 
 # Token counting
 tiktoken-rs = "0.5"
+
+# HTTP client for model discovery
+reqwest = { version = "0.11", features = ["json"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "macros"] }

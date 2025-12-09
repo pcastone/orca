@@ -1,6 +1,6 @@
 //! Input event handling for TUI
 
-use super::app::{App, DialogState, FocusedArea, LlmConfigForm, MenuState, SidebarTab};
+use super::app::{App, DialogState, FocusedArea, MenuState, SidebarTab, ViewMode, ConfigSection, ConfigEditorForm, LlmFocusArea, LlmProfileEntry};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tracing::debug;
 
@@ -16,6 +16,12 @@ impl InputHandler {
     /// Handle a keyboard event
     pub fn handle_key_event(&self, key_event: KeyEvent, app: &mut App) {
         debug!("Key event: code={:?}, modifiers={:?}", key_event.code, key_event.modifiers);
+
+        // Handle config editor mode
+        if app.view_mode == ViewMode::ConfigEditor {
+            self.handle_config_editor_key(key_event, app);
+            return;
+        }
 
         // Handle menu-specific keys first
         if app.focused == FocusedArea::Menu {
@@ -68,83 +74,6 @@ impl InputHandler {
                 }
                 KeyCode::Esc => {
                     app.dialog_state = DialogState::None;
-                    return;
-                }
-                _ => return,
-            }
-        }
-
-        // Handle LLM config form input
-        if app.dialog_state == DialogState::LlmProfileEdit || app.dialog_state == DialogState::LlmProfileCreate {
-            match key_event.code {
-                KeyCode::Tab => {
-                    // Move to next field
-                    let field_count = LlmConfigForm::field_count();
-                    app.llm_config_form.selected_field = (app.llm_config_form.selected_field + 1) % field_count;
-                    return;
-                }
-                KeyCode::BackTab => {
-                    // Move to previous field
-                    let field_count = LlmConfigForm::field_count();
-                    if app.llm_config_form.selected_field == 0 {
-                        app.llm_config_form.selected_field = field_count - 1;
-                    } else {
-                        app.llm_config_form.selected_field -= 1;
-                    }
-                    return;
-                }
-                KeyCode::Up => {
-                    // Previous field
-                    if app.llm_config_form.selected_field > 0 {
-                        app.llm_config_form.selected_field -= 1;
-                    }
-                    return;
-                }
-                KeyCode::Down => {
-                    // Next field
-                    let field_count = LlmConfigForm::field_count();
-                    if app.llm_config_form.selected_field < field_count - 1 {
-                        app.llm_config_form.selected_field += 1;
-                    }
-                    return;
-                }
-                KeyCode::Left if app.llm_config_form.selected_field == 0 => {
-                    // Cycle through providers
-                    let providers = LlmConfigForm::providers();
-                    let current_idx = providers.iter().position(|&p| p == app.llm_config_form.provider).unwrap_or(0);
-                    let new_idx = if current_idx == 0 { providers.len() - 1 } else { current_idx - 1 };
-                    app.llm_config_form.provider = providers[new_idx].to_string();
-                    return;
-                }
-                KeyCode::Right if app.llm_config_form.selected_field == 0 => {
-                    // Cycle through providers
-                    let providers = LlmConfigForm::providers();
-                    let current_idx = providers.iter().position(|&p| p == app.llm_config_form.provider).unwrap_or(0);
-                    let new_idx = (current_idx + 1) % providers.len();
-                    app.llm_config_form.provider = providers[new_idx].to_string();
-                    return;
-                }
-                KeyCode::Char(c) if app.llm_config_form.selected_field > 0 => {
-                    // Add character to current field
-                    let field = app.llm_config_form.get_field_value_mut(app.llm_config_form.selected_field);
-                    field.push(c);
-                    return;
-                }
-                KeyCode::Backspace if app.llm_config_form.selected_field > 0 => {
-                    // Remove character from current field
-                    let field = app.llm_config_form.get_field_value_mut(app.llm_config_form.selected_field);
-                    field.pop();
-                    return;
-                }
-                KeyCode::Enter => {
-                    // Mark for async save
-                    app.pending_llm_save = true;
-                    app.dialog_state = DialogState::None;
-                    return;
-                }
-                KeyCode::Esc => {
-                    app.dialog_state = DialogState::None;
-                    app.add_message("LLM configuration cancelled".to_string());
                     return;
                 }
                 _ => return,
@@ -359,18 +288,18 @@ impl InputHandler {
                 }
             }
 
-            // Newline in prompt (max 3 lines)
+            // Submit prompt with Enter - send to LLM
             KeyCode::Enter if app.focused == FocusedArea::Prompts => {
-                app.newline_prompt();
-            }
-
-            // Submit prompt with Ctrl+Enter
-            KeyCode::Enter if key_event.modifiers.contains(KeyModifiers::CONTROL) && app.focused == FocusedArea::Prompts => {
                 let prompt_text = app.get_prompt_text();
                 if !prompt_text.trim().is_empty() {
+                    // Display user message
                     app.add_message(format!("You:\n{}", prompt_text));
-                    app.add_history(prompt_text);
+                    app.add_history(prompt_text.clone());
                     app.clear_prompt();
+
+                    // Queue prompt for async LLM processing
+                    app.pending_prompt_text = prompt_text;
+                    app.pending_prompt_submit = true;
                 }
             }
 
@@ -381,11 +310,12 @@ impl InputHandler {
                 }
             }
 
-            // Ctrl+L: Open LLM config form
+            // Ctrl+L: Open config editor with LLM section focused
             KeyCode::Char('l') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
-                app.dialog_state = DialogState::LlmProfileEdit;
-                app.focused = FocusedArea::Menu;
-                // Form will be loaded with current config by UI
+                app.view_mode = ViewMode::ConfigEditor;
+                app.config_editor = super::app::ConfigEditorForm::default();
+                app.config_editor.section = ConfigSection::Llm;
+                app.config_editor.field_index = 0;
             }
 
             // Ctrl+P: Open pattern selection
@@ -395,12 +325,397 @@ impl InputHandler {
                 app.focused = FocusedArea::Menu;
             }
 
-            // Quit (q or Esc when menu is not open)
-            KeyCode::Char('q') => {
+            // Ctrl+1: Focus Conversation area
+            KeyCode::Char('1') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                app.close_menu();
+                app.focused = FocusedArea::Conversation;
+            }
+            // Ctrl+2: Focus Prompts area
+            KeyCode::Char('2') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                app.close_menu();
+                app.focused = FocusedArea::Prompts;
+            }
+            // Ctrl+3: Focus Sidebar
+            KeyCode::Char('3') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                app.close_menu();
+                app.focused = FocusedArea::Sidebar;
+            }
+            // Ctrl+4: Toggle Config Editor view
+            KeyCode::Char('4') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                app.close_menu();
+                if app.view_mode == ViewMode::ConfigEditor {
+                    app.view_mode = ViewMode::Conversation;
+                } else {
+                    app.view_mode = ViewMode::ConfigEditor;
+                    app.config_editor = super::app::ConfigEditorForm::default();
+                }
+            }
+            // Ctrl+Q: Quit application
+            KeyCode::Char('q') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
                 app.state.should_quit = true;
             }
-            KeyCode::Esc if app.menu_state == MenuState::Closed => {
+
+            // Quit with 'q' only when NOT in Prompts focus (so user can type 'q')
+            KeyCode::Char('q') if app.focused != FocusedArea::Prompts => {
                 app.state.should_quit = true;
+            }
+            // Quit with Esc when menu is not open and not in Prompts
+            KeyCode::Esc if app.menu_state == MenuState::Closed && app.focused != FocusedArea::Prompts => {
+                app.state.should_quit = true;
+            }
+
+            _ => {}
+        }
+    }
+
+    /// Handle key events in config editor mode
+    fn handle_config_editor_key(&self, key_event: KeyEvent, app: &mut App) {
+        let form = &mut app.config_editor;
+
+        // If editing a field
+        if form.editing {
+            match key_event.code {
+                KeyCode::Enter => {
+                    // Commit the edit
+                    if form.section == ConfigSection::Llm {
+                        // LLM section - edit the selected profile's field
+                        let new_value = form.edit_buffer.clone();
+                        let field_idx = form.llm_detail_field;
+                        if let Some(profile) = form.selected_llm_profile_mut() {
+                            if let Some(field) = profile.get_field_mut(field_idx) {
+                                *field = new_value;
+                                form.modified = true;
+                            }
+                        }
+                    } else {
+                        // Other sections - clone buffer first to avoid borrow issues
+                        let new_value = form.edit_buffer.clone();
+                        if let Some(field) = form.get_field_mut() {
+                            *field = new_value;
+                            form.modified = true;
+                        }
+                    }
+                    form.editing = false;
+                    form.edit_buffer.clear();
+                }
+                KeyCode::Esc => {
+                    // Cancel edit
+                    form.editing = false;
+                    form.edit_buffer.clear();
+                }
+                KeyCode::Backspace => {
+                    form.edit_buffer.pop();
+                }
+                KeyCode::Char(c) => {
+                    form.edit_buffer.push(c);
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        // Handle LLM section specially (table + detail view)
+        if form.section == ConfigSection::Llm {
+            self.handle_llm_section_key(key_event, app);
+            return;
+        }
+
+        // Handle dropdown navigation if open (for Workflow section)
+        if form.dropdown_open {
+            match key_event.code {
+                KeyCode::Up | KeyCode::Char('k') => form.dropdown_prev(),
+                KeyCode::Down | KeyCode::Char('j') => form.dropdown_next(),
+                KeyCode::Enter => {
+                    if form.section == ConfigSection::Workflow {
+                        form.apply_workflow_dropdown_selection();
+                    }
+                }
+                KeyCode::Esc => form.close_dropdown(),
+                _ => {}
+            }
+            return;
+        }
+
+        // Not editing - handle navigation for other sections
+        match key_event.code {
+            // Navigation between sections
+            KeyCode::Tab => {
+                form.section = form.section.next();
+                form.field_index = 0;
+                form.button_focus = 0;
+            }
+            KeyCode::BackTab => {
+                form.section = form.section.prev();
+                form.field_index = 0;
+                form.button_focus = 0;
+            }
+
+            // Field navigation
+            KeyCode::Up | KeyCode::Char('k') => {
+                if form.button_focus > 0 {
+                    // Move from buttons back to fields
+                    form.button_focus = 0;
+                    form.field_index = form.field_count().saturating_sub(1);
+                } else if form.field_index > 0 {
+                    form.field_index -= 1;
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if form.button_focus == 0 {
+                    if form.field_index < form.field_count() - 1 {
+                        form.field_index += 1;
+                    } else {
+                        // Move to Save button
+                        form.button_focus = 1;
+                    }
+                }
+            }
+
+            // Button navigation
+            KeyCode::Left | KeyCode::Char('h') if form.button_focus > 0 => {
+                if form.button_focus > 1 {
+                    form.button_focus -= 1;
+                }
+            }
+            KeyCode::Right | KeyCode::Char('l') if form.button_focus > 0 => {
+                if form.button_focus < 2 {
+                    form.button_focus += 1;
+                }
+            }
+
+            // Space to toggle boolean fields
+            KeyCode::Char(' ') if form.button_focus == 0 => {
+                if form.is_bool_field(form.field_index) {
+                    form.toggle_bool_field();
+                }
+            }
+
+            // Enter to edit field or activate button
+            KeyCode::Enter => {
+                if form.button_focus == 1 {
+                    // Save button - mark pending save
+                    app.pending_config_save = true;
+                } else if form.button_focus == 2 {
+                    // Cancel button
+                    app.close_config_editor();
+                } else if form.section == ConfigSection::Workflow
+                    && ConfigEditorForm::is_workflow_dropdown_field(form.field_index) {
+                    // Open dropdown for workflow planner/worker fields
+                    form.open_workflow_dropdown();
+                } else if !form.is_bool_field(form.field_index) {
+                    // Start editing the field
+                    if let Some(field) = form.get_field_mut() {
+                        form.edit_buffer = field.clone();
+                        form.editing = true;
+                    }
+                } else {
+                    // Toggle boolean field
+                    form.toggle_bool_field();
+                }
+            }
+
+            // Escape to cancel/close
+            KeyCode::Esc => {
+                app.close_config_editor();
+            }
+
+            // Ctrl+S to save
+            KeyCode::Char('s') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                app.pending_config_save = true;
+            }
+
+            _ => {}
+        }
+    }
+
+    /// Handle key events for LLM section (table + detail view)
+    fn handle_llm_section_key(&self, key_event: KeyEvent, app: &mut App) {
+        let form = &mut app.config_editor;
+
+        // Handle dropdown navigation if dropdown is open
+        if form.dropdown_open {
+            match key_event.code {
+                KeyCode::Up | KeyCode::Char('k') => {
+                    form.dropdown_prev();
+                    return;
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    form.dropdown_next();
+                    return;
+                }
+                KeyCode::Enter => {
+                    form.apply_dropdown_selection();
+                    return;
+                }
+                KeyCode::Esc => {
+                    form.close_dropdown();
+                    return;
+                }
+                _ => return,  // Ignore other keys when dropdown is open
+            }
+        }
+
+        match key_event.code {
+            // Tab: Switch between table and detail, or to next section
+            KeyCode::Tab => {
+                if form.button_focus > 0 {
+                    // From buttons to next section
+                    form.section = form.section.next();
+                    form.field_index = 0;
+                    form.button_focus = 0;
+                } else if form.llm_focus == LlmFocusArea::Table {
+                    // Switch to detail view
+                    form.llm_focus = LlmFocusArea::Detail;
+                    form.llm_detail_field = 0;
+                } else {
+                    // From detail, move to buttons
+                    form.button_focus = 1;
+                    form.llm_focus = LlmFocusArea::Table;  // Reset for next Tab cycle
+                }
+            }
+            KeyCode::BackTab => {
+                if form.button_focus > 0 {
+                    // From buttons back to detail
+                    form.button_focus = 0;
+                    form.llm_focus = LlmFocusArea::Detail;
+                } else if form.llm_focus == LlmFocusArea::Detail {
+                    // Switch back to table
+                    form.llm_focus = LlmFocusArea::Table;
+                } else {
+                    // From table to previous section
+                    form.section = form.section.prev();
+                    form.field_index = 0;
+                    form.button_focus = 0;
+                }
+            }
+
+            // Up/Down navigation
+            KeyCode::Up | KeyCode::Char('k') => {
+                if form.button_focus > 0 {
+                    // Move from buttons back to content
+                    form.button_focus = 0;
+                } else if form.llm_focus == LlmFocusArea::Table {
+                    // Navigate up in table
+                    if form.llm_selected_index > 0 {
+                        form.llm_selected_index -= 1;
+                    }
+                } else {
+                    // Navigate up in detail form
+                    if form.llm_detail_field > 0 {
+                        form.llm_detail_field -= 1;
+                    }
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if form.button_focus == 0 {
+                    if form.llm_focus == LlmFocusArea::Table {
+                        // Navigate down in table
+                        if form.llm_selected_index < form.llm_profiles.len().saturating_sub(1) {
+                            form.llm_selected_index += 1;
+                        }
+                    } else {
+                        // Navigate down in detail form
+                        if form.llm_detail_field < LlmProfileEntry::field_count() - 1 {
+                            form.llm_detail_field += 1;
+                        } else {
+                            // Move to Save button
+                            form.button_focus = 1;
+                        }
+                    }
+                }
+            }
+
+            // Button navigation
+            KeyCode::Left | KeyCode::Char('h') if form.button_focus > 0 => {
+                if form.button_focus > 1 {
+                    form.button_focus -= 1;
+                }
+            }
+            KeyCode::Right | KeyCode::Char('l') if form.button_focus > 0 => {
+                if form.button_focus < 2 {
+                    form.button_focus += 1;
+                }
+            }
+
+            // Space to toggle boolean fields in detail view
+            KeyCode::Char(' ') if form.button_focus == 0 => {
+                if form.llm_focus == LlmFocusArea::Detail {
+                    let field_idx = form.llm_detail_field;
+                    if LlmProfileEntry::is_bool_field(field_idx) {
+                        if let Some(profile) = form.selected_llm_profile_mut() {
+                            profile.toggle_bool(field_idx);
+                            form.modified = true;
+                        }
+                    }
+                }
+            }
+
+            // 'n' to add new profile
+            KeyCode::Char('n') if form.button_focus == 0 && form.llm_focus == LlmFocusArea::Table => {
+                form.add_llm_profile();
+            }
+
+            // 'c' to copy selected profile
+            KeyCode::Char('c') if form.button_focus == 0 && form.llm_focus == LlmFocusArea::Table => {
+                form.copy_llm_profile();
+            }
+
+            // 'd' to delete selected profile
+            KeyCode::Char('d') if form.button_focus == 0 && form.llm_focus == LlmFocusArea::Table => {
+                form.delete_selected_llm_profile();
+            }
+
+            // Enter to edit field or activate button
+            KeyCode::Enter => {
+                if form.button_focus == 1 {
+                    // Save button - LLM config goes to database, not file
+                    app.pending_llm_save = true;
+                } else if form.button_focus == 2 {
+                    // Cancel button
+                    app.close_config_editor();
+                } else if form.llm_focus == LlmFocusArea::Table {
+                    // From table, switch to detail to edit
+                    form.llm_focus = LlmFocusArea::Detail;
+                    form.llm_detail_field = 0;
+                } else {
+                    // In detail view
+                    let field_idx = form.llm_detail_field;
+
+                    if LlmProfileEntry::is_bool_field(field_idx) {
+                        // Toggle boolean field
+                        if let Some(profile) = form.selected_llm_profile_mut() {
+                            profile.toggle_bool(field_idx);
+                            form.modified = true;
+                        }
+                    } else if LlmProfileEntry::is_dropdown_field(field_idx) {
+                        // Open dropdown for dropdown fields (Provider, Model, Workflow, Budget)
+                        form.open_dropdown();
+                        // For model field, trigger async query to provider
+                        if field_idx == 2 {
+                            app.pending_model_query = true;
+                        }
+                    } else {
+                        // Start text editing for regular fields
+                        if let Some(profile) = form.selected_llm_profile() {
+                            form.edit_buffer = profile.field_value(field_idx);
+                            // Remove display-only values
+                            if form.edit_buffer == "(not set)" || form.edit_buffer == "(default)" || form.edit_buffer == "(none)" {
+                                form.edit_buffer.clear();
+                            }
+                            form.editing = true;
+                        }
+                    }
+                }
+            }
+
+            // Escape to cancel/close
+            KeyCode::Esc => {
+                app.close_config_editor();
+            }
+
+            // Ctrl+S to save LLM config to database
+            KeyCode::Char('s') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
+                app.pending_llm_save = true;
             }
 
             _ => {}
@@ -412,13 +727,15 @@ impl InputHandler {
 fn execute_menu_action(action: &str, app: &mut App) {
     match action {
         // File menu actions
-        "file_new" => {
-            app.clear_conversation();
+        "file_init" => {
+            // Initialize - scan project and set up database
+            let dialog = super::dialog::Dialog::info("Init", "Scanning project and initializing database...\n\nRun 'orca_install init' to set up defaults.");
+            app.show_dialog(dialog);
             app.close_menu();
         }
-        "file_open" => {
-            // Show file open dialog
-            let dialog = super::dialog::Dialog::info("Open File", "Open file functionality coming soon...");
+        "file_update" => {
+            // Update - rescan YAML files and update database
+            let dialog = super::dialog::Dialog::info("Update", "Scanning YAML files and updating database...\n\nThis will sync workflows, patterns, and prompts.");
             app.show_dialog(dialog);
             app.close_menu();
         }
@@ -428,47 +745,89 @@ fn execute_menu_action(action: &str, app: &mut App) {
             app.show_dialog(dialog);
             app.close_menu();
         }
+        "file_backup" => {
+            // Trigger backup operation
+            app.pending_backup = true;
+            app.close_menu();
+        }
+        "file_restore" => {
+            // Trigger restore operation (show backup list first)
+            app.pending_restore = true;
+            app.close_menu();
+        }
+        "file_export" => {
+            // Trigger export operation
+            app.pending_export = true;
+            app.close_menu();
+        }
+        "file_import" => {
+            // Trigger import operation
+            app.pending_import = true;
+            app.close_menu();
+        }
         "file_quit" => {
             app.state.should_quit = true;
             app.close_menu();
         }
 
-        // Edit menu actions
-        "edit_clear" => {
-            app.clear_conversation();
-            app.close_menu();
-        }
-        "edit_copy" => {
-            let dialog = super::dialog::Dialog::info("Copy", "Text copied to clipboard!");
+        // Edit menu actions (AST operations)
+        "edit_build" => {
+            let dialog = super::dialog::Dialog::info(
+                "AST Build",
+                "Building initial AST index for project...\n\nThis will parse all supported source files\n(Rust, Python) and extract symbols, imports,\nand code structure."
+            );
             app.show_dialog(dialog);
             app.close_menu();
+            // TODO: Trigger actual AST build via AstService
         }
-        "edit_preferences" => {
-            let dialog = super::dialog::Dialog::info("Preferences", "Preferences dialog coming soon...");
+        "edit_update" => {
+            let dialog = super::dialog::Dialog::info(
+                "AST Update",
+                "Scanning for modified files...\n\nThis will detect changed files by comparing\ncontent hashes and re-parse only those files."
+            );
             app.show_dialog(dialog);
             app.close_menu();
+            // TODO: Trigger actual AST update via AstService
+        }
+        "edit_refine" => {
+            let dialog = super::dialog::Dialog::info(
+                "AST Refine",
+                "Performing deep semantic analysis...\n\nThis extracts:\n- Call graphs (what calls what)\n- Type information\n- Cross-references (where symbols are used)"
+            );
+            app.show_dialog(dialog);
+            app.close_menu();
+            // TODO: Trigger actual AST refinement via AstService
+        }
+        "edit_purge" => {
+            let dialog = super::dialog::Dialog::info(
+                "AST Purge",
+                "Removing refined AST data...\n\nThis clears deep semantic analysis while\nkeeping the base AST index intact."
+            );
+            app.show_dialog(dialog);
+            app.close_menu();
+            // TODO: Trigger actual AST purge via AstService
+        }
+        "edit_search" => {
+            let dialog = super::dialog::Dialog::info(
+                "AST Search",
+                "Search across indexed code...\n\nSupports:\n- Symbol search (exact name)\n- Fuzzy search (approximate match)\n- Semantic search (with cross-refs)"
+            );
+            app.show_dialog(dialog);
+            app.close_menu();
+            // TODO: Show search input dialog and trigger search
         }
 
         // Config menu actions
         "config_view" => {
-            // Build config info string
-            let config_info = format!(
-                "Current Configuration:\n\n\
-                Model: {}\n\
-                Tokens Used: {}\n\
-                Budget: {}\n\
-                LLM Profile: {}\n\n\
-                Config files:\n\
-                - ~/.orca/orca.toml (user)\n\
-                - ./.orca/orca.toml (project)",
-                app.current_model,
-                app.tokens_used,
-                app.active_budget.as_ref().unwrap_or(&"None".to_string()),
-                app.llm_profile.as_ref().unwrap_or(&"None".to_string())
-            );
-            let dialog = super::dialog::Dialog::info("Configuration", config_info);
-            app.show_dialog(dialog);
+            // Open config editor - mark as pending so async code can handle it
+            app.pending_config_save = false;  // Reset pending flag
+            app.view_mode = ViewMode::ConfigEditor;
             app.close_menu();
+            // Note: Config will be loaded in the main loop when pending_config_save is checked
+            // For now, reset the editor state
+            app.config_editor = super::app::ConfigEditorForm::default();
+            app.config_editor.field_index = 0;
+            app.config_editor.button_focus = 0;
         }
         "config_budget" => {
             // Show budget management options
@@ -480,12 +839,6 @@ fn execute_menu_action(action: &str, app: &mut App) {
             ];
             let dialog = super::dialog::Dialog::select_list("Budget Management", budget_options);
             app.show_dialog(dialog);
-            app.close_menu();
-        }
-        "config_llm_profile" => {
-            // Open LLM configuration form directly
-            app.dialog_state = DialogState::LlmProfileEdit;
-            app.focused = FocusedArea::Menu;
             app.close_menu();
         }
         "config_pattern" => {
@@ -581,7 +934,7 @@ fn execute_menu_action(action: &str, app: &mut App) {
         "help_shortcuts" => {
             let dialog = super::dialog::Dialog::info(
                 "Keyboard Shortcuts",
-                "Alt+F - File Menu\nAlt+E - Edit Menu\nAlt+C - Config Menu\nAlt+W - Workflow Menu\nAlt+H - Help Menu\n\nTab - Switch focus\nUp/Down - Navigate\nEnter - Select\nEsc - Close/Quit\nCtrl+Enter - Submit prompt\nCtrl+C - Clear conversation\nCtrl+L - LLM Config\nCtrl+P - Pattern Select",
+                "Navigation:\nCtrl+1 - Focus Conversation\nCtrl+2 - Focus Prompts\nCtrl+3 - Focus Sidebar\nCtrl+4 - Toggle Config Editor\nCtrl+Q - Quit\n\nMenus:\nAlt+F - File | Alt+E - Edit | Alt+C - Config\nAlt+W - Workflow | Alt+H - Help | F1-F5\n\nGeneral:\nTab - Switch focus | Up/Down - Navigate\nEnter - Select/Submit | Esc - Close/Quit\nCtrl+C - Clear | Ctrl+L - Config Editor | Ctrl+P - Pattern",
             );
             app.show_dialog(dialog);
             app.close_menu();
@@ -612,21 +965,6 @@ fn _show_budget_operation(operation: &str, app: &mut App) {
         if operation == "Create" { "Create" } else { "Confirm" }
     );
     let dialog = super::dialog::Dialog::confirm(&format!("{} Budget", operation), msg);
-    app.show_dialog(dialog);
-}
-
-/// Helper: Show LLM profile operation confirmation
-fn _show_llm_operation(operation: &str, app: &mut App) {
-    let msg = format!(
-        "LLM Profile {}:\n\n\
-        Name: Multi-Model\n\
-        Planner: Claude-3-Opus\n\
-        Worker: GPT-4\n\n\
-        {} this profile?",
-        operation.to_lowercase(),
-        if operation == "Create" { "Create" } else { "Confirm" }
-    );
-    let dialog = super::dialog::Dialog::confirm(&format!("{} Profile", operation), msg);
     app.show_dialog(dialog);
 }
 

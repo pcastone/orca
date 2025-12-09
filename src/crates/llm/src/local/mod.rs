@@ -12,11 +12,14 @@
 //! - **Ollama** - Popular local LLM runner with wide model support
 //! - **llama.cpp** - Direct llama.cpp server integration
 //! - **LM Studio** - User-friendly local LLM interface
+//! - **Claude Code** - Claude Code CLI (uses Claude Pro/Max subscription)
 
+pub mod claude_code;
 pub mod ollama;
 pub mod llama_cpp;
 pub mod lmstudio;
 
+pub use claude_code::ClaudeCodeClient;
 pub use ollama::OllamaClient;
 pub use llama_cpp::LlamaCppClient;
 pub use lmstudio::LmStudioClient;

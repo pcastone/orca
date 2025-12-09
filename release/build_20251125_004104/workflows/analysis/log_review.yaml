@@ -1,0 +1,132 @@
+# Log Review and Analysis Workflow
+# Pattern: ReAct (Reasoning + Acting) - Multi-step
+# Purpose: Scan logs for errors, patterns, and anomalies
+#
+# This workflow uses the ReAct pattern in two stages:
+# 1. Scan logs: Search for errors, warnings, and patterns
+# 2. Generate report: Produce a structured summary of findings
+#
+# Use Cases:
+# - Investigate application failures
+# - Monitor system health
+# - Identify error patterns
+# - Track down intermittent issues
+# - Audit log activity
+#
+# Tools Available:
+# - file_read: Read log files
+# - grep: Search for error patterns (ERROR, WARN, FATAL, etc.)
+# - fs_list: List log files in directories
+# - file_write: Generate report output
+
+id: "log_analysis"
+description: "Review logs for errors and patterns with automated categorization"
+
+steps:
+  # Step 1: Scan and analyze log files
+  - name: "scan_logs"
+    pattern: "react_1"
+    config:
+      # Maximum iterations for log scanning
+      max_iterations: 8
+
+      # Tools for log analysis
+      tools:
+        - file_read
+        - grep
+        - fs_list
+
+      # System prompt for log scanning
+      system_prompt: |
+        You are a log analysis assistant using the ReAct pattern.
+
+        Your task is to scan log files and identify issues:
+        1. List available log files
+        2. Search for error patterns (ERROR, WARN, FATAL, EXCEPTION, etc.)
+        3. Read log entries around errors to get context
+        4. Categorize issues by severity and frequency
+        5. Identify patterns or recurring problems
+
+        For each error found, note:
+        - Timestamp
+        - Severity level (FATAL > ERROR > WARN > INFO)
+        - Error message
+        - Context (surrounding log entries)
+        - Frequency (how often it occurs)
+
+        Common error patterns to search for:
+        - ERROR, FATAL, CRITICAL
+        - Exception, Traceback, Stack trace
+        - Failed, Timeout, Connection refused
+        - Out of memory, Disk full
+        - HTTP 5xx errors, 4xx errors
+        - Authentication failures
+        - Database errors
+
+        Be thorough but efficient. Prioritize high-severity issues.
+
+    on_success: "generate_report"
+
+  # Step 2: Generate structured report
+  - name: "generate_report"
+    pattern: "react_1"
+    config:
+      # Maximum iterations for report generation
+      max_iterations: 3
+
+      # Tools for report generation
+      tools:
+        - file_write
+
+      # System prompt for report generation
+      system_prompt: |
+        You are a report generation assistant.
+
+        Based on the log analysis from the previous step, generate a structured
+        report with the following sections:
+
+        # Log Analysis Report
+
+        ## Summary
+        - Total errors found
+        - Severity breakdown (FATAL/ERROR/WARN)
+        - Time range analyzed
+
+        ## Critical Issues (FATAL/ERROR)
+        For each critical issue:
+        - Timestamp of first occurrence
+        - Error message
+        - Frequency
+        - Impact assessment
+        - Recommended action
+
+        ## Warnings
+        - Summary of warning-level issues
+        - Patterns identified
+        - Potential concerns
+
+        ## Patterns and Trends
+        - Recurring errors
+        - Time-based patterns
+        - Correlation between errors
+
+        ## Recommendations
+        - Immediate actions required
+        - Follow-up investigation needed
+        - Preventive measures
+
+        Write the report to a file named 'log_analysis_report.md'.
+
+    on_success:
+      end: true
+
+# Global workflow settings
+settings:
+  # Maximum total steps across all workflow stages
+  max_total_steps: 12
+
+  # Enable automatic retries
+  enable_retries: true
+
+  # Maximum retries per step
+  max_retries: 2

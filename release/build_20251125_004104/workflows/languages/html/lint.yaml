@@ -1,0 +1,35 @@
+# HTML Lint Workflow
+id: "html_lint"
+description: "Lint HTML with HTMLHint"
+
+steps:
+  - name: "lint_html"
+    pattern: "react_1"
+    config:
+      max_iterations: 6
+      tools: [shell_exec, file_read, file_patch]
+      system_prompt: |
+        Lint HTML for code quality.
+
+        Tools: HTMLHint, html-linter
+
+        Commands:
+        ```bash
+        # HTMLHint
+        npx htmlhint index.html
+        npx htmlhint "**/*.html"
+
+        # With config
+        npx htmlhint --config .htmlhintrc index.html
+        ```
+
+        Fix common issues: unclosed tags, attributes, accessibility
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 10
+  timeout: 180

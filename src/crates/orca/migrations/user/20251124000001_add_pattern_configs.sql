@@ -21,10 +21,8 @@ CREATE INDEX idx_pattern_configs_type ON pattern_configs(pattern_type);
 CREATE INDEX idx_pattern_configs_name ON pattern_configs(name);
 CREATE INDEX idx_pattern_configs_default ON pattern_configs(is_default);
 
--- Add pattern_config_id column to tasks table
-ALTER TABLE tasks ADD COLUMN pattern_config_id TEXT REFERENCES pattern_configs(id);
-
-CREATE INDEX idx_tasks_pattern_config ON tasks(pattern_config_id);
+-- Note: Tasks table is in project database, not user database
+-- pattern_config_id foreign key should be added to project migrations
 
 -- Insert default pattern configs
 INSERT INTO pattern_configs (id, name, pattern_type, config, tools, system_prompt, max_iterations, is_default, usage_count, created_at, updated_at)

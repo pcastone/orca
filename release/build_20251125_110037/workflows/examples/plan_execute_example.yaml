@@ -1,0 +1,85 @@
+# Plan-Execute Pattern Example
+# This workflow demonstrates explicit planning before execution
+#
+# Task: Research and summarize a topic
+# Pattern: Plan-Execute
+# Complexity: Intermediate
+#
+# This example shows:
+# - How planning works before execution
+# - Multi-step coordination
+# - Replanning when needed
+# - Planner vs executor configuration
+
+id: "research_and_summarize"
+description: "Learn Plan-Execute pattern with a research task"
+
+steps:
+  - name: "plan_and_research"
+    pattern: "plan_execute_1"
+    config:
+      # Maximum steps in the plan
+      max_steps: 8
+
+      # Allow replanning if initial plan doesn't work
+      replanning_enabled: true
+
+      # Planner LLM: creates the step-by-step plan
+      planner_config:
+        model: "gpt-4"
+        temperature: 0.7  # Higher temp for creative planning
+
+      # Executor LLM: carries out each step
+      executor_config:
+        model: "gpt-4"
+        temperature: 0.5  # Lower temp for accurate execution
+
+      # Tools for research
+      tools:
+        - file_read
+        - grep
+        - fs_list
+        - file_write
+
+      # System prompt guides both planning and execution
+      system_prompt: |
+        You are a research assistant using Plan-Execute pattern.
+
+        PLANNER MODE:
+        Create a detailed plan to research the topic:
+        1. Identify what information is needed
+        2. Determine where to find it (which files/directories)
+        3. Plan how to organize findings
+        4. Decide on output format
+
+        Example plan:
+        - Step 1: List relevant source files
+        - Step 2: Read key files for information
+        - Step 3: Search for specific patterns
+        - Step 4: Organize findings by category
+        - Step 5: Write summary to file
+
+        EXECUTOR MODE:
+        Execute each step in the plan:
+        - Follow the plan step by step
+        - Use appropriate tools
+        - Report results
+        - Flag if replanning needed
+
+        Output should be a markdown file with research findings.
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 15
+  enable_retries: true
+  max_retries: 1
+  timeout: 300  # 5 minutes
+
+# Usage Example:
+# aco workflow execute research_and_summarize \
+#   --input "Research how error handling works in this codebase"

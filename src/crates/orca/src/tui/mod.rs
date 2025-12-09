@@ -16,7 +16,7 @@ pub use ui::render_ui;
 
 use anyhow::Result;
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent},
+    event::{self, Event},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -47,8 +47,9 @@ pub async fn run_tui(app: &mut App) -> Result<()> {
         ui::render_ui(f, app);
     })?;
 
-    // Track previous dialog state for loading config
+    // Track previous states for loading config
     let mut prev_dialog_state = app.dialog_state;
+    let mut prev_view_mode = app.view_mode;
 
     // Main event loop
     loop {
@@ -57,28 +58,75 @@ pub async fn run_tui(app: &mut App) -> Result<()> {
 
         if crossterm::event::poll(timeout)? {
             if let Event::Key(key_event) = event::read()? {
-                if should_quit(&key_event) {
-                    break;
-                }
-
-                // Handle input
+                // Handle input - let handler manage quit via app.state.should_quit
                 let handler = InputHandler::new();
                 handler.handle_key_event(key_event, app);
+
+                // Check if handler set should_quit
+                if app.state.should_quit {
+                    break;
+                }
             }
         }
 
-        // Check if dialog state changed to LlmProfileEdit - load config
+        // Track dialog state changes
         if app.dialog_state != prev_dialog_state {
-            if app.dialog_state == app::DialogState::LlmProfileEdit || app.dialog_state == app::DialogState::LlmProfileCreate {
-                app.load_llm_config_form().await;
-            }
             prev_dialog_state = app.dialog_state;
         }
 
-        // Handle pending LLM config save
+        // Check if entering config editor mode - load config
+        if app.view_mode != prev_view_mode {
+            if app.view_mode == app::ViewMode::ConfigEditor {
+                app.open_config_editor().await;
+            }
+            prev_view_mode = app.view_mode;
+        }
+
+        // Handle pending config editor save (Execution, Logging sections -> file)
+        if app.pending_config_save {
+            app.pending_config_save = false;
+            app.save_and_close_config_editor().await;
+        }
+
+        // Handle pending LLM config save (LLM section -> database)
         if app.pending_llm_save {
             app.pending_llm_save = false;
             app.save_llm_config().await;
+        }
+
+        // Handle pending backup operation
+        if app.pending_backup {
+            app.pending_backup = false;
+            app.handle_backup().await;
+        }
+
+        // Handle pending restore operation
+        if app.pending_restore {
+            app.pending_restore = false;
+            app.handle_restore().await;
+        }
+
+        // Handle pending export operation
+        if app.pending_export {
+            app.pending_export = false;
+            app.handle_export().await;
+        }
+
+        // Handle pending import operation
+        if app.pending_import {
+            app.pending_import = false;
+            app.handle_import().await;
+        }
+
+        // Handle pending model query (async fetch from provider)
+        if app.pending_model_query {
+            app.query_provider_models().await;
+        }
+
+        // Handle pending prompt submission (send to LLM)
+        if app.pending_prompt_submit {
+            app.pending_prompt_submit = false;
+            app.handle_prompt_submit().await;
         }
 
         // Redraw
@@ -96,9 +144,4 @@ pub async fn run_tui(app: &mut App) -> Result<()> {
     terminal.show_cursor()?;
 
     Ok(())
-}
-
-/// Check if quit key was pressed
-fn should_quit(key: &KeyEvent) -> bool {
-    key.code == KeyCode::Char('q') || key.code == KeyCode::Esc
 }

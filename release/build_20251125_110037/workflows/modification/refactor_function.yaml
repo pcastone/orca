@@ -1,0 +1,115 @@
+# Function Refactoring Workflow
+# Pattern: Plan-Execute (Planning before refactoring)
+# Purpose: Refactor existing functions safely
+# Complexity: Medium
+# Use Cases:
+# - Improve code readability
+# - Extract functions
+# - Simplify complex logic
+# - Apply design patterns
+
+id: "refactor_function"
+description: "Safely refactor a function while maintaining behavior and passing tests"
+
+steps:
+  - name: "plan_and_refactor"
+    pattern: "plan_execute_1"
+    config:
+      # Refactoring requires careful planning
+      max_steps: 10
+
+      # Allow replanning if tests fail
+      replanning_enabled: true
+      max_replans: 2
+
+      # Tools for refactoring
+      tools:
+        - file_read
+        - grep
+        - file_patch
+        - shell_exec
+
+      # Planner configuration
+      planner_config:
+        temperature: 0.6
+        system_prompt: |
+          Create a safe refactoring plan for a function.
+
+          Refactoring Plan Structure:
+          1. Read current function implementation
+          2. Find all callers of the function
+          3. Read tests for the function
+          4. Design refactoring approach
+          5. Apply refactoring changes
+          6. Run tests to verify behavior unchanged
+          7. Run build to check compilation
+
+          Safety Checklist:
+          - Understand current behavior completely
+          - Identify all call sites
+          - Ensure tests exist and pass before refactoring
+          - Make changes incrementally
+          - Verify tests still pass after changes
+          - Check for breaking changes
+
+      # Executor configuration
+      executor_config:
+        temperature: 0.4
+        system_prompt: |
+          Execute refactoring steps carefully.
+
+          Guidelines:
+          - Read code thoroughly before changing
+          - Use file_patch for surgical changes
+          - Run tests after each significant change
+          - If tests fail, understand why before proceeding
+          - Preserve exact behavior (no feature changes)
+
+          Common Refactoring Patterns:
+          - Extract method: Pull complex logic into new function
+          - Rename: Give better names to variables/functions
+          - Simplify conditionals: Reduce nesting, clarify logic
+          - Remove duplication: Consolidate repeated code
+          - Extract variable: Name complex expressions
+
+    on_success:
+      end: true
+
+    on_failure: "rollback_changes"
+
+  # Fallback: If refactoring breaks things, inform user
+  - name: "rollback_changes"
+    pattern: "react_1"
+    config:
+      max_iterations: 3
+      tools:
+        - shell_exec
+        - file_read
+
+      system_prompt: |
+        The refactoring caused issues. Check what went wrong:
+        1. Run tests to see which ones failed
+        2. Check build errors if any
+        3. Summarize the problem
+        4. Recommend either: rollback or manual intervention
+
+        DO NOT attempt to fix automatically - report the issue.
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+# Settings for refactoring
+settings:
+  max_total_steps: 15
+  enable_retries: true
+  max_retries: 1
+  timeout: 480  # 8 minutes for refactoring and testing
+
+# Usage Examples:
+# aco workflow execute refactor_function --input "Refactor the parse_config function to be more readable"
+# aco workflow execute refactor_function --input "Extract a helper function from the execute_task method"
+# aco workflow execute refactor_function --input "Simplify the conditional logic in authenticate_user"
+# aco workflow execute refactor_function --input "Rename variables in process_data for clarity"

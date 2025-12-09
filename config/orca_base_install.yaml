@@ -1,0 +1,171 @@
+version: "1.0"
+orca:
+  # TOML configuration defaults
+  toml:
+    database:
+      path: "orca.db"
+    llm:
+      provider: "ollama"
+      model: "qwen3:4b"
+      api_base: "http://localhost:11434"
+      temperature: 0.7
+      max_tokens: 4096
+    execution:
+      max_concurrent_tasks: 5
+      task_timeout: 300
+      streaming: true
+      max_iterations: 10
+      default_pattern: "react"
+      show_thinking: true
+    logging:
+      level: "debug"
+      format: "compact"
+      colored: true
+      timestamps: true
+      log_directory: "../log"
+      log_prefix: "orca"
+    budget:
+      enforce_budgets: true
+      log_usage: true
+      alert_threshold: 80.0
+    workflow:
+      enable_caching: false
+      cache_ttl_secs: 3600
+      max_duration_secs: 3600
+
+  # Database seed data
+  database:
+    llm_providers:
+      - name: "Ollama Qwen"
+        provider_type: "ollama"
+        model: "qwen3:4b"
+        api_base: "http://localhost:11434"
+        temperature: 0.7
+        max_tokens: 4096
+        is_default: true
+
+    llm_pricing:
+      # Anthropic
+      - provider: "anthropic"
+        model: "claude-sonnet-4-20250514"
+        cost_per_input_token: 0.000003
+        cost_per_output_token: 0.000015
+      - provider: "anthropic"
+        model: "claude-3-5-haiku-20241022"
+        cost_per_input_token: 0.000001
+        cost_per_output_token: 0.000005
+      - provider: "anthropic"
+        model: "claude-3-opus-20240229"
+        cost_per_input_token: 0.000015
+        cost_per_output_token: 0.000075
+      # OpenAI
+      - provider: "openai"
+        model: "gpt-4o"
+        cost_per_input_token: 0.0000025
+        cost_per_output_token: 0.00001
+      - provider: "openai"
+        model: "gpt-4o-mini"
+        cost_per_input_token: 0.00000015
+        cost_per_output_token: 0.0000006
+      - provider: "openai"
+        model: "gpt-4-turbo"
+        cost_per_input_token: 0.00001
+        cost_per_output_token: 0.00003
+      # Deepseek
+      - provider: "deepseek"
+        model: "deepseek-chat"
+        cost_per_input_token: 0.00000014
+        cost_per_output_token: 0.00000028
+      - provider: "deepseek"
+        model: "deepseek-coder"
+        cost_per_input_token: 0.00000014
+        cost_per_output_token: 0.00000028
+
+    budgets:
+      - name: "Default Daily"
+        type: "recurring"
+        renewal_interval_unit: "days"
+        renewal_interval_value: 1
+        credit_amount: 10.0
+        enforcement: "warn"
+        active: true
+      - name: "Monthly Cap"
+        type: "credit"
+        credit_amount: 100.0
+        credit_cap: 100.0
+        enforcement: "block"
+        active: false
+
+    llm_profiles:
+      - name: "Ollama Qwen"
+        description: "Default Ollama profile with Qwen for local inference"
+        planner_provider: "ollama"
+        planner_model: "qwen3:4b"
+        worker_provider: "ollama"
+        worker_model: "qwen3:4b"
+        active: true
+
+    prompts:
+      - name: "system_default"
+        category: "system"
+        description: "Default system prompt for general assistance"
+        template: "You are a helpful AI assistant. Be concise and accurate in your responses."
+        variables: []
+      - name: "code_review"
+        category: "task"
+        description: "Code review prompt"
+        template: "Review the following code for bugs, security issues, and best practices:\n\n{{code}}"
+        variables: ["code"]
+      - name: "explain_code"
+        category: "task"
+        description: "Explain code functionality"
+        template: "Explain what the following code does, including any edge cases or potential issues:\n\n{{code}}"
+        variables: ["code"]
+      - name: "write_tests"
+        category: "task"
+        description: "Generate unit tests"
+        template: "Write comprehensive unit tests for the following code:\n\n{{code}}"
+        variables: ["code"]
+      - name: "refactor"
+        category: "task"
+        description: "Refactor code for better readability"
+        template: "Refactor the following code for better readability and maintainability:\n\n{{code}}"
+        variables: ["code"]
+
+    workflow_templates:
+      - name: "Simple ReAct"
+        description: "Basic ReAct pattern for simple tasks"
+        pattern: "react"
+        definition: '{"max_iterations": 5, "tools": ["read_file", "search"]}'
+        tags: ["simple", "quick"]
+        is_public: true
+      - name: "Full ReAct"
+        description: "Full ReAct pattern with all tools"
+        pattern: "react"
+        definition: '{"max_iterations": 10, "tools": ["read_file", "write_file", "list_dir", "search", "bash"]}'
+        tags: ["full", "development"]
+        is_public: true
+      - name: "Plan Execute"
+        description: "Plan-Execute pattern for complex multi-step tasks"
+        pattern: "plan_execute"
+        definition: '{"max_plan_steps": 10, "max_execution_iterations": 5}'
+        tags: ["planning", "complex"]
+        is_public: true
+
+    pattern_configs:
+      - name: "default_react_simple"
+        pattern_type: "react"
+        max_iterations: 3
+        tools: ["read_file", "list_dir", "search"]
+        system_prompt: "You are a helpful assistant. Be concise and efficient."
+      - name: "default_react"
+        pattern_type: "react"
+        max_iterations: 10
+        tools: ["read_file", "write_file", "list_dir", "search", "bash"]
+        system_prompt: "You are a helpful coding assistant. Think step by step and use tools to accomplish your goals."
+        is_default: true
+      - name: "default_plan_execute"
+        pattern_type: "plan_execute"
+        max_iterations: 15
+        tools: ["read_file", "write_file", "list_dir", "search", "bash"]
+        system_prompt: "You are a planning assistant. First create a detailed plan, then execute each step methodically."

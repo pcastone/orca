@@ -10,8 +10,10 @@ pub mod config;
 pub mod error;
 pub mod server;
 pub mod session;
+pub mod tools;
 pub mod tui;
 pub mod version;
+pub mod worker;
 pub mod workspace;
 
 pub use auth::{CachedToken, ConnectAuth};
@@ -20,6 +22,7 @@ pub use error::{AcoError, Result};
 pub use server::AcoServer;
 pub use session::SessionManager;
 pub use tui::{App, AppState, View, TuiConfig};
+pub use worker::AcoWorker;
 pub use workspace::{
     PathValidator, SecurityConfig, WorkspaceInitConfig, WorkspaceInitializer, WorkspaceMetadata,
     WorkspaceValidator,

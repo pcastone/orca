@@ -1,0 +1,241 @@
+# Data Model Template
+# Defines standard format for data model documentation
+
+# Entity Definition
+entity:
+  required_fields:
+    - name
+    - description
+    - attributes
+
+  optional_fields:
+    - relationships
+    - indexes
+    - constraints
+    - audit_fields
+
+# Attribute Types
+attribute_types:
+  primitives:
+    - string
+    - integer
+    - bigint
+    - float
+    - decimal
+    - boolean
+    - date
+    - datetime
+    - timestamp
+    - time
+    - uuid
+    - json
+    - text
+    - binary
+
+  special:
+    - enum
+    - array
+    - jsonb
+
+# Attribute Definition
+attribute:
+  required:
+    - name
+    - type
+    - description
+
+  optional:
+    - nullable: "Whether null is allowed (default: false)"
+    - default: "Default value"
+    - unique: "Whether value must be unique"
+    - indexed: "Whether to create index"
+    - length: "Max length for strings"
+    - precision: "Precision for decimals"
+    - scale: "Scale for decimals"
+    - enum_values: "Allowed values for enum type"
+    - references: "Foreign key reference"
+
+# Common Audit Fields
+audit_fields:
+  created_at:
+    type: "timestamp"
+    nullable: false
+    default: "CURRENT_TIMESTAMP"
+    description: "When the record was created"
+
+  updated_at:
+    type: "timestamp"
+    nullable: false
+    default: "CURRENT_TIMESTAMP"
+    on_update: "CURRENT_TIMESTAMP"
+    description: "When the record was last updated"
+
+  created_by:
+    type: "uuid"
+    nullable: true
+    references: "users.id"
+    description: "User who created the record"
+
+  updated_by:
+    type: "uuid"
+    nullable: true
+    references: "users.id"
+    description: "User who last updated the record"
+
+  deleted_at:
+    type: "timestamp"
+    nullable: true
+    description: "Soft delete timestamp"
+
+# Relationship Types
+relationships:
+  one_to_one:
+    notation: "1:1"
+    description: "Each entity A has exactly one entity B"
+    example: "User has one Profile"
+
+  one_to_many:
+    notation: "1:N"
+    description: "Each entity A can have many entity B"
+    example: "User has many Orders"
+
+  many_to_many:
+    notation: "M:N"
+    description: "Many A can relate to many B"
+    example: "Products have many Tags"
+    implementation: "Junction/join table"
+
+# Index Types
+indexes:
+  types:
+    - primary: "Primary key index"
+    - unique: "Unique constraint index"
+    - index: "Standard B-tree index"
+    - composite: "Multi-column index"
+    - partial: "Conditional index"
+    - gin: "Generalized Inverted Index (for arrays/jsonb)"
+    - gist: "Generalized Search Tree (for geometry)"
+
+  naming_convention: "idx_{table}_{columns}"
+
+# Constraints
+constraints:
+  types:
+    - primary_key: "Unique identifier"
+    - foreign_key: "Reference to another table"
+    - unique: "No duplicate values"
+    - check: "Custom validation"
+    - not_null: "Required field"
+
+  naming_convention:
+    primary_key: "pk_{table}"
+    foreign_key: "fk_{table}_{referenced_table}"
+    unique: "uq_{table}_{columns}"
+    check: "ck_{table}_{description}"
+
+# Mermaid ER Diagram Syntax
+mermaid_syntax:
+  relationships:
+    one_to_one: "||--||"
+    one_to_many: "||--o{"
+    many_to_one: "}o--||"
+    many_to_many: "}o--o{"
+    zero_or_one: "|o--o|"
+    one_or_more: "||--|{"
+
+  attribute_keys:
+    PK: "Primary Key"
+    FK: "Foreign Key"
+    UK: "Unique Key"
+
+  example: |
+    erDiagram
+        USER ||--o{ ORDER : places
+        USER {
+            uuid id PK
+            string email UK
+            string name
+            timestamp created_at
+        }
+        ORDER {
+            uuid id PK
+            uuid user_id FK
+            decimal total
+            string status
+            timestamp created_at
+        }
+
+# Migration Considerations
+migrations:
+  breaking_changes:
+    - "Removing columns"
+    - "Changing column types"
+    - "Adding NOT NULL without default"
+    - "Removing tables"
+
+  safe_changes:
+    - "Adding nullable columns"
+    - "Adding tables"
+    - "Adding indexes"
+    - "Adding columns with defaults"
+
+  rollback_strategy:
+    description: "Always create down migration"
+    considerations:
+      - "Data loss on rollback?"
+      - "Dependent migrations?"
+      - "Application compatibility?"
+
+# Example Entity Template
+example_template: |
+  ## Entity: [Name]
+
+  [Description of what this entity represents]
+
+  ### Attributes
+
+  | Name | Type | Nullable | Default | Description |
+  |------|------|----------|---------|-------------|
+  | id | uuid | No | gen_random_uuid() | Primary key |
+  | name | string(100) | No | - | Display name |
+  | status | enum | No | 'active' | Current status |
+  | metadata | jsonb | Yes | {} | Additional data |
+  | created_at | timestamp | No | now() | Creation time |
+  | updated_at | timestamp | No | now() | Last update |
+
+  ### Relationships
+
+  | Relationship | Type | Target | Description |
+  |--------------|------|--------|-------------|
+  | belongs_to | N:1 | User | Owner of this entity |
+  | has_many | 1:N | Item | Child items |
+
+  ### Indexes
+
+  | Name | Columns | Type | Description |
+  |------|---------|------|-------------|
+  | idx_entity_user | user_id | btree | Query by owner |
+  | idx_entity_status | status | btree | Filter by status |
+
+  ### Constraints
+
+  - PK: id
+  - FK: user_id -> users.id ON DELETE CASCADE
+  - CHECK: status IN ('active', 'inactive', 'archived')
+
+  ### ER Diagram
+
+  ```mermaid
+  erDiagram
+      USER ||--o{ ENTITY : owns
+      ENTITY ||--o{ ITEM : contains
+      ENTITY {
+          uuid id PK
+          uuid user_id FK
+          string name
+          enum status
+          jsonb metadata
+          timestamp created_at
+          timestamp updated_at
+      }
+  ```

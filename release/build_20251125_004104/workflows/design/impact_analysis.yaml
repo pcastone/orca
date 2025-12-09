@@ -1,0 +1,133 @@
+# Impact Analysis Workflow
+# Pattern: ReAct (Exploration and analysis)
+# Purpose: Analyze impact of changes on DB, contracts, versioning
+# Complexity: Medium
+# Use Cases:
+# - Assess database schema changes
+# - Identify breaking API changes
+# - Plan versioning strategy
+# - Map affected components
+
+id: "impact_analysis"
+description: "Analyze impact of changes on database, contracts, and versioning"
+
+steps:
+  - name: "analyze_impact"
+    pattern: "react_1"
+    config:
+      max_iterations: 15
+
+      tools:
+        - file_read
+        - grep
+        - fs_list
+        - git_diff
+        - shell_exec
+
+      system_prompt: |
+        You are analyzing the impact of proposed changes.
+
+        Impact Categories to Assess:
+
+        1. DATABASE CHANGES:
+           - Schema modifications (add/remove/alter columns)
+           - Index changes
+           - Migration requirements
+           - Data migration needs
+           - Rollback complexity
+           - Downtime requirements
+
+        2. API/CONTRACT CHANGES:
+           - Breaking changes (removed fields, changed types)
+           - Non-breaking changes (added fields, new endpoints)
+           - Deprecation requirements
+           - Version bump needed (major/minor/patch)
+           - Client update requirements
+
+        3. DEPENDENCY IMPACT:
+           - Upstream services affected
+           - Downstream consumers affected
+           - Library version changes
+           - Configuration changes
+
+        4. CODE IMPACT:
+           - Files that need modification
+           - Tests that need updating
+           - Documentation updates
+           - Related features affected
+
+        Analysis Process:
+        1. Understand what's being changed
+        2. Search for usages and dependencies
+        3. Check database schemas
+        4. Review API contracts
+        5. Identify all affected components
+        6. Assess risk level for each impact
+
+        Output Format:
+        ```markdown
+        # Impact Analysis: [Change Description]
+
+        ## Summary
+        - Risk Level: [Low/Medium/High]
+        - Breaking Changes: [Yes/No]
+        - Migration Required: [Yes/No]
+
+        ## Database Impact
+        | Change | Type | Migration | Rollback | Risk |
+        |--------|------|-----------|----------|------|
+        | ...    | ...  | ...       | ...      | ...  |
+
+        Migration Script Needed: [Yes/No]
+        Estimated Downtime: [None/Minutes/Hours]
+
+        ## API Impact
+        | Endpoint | Change | Breaking | Version |
+        |----------|--------|----------|---------|
+        | ...      | ...    | ...      | ...     |
+
+        Recommended Version Bump: [Major/Minor/Patch]
+        Client Updates Required: [List clients]
+
+        ## Affected Components
+        | Component | Impact | Changes Needed |
+        |-----------|--------|----------------|
+        | ...       | ...    | ...            |
+
+        ## Affected Tests
+        - test_file_1.py
+        - test_file_2.py
+
+        ## Risks & Mitigations
+        | Risk | Severity | Mitigation |
+        |------|----------|------------|
+        | ...  | ...      | ...        |
+
+        ## Recommended Approach
+        1. ...
+        2. ...
+
+        ## Checklist Before Implementation
+        - [ ] Database migration tested
+        - [ ] API versioning decided
+        - [ ] Clients notified
+        - [ ] Rollback plan ready
+        - [ ] Monitoring in place
+        ```
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 20
+  enable_retries: true
+  max_retries: 1
+  timeout: 600
+
+# Usage Examples:
+# aco workflow execute impact_analysis --input "Analyze impact of adding soft delete to users table"
+# aco workflow execute impact_analysis --input "What's affected by changing the order status enum?"
+# aco workflow execute impact_analysis --input "Impact of upgrading the payment gateway API version"

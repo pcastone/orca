@@ -4,6 +4,7 @@
 //! complex workflows, tasks, and execution pipelines.
 
 pub mod api;
+pub mod ast;
 pub mod client;
 pub mod config;
 pub mod context;
@@ -11,6 +12,7 @@ pub mod db;
 pub mod executor;
 pub mod execution;
 pub mod expression;
+pub mod grpc;
 pub mod integration;
 pub mod interpreter;
 pub mod pattern;

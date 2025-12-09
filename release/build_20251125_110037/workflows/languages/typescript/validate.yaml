@@ -1,0 +1,215 @@
+# TypeScript Full Validation Workflow
+# Pattern: Plan-Execute
+# Purpose: Complete validation - lint, typecheck, test, build
+# Complexity: High
+
+id: "typescript_validate"
+description: "Complete TypeScript validation: lint, type check, test, and build"
+
+steps:
+  - name: "validation_pipeline"
+    pattern: "plan_execute"
+    config:
+      max_iterations: 15
+      tools: [shell_exec, file_read, file_patch, grep]
+
+      system_prompt: |
+        You are a TypeScript quality expert using the Plan-Execute pattern.
+
+        Task: Perform complete TypeScript validation pipeline.
+
+        ═══════════════════════════════════════════════════════════════════
+        PHASE 1: TYPE CHECKING
+        ═══════════════════════════════════════════════════════════════════
+
+        **Step 1.1: Run TypeScript Compiler (no emit)**
+        ```bash
+        # Type check without compilation
+        npx tsc --noEmit
+
+        # With pretty output
+        npx tsc --noEmit --pretty
+
+        # Check specific project
+        npx tsc --noEmit -p tsconfig.json
+        ```
+
+        Common type errors:
+        - TS2322: Type 'X' not assignable to 'Y'
+        - TS2339: Property doesn't exist
+        - TS2345: Argument type mismatch
+        - TS2304: Cannot find name
+        - TS2741: Property missing in type
+
+        **Expected:** 0 type errors
+        **Critical:** Type errors must be fixed
+
+        ═══════════════════════════════════════════════════════════════════
+        PHASE 2: LINTING
+        ═══════════════════════════════════════════════════════════════════
+
+        **Step 2.1: Run ESLint**
+        ```bash
+        # Lint all TypeScript files
+        npx eslint . --ext .ts,.tsx
+
+        # With max warnings
+        npx eslint . --ext .ts,.tsx --max-warnings 0
+
+        # Detailed output
+        npx eslint . --ext .ts,.tsx --format stylish
+        ```
+
+        Check for:
+        - @typescript-eslint/no-explicit-any
+        - @typescript-eslint/no-unused-vars
+        - @typescript-eslint/explicit-function-return-type
+        - Naming conventions
+        - Code style violations
+
+        **Expected:** 0 errors, minimal warnings
+        **Goal:** --max-warnings 0
+
+        ═══════════════════════════════════════════════════════════════════
+        PHASE 3: FORMATTING CHECK
+        ═══════════════════════════════════════════════════════════════════
+
+        **Step 3.1: Prettier check (no modifications)**
+        ```bash
+        # Check formatting
+        npx prettier --check .
+
+        # Specific files
+        npx prettier --check "src/**/*.{ts,tsx}"
+        ```
+
+        **Expected:** All files properly formatted
+        **If fails:** Report files, suggest: npx prettier --write .
+
+        ═══════════════════════════════════════════════════════════════════
+        PHASE 4: UNIT TESTING
+        ═══════════════════════════════════════════════════════════════════
+
+        **Step 4.1: Run tests with coverage**
+        ```bash
+        # Jest
+        npm test -- --coverage --watchAll=false
+
+        # Vitest
+        vitest run --coverage
+
+        # With specific threshold
+        npm test -- --coverage --coverageThreshold='{"global":{"lines":80}}'
+        ```
+
+        **Step 4.2: Analyze test results**
+        - All tests pass
+        - Coverage >= 80%
+        - No skipped tests
+        - No test timeouts
+        - Snapshot tests up-to-date
+
+        **Coverage Requirements:**
+        - Statements: >= 80%
+        - Branches: >= 80%
+        - Functions: >= 80%
+        - Lines: >= 80%
+
+        ═══════════════════════════════════════════════════════════════════
+        PHASE 5: BUILD VERIFICATION
+        ═══════════════════════════════════════════════════════════════════
+
+        **Step 5.1: Production build**
+        ```bash
+        # Clean previous build
+        rm -rf dist/ build/
+
+        # Run build
+        npm run build
+
+        # Or with specific builder
+        npx tsc
+        # or
+        vite build
+        # or
+        webpack --mode production
+        ```
+
+        **Step 5.2: Verify build output**
+        - Build completes without errors
+        - Output directory exists (dist/ or build/)
+        - Files generated (.js, .d.ts, .map)
+        - Bundle sizes reasonable
+        - No duplicate dependencies
+
+        **Step 5.3: Check bundle size (if applicable)**
+        ```bash
+        # Using size-limit or bundlesize
+        npx size-limit
+        ```
+
+        ═══════════════════════════════════════════════════════════════════
+        PHASE 6: DEPENDENCY AUDIT
+        ═══════════════════════════════════════════════════════════════════
+
+        **Step 6.1: Security audit**
+        ```bash
+        # npm audit
+        npm audit
+
+        # yarn audit
+        yarn audit
+
+        # pnpm audit
+        pnpm audit
+
+        # Check for high/critical only
+        npm audit --audit-level=high
+        ```
+
+        **Expected:** No high/critical vulnerabilities
+        **Action:** Review and update dependencies if needed
+
+        ═══════════════════════════════════════════════════════════════════
+        VALIDATION SUMMARY
+        ═══════════════════════════════════════════════════════════════════
+
+        **✅ VALIDATION CHECKLIST:**
+        - [ ] Type checking (tsc --noEmit)
+        - [ ] Linting (ESLint)
+        - [ ] Formatting (Prettier)
+        - [ ] Unit tests pass
+        - [ ] Coverage >= 80%
+        - [ ] Build succeeds
+        - [ ] No security vulnerabilities
+
+        **📊 METRICS:**
+        - Type errors: X
+        - Lint errors/warnings: X/Y
+        - Tests passed: X/Y
+        - Coverage: X%
+        - Build time: Xs
+        - Bundle size: XMB
+
+        **PASS CRITERIA:**
+        - 0 type errors
+        - 0 lint errors
+        - All tests pass
+        - Coverage >= 80%
+        - Build succeeds
+        - No critical security issues
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 20
+  enable_retries: false
+  timeout: 900  # 15 minutes
+
+# Usage:
+# aco workflow execute typescript_validate --input "Full validation check"
+# aco workflow execute typescript_validate --input "Pre-commit validation"
+# aco workflow execute typescript_validate --input "CI pipeline validation"

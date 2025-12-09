@@ -1,0 +1,31 @@
+# SvelteKit Build Workflow
+id: "sveltekit_build"
+description: "Build SvelteKit app for production"
+
+steps:
+  - name: "build_sveltekit"
+    pattern: "react_1"
+    config:
+      max_iterations: 6
+      tools: [shell_exec, file_read, grep]
+      system_prompt: |
+        Build SvelteKit app for production.
+
+        Commands:
+        ```bash
+        npm run build
+        npm run preview  # Preview production build
+        ```
+
+        Check .svelte-kit/ and build/ output
+
+        Verify adapter configuration (node, static, vercel, etc.)
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 10
+  timeout: 360

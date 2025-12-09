@@ -1,0 +1,206 @@
+# Autopilot Workflow
+# Pattern: Plan-Execute (Continuous task processing)
+# Purpose: Automatically process all items in a todo list until completion
+# Complexity: High
+# Use Cases:
+# - Autonomous task execution
+# - Batch processing of work items
+# - Unattended workflow completion
+# - Multi-step project execution
+
+id: "autopilot"
+description: "Automatically process all todo items until the list is complete"
+
+steps:
+  - name: "process_todo_list"
+    pattern: "plan_execute_1"
+    config:
+      max_steps: 50  # High limit for many todos
+
+      replanning_enabled: true
+
+      tools:
+        - file_read
+        - file_write
+        - file_patch
+        - grep
+        - shell_exec
+        - git_status
+        - git_diff
+        - git_add
+        - git_commit
+        - fs_list
+
+      planner_config:
+        temperature: 0.5
+        system_prompt: |
+          You are an autonomous task executor running in autopilot mode.
+
+          AUTOPILOT PROTOCOL:
+
+          1. READ TODO LIST:
+             - Get current state of all todos
+             - Identify pending items
+             - Check for blocked items
+
+          2. PRIORITIZE:
+             - Dependencies first
+             - Critical items before nice-to-haves
+             - Quick wins to build momentum
+
+          3. FOR EACH TODO:
+             - Mark as in_progress
+             - Execute the task
+             - Verify completion
+             - Mark as completed
+             - Move to next
+
+          4. HANDLE FAILURES:
+             - Log the failure reason
+             - Decide: retry, skip, or abort
+             - If skip, add note and continue
+             - If abort, report status
+
+          5. CONTINUE UNTIL:
+             - All todos completed
+             - Unrecoverable error
+             - Max iterations reached
+
+          PLANNING APPROACH:
+
+          Create a plan that:
+          - Lists all pending todos in execution order
+          - Identifies dependencies between items
+          - Estimates effort for each
+          - Plans verification for each
+
+          For complex todos, break them down into sub-steps.
+
+          IMPORTANT:
+          - Do NOT skip items without good reason
+          - Document progress as you go
+          - Commit changes at logical points
+          - Report final status clearly
+
+      executor_config:
+        temperature: 0.4
+        system_prompt: |
+          You are executing todos in autopilot mode.
+
+          FOR EACH TODO ITEM:
+
+          1. ANNOUNCE:
+             ```
+             [AUTOPILOT] Starting: {todo_description}
+             ```
+
+          2. EXECUTE:
+             - Perform the required actions
+             - Use appropriate tools
+             - Follow best practices
+
+          3. VERIFY:
+             - Check that the work is complete
+             - Run tests if applicable
+             - Validate output
+
+          4. COMPLETE:
+             ```
+             [AUTOPILOT] Completed: {todo_description}
+             ```
+
+          5. PROGRESS UPDATE:
+             ```
+             [AUTOPILOT] Progress: {completed}/{total} todos
+             ```
+
+          ERROR HANDLING:
+
+          If a todo fails:
+          ```
+          [AUTOPILOT] Failed: {todo_description}
+          Reason: {error}
+          Action: {retry|skip|abort}
+          ```
+
+          COMPLETION CRITERIA:
+
+          A todo is complete when:
+          - The described work is done
+          - Any tests pass
+          - Output is verified
+
+          FINAL REPORT:
+
+          When all todos processed:
+          ```markdown
+          # Autopilot Summary
+
+          ## Results
+          - Completed: {n}
+          - Skipped: {n}
+          - Failed: {n}
+
+          ## Completed Items
+          - [x] Item 1
+          - [x] Item 2
+
+          ## Skipped Items
+          - [ ] Item 3 - Reason: {reason}
+
+          ## Failed Items
+          - [ ] Item 4 - Error: {error}
+
+          ## Time Elapsed
+          {duration}
+
+          ## Recommendations
+          - {any follow-up actions}
+          ```
+
+    on_success:
+      end: true
+
+    on_failure: "recovery_mode"
+
+  - name: "recovery_mode"
+    pattern: "react_1"
+    config:
+      max_iterations: 10
+
+      tools:
+        - file_read
+        - file_write
+        - shell_exec
+        - grep
+
+      system_prompt: |
+        Autopilot encountered an issue. Attempt recovery.
+
+        1. Assess what went wrong
+        2. Determine if it's recoverable
+        3. Either:
+           - Fix the issue and continue
+           - Skip the problematic item
+           - Report final status
+
+        Prioritize completing as many todos as possible.
+
+        Always end with a status report of what was completed.
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 100  # High for autonomous operation
+  enable_retries: true
+  max_retries: 3
+  timeout: 3600  # 1 hour for long task lists
+
+# Usage Examples:
+# aco workflow execute autopilot --input "Process all pending todos for the auth feature"
+# aco workflow execute autopilot --input "Complete the remaining items in the refactoring plan"
+# aco workflow execute autopilot --input "Execute all todos until done"

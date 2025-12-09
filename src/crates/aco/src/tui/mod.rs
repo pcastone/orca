@@ -65,6 +65,9 @@ pub async fn run(config: TuiConfig) -> Result<()> {
     if let Err(e) = app.refresh_workflows().await {
         tracing::warn!("Initial workflow load failed: {}", e);
     }
+    if let Err(e) = app.refresh_bugs().await {
+        tracing::warn!("Initial bug load failed: {}", e);
+    }
 
     // Create event handler
     let event_handler = EventHandler::new(); // 60 FPS tick rate
@@ -85,6 +88,9 @@ pub async fn run(config: TuiConfig) -> Result<()> {
                     if let Err(e) = app.refresh_workflows().await {
                         tracing::debug!("Workflow refresh failed: {}", e);
                     }
+                    if let Err(e) = app.refresh_bugs().await {
+                        tracing::debug!("Bug refresh failed: {}", e);
+                    }
                 }
             }
             Ok(Event::Key(key)) => {
@@ -95,9 +101,37 @@ pub async fn run(config: TuiConfig) -> Result<()> {
                     break;
                 }
 
+                // Handle Ctrl+number for view navigation (same as plain numbers)
+                if key.modifiers.contains(KeyModifiers::CONTROL) {
+                    match key.code {
+                        KeyCode::Char('1') => {
+                            app.go_to_view(View::TaskList);
+                            continue;
+                        }
+                        KeyCode::Char('2') => {
+                            app.go_to_view(View::WorkflowList);
+                            continue;
+                        }
+                        KeyCode::Char('3') => {
+                            app.go_to_view(View::BugList);
+                            continue;
+                        }
+                        KeyCode::Char('4') => {
+                            app.go_to_view(View::ExecutionStream);
+                            continue;
+                        }
+                        KeyCode::Char('5') => {
+                            app.go_to_view(View::Help);
+                            continue;
+                        }
+                        KeyCode::Char('q') => break, // Ctrl+Q to quit
+                        _ => {}
+                    }
+                }
+
                 match key.code {
                     KeyCode::Char('q') | KeyCode::Esc => {
-                        if app.view() == View::TaskList || app.view() == View::WorkflowList || app.view() == View::Help {
+                        if app.view() == View::TaskList || app.view() == View::WorkflowList || app.view() == View::BugList || app.view() == View::Help {
                             break;
                         } else if app.view() == View::ExecutionStream {
                             app.clear_execution();
@@ -110,6 +144,7 @@ pub async fn run(config: TuiConfig) -> Result<()> {
                         // Manual refresh
                         app.refresh_tasks().await?;
                         app.refresh_workflows().await?;
+                        app.refresh_bugs().await?;
                     }
                     KeyCode::Char('e') => {
                         // Execute selected task or workflow
@@ -153,8 +188,9 @@ pub async fn run(config: TuiConfig) -> Result<()> {
                     // Direct view switching with numbers
                     KeyCode::Char('1') => app.go_to_view(View::TaskList),
                     KeyCode::Char('2') => app.go_to_view(View::WorkflowList),
-                    KeyCode::Char('3') => app.go_to_view(View::ExecutionStream),
-                    KeyCode::Char('4') | KeyCode::Char('?') | KeyCode::Char('h') => app.go_to_view(View::Help),
+                    KeyCode::Char('3') => app.go_to_view(View::BugList),
+                    KeyCode::Char('4') => app.go_to_view(View::ExecutionStream),
+                    KeyCode::Char('5') | KeyCode::Char('?') | KeyCode::Char('h') => app.go_to_view(View::Help),
 
                     // View navigation
                     KeyCode::Tab => app.next_view(),
@@ -180,6 +216,20 @@ pub async fn run(config: TuiConfig) -> Result<()> {
                     // F1 for help
                     KeyCode::F(1) => app.go_to_view(View::Help),
 
+                    // Data operations
+                    KeyCode::F(5) => {
+                        app.pending_backup = true;
+                    }
+                    KeyCode::F(6) => {
+                        app.pending_restore = true;
+                    }
+                    KeyCode::F(7) => {
+                        app.pending_export = true;
+                    }
+                    KeyCode::F(8) => {
+                        app.pending_import = true;
+                    }
+
                     _ => {}
                 }
             }
@@ -193,6 +243,32 @@ pub async fn run(config: TuiConfig) -> Result<()> {
             Err(e) => {
                 tracing::error!("Event receive error: {}", e);
                 break;
+            }
+        }
+
+        // Handle pending data operations
+        if app.pending_backup {
+            app.pending_backup = false;
+            if let Err(e) = app.handle_backup().await {
+                app.set_error(format!("Backup failed: {}", e));
+            }
+        }
+        if app.pending_restore {
+            app.pending_restore = false;
+            if let Err(e) = app.handle_restore().await {
+                app.set_error(format!("Restore failed: {}", e));
+            }
+        }
+        if app.pending_export {
+            app.pending_export = false;
+            if let Err(e) = app.handle_export().await {
+                app.set_error(format!("Export failed: {}", e));
+            }
+        }
+        if app.pending_import {
+            app.pending_import = false;
+            if let Err(e) = app.handle_import().await {
+                app.set_error(format!("Import failed: {}", e));
             }
         }
 

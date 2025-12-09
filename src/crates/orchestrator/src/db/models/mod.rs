@@ -13,6 +13,7 @@ pub mod configuration;
 pub mod bug;
 pub mod prompt_history;
 pub mod checkpoint;
+pub mod execution_metrics;
 
 pub use task::Task;
 pub use workflow::Workflow;
@@ -23,3 +24,7 @@ pub use configuration::Configuration;
 pub use bug::Bug;
 pub use prompt_history::PromptHistory;
 pub use checkpoint::Checkpoint;
+pub use execution_metrics::{
+    PromptExecution, ExecutionIteration, AggregatedMetrics,
+    IterationMetrics, LlmMetrics, ExecutionSummary, ExecutionDetails
+};

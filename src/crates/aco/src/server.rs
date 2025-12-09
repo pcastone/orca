@@ -1,5 +1,6 @@
 //! Server module (stub for future server implementation)
 
+use langgraph_prebuilt::Tool;
 use std::sync::Arc;
 
 pub struct AcoServer {
@@ -18,7 +19,7 @@ impl AcoServer {
         self
     }
 
-    pub async fn register_tool(&self, _tool: Arc<dyn std::any::Any>) {
+    pub async fn register_tool(&self, _tool: Arc<dyn Tool>) {
         // Stub implementation - will be implemented in future tasks
     }
 

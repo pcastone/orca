@@ -371,3 +371,36 @@ fn colorize_priority(priority: i64) -> colored::ColoredString {
         _ => text.normal(),
     }
 }
+
+/// Handle bug stats command
+pub async fn handle_stats(db_manager: Arc<DatabaseManager>) -> Result<()> {
+    let project_db = db_manager
+        .project_db()
+        .ok_or_else(|| OrcaError::Other("No project database. Run 'orca init' in a project directory.".to_string()))?;
+
+    let repo = BugRepository::new(project_db.clone());
+    let stats = repo.get_stats().await?;
+
+    println!("\n{}", "Bug Statistics".bold().underline());
+
+    // Status counts
+    println!("\n{}:", "By Status".bold());
+    println!("  {} {}", "Open:".cyan(), stats.open);
+    println!("  {} {}", "In Progress:".yellow(), stats.in_progress);
+    println!("  {} {}", "Fixed:".green(), stats.fixed);
+    println!("  {} {}", "Won't Fix:".bright_black(), stats.wontfix);
+    println!("  {} {}", "Duplicate:".bright_black(), stats.duplicate);
+
+    // Priority counts
+    println!("\n{}:", "By Priority".bold());
+    println!("  {} {}", "Critical:".red().bold(), stats.critical);
+    println!("  {} {}", "High:".red(), stats.high);
+    println!("  {} {}", "Medium:".yellow(), stats.medium);
+    println!("  {} {}", "Low:".blue(), stats.low);
+    println!("  {} {}", "Trivial:".bright_black(), stats.trivial);
+
+    // Total
+    println!("\n{}: {}", "Total Bugs".bold(), stats.total);
+
+    Ok(())
+}

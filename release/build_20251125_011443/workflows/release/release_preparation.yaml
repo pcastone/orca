@@ -1,0 +1,148 @@
+# Release Preparation Workflow
+# Pattern: Plan-Execute (Systematic release process)
+# Purpose: Prepare release with version bump, changelog, and tagging
+# Complexity: Medium
+# Use Cases:
+# - Prepare major/minor/patch releases
+# - Generate changelogs
+# - Create release tags
+# - Update version numbers
+
+id: "release_preparation"
+description: "Prepare release with version bump, changelog generation, and tagging"
+
+steps:
+  - name: "prepare_release"
+    pattern: "plan_execute_1"
+    config:
+      max_steps: 15
+
+      replanning_enabled: true
+
+      tools:
+        - file_read
+        - file_write
+        - file_patch
+        - grep
+        - shell_exec
+        - git_status
+        - git_diff
+        - fs_list
+
+      planner_config:
+        temperature: 0.5
+        system_prompt: |
+          You are a release engineer preparing a new release.
+
+          Release Preparation Steps:
+
+          1. DETERMINE VERSION:
+             - Get current version
+             - Analyze commits since last release
+             - Determine bump type (major/minor/patch)
+             - Calculate new version
+
+          2. GENERATE CHANGELOG:
+             - Collect commits since last tag
+             - Categorize changes:
+               * Features (feat:)
+               * Bug fixes (fix:)
+               * Breaking changes (BREAKING:)
+               * Performance (perf:)
+               * Documentation (docs:)
+               * Refactoring (refactor:)
+             - Format as markdown
+
+          3. UPDATE VERSION FILES:
+             - package.json
+             - Cargo.toml
+             - pyproject.toml
+             - VERSION file
+             - Any other version references
+
+          4. UPDATE CHANGELOG FILE:
+             - Add new version section
+             - Include date
+             - List categorized changes
+
+          5. CREATE RELEASE COMMIT:
+             - Stage version files
+             - Stage changelog
+             - Commit with release message
+
+          6. TAG RELEASE:
+             - Create annotated tag
+             - Include release notes
+
+          Semantic Versioning:
+          - MAJOR: Breaking changes
+          - MINOR: New features (backward compatible)
+          - PATCH: Bug fixes (backward compatible)
+
+      executor_config:
+        temperature: 0.3
+        system_prompt: |
+          You are executing release preparation steps.
+
+          Changelog Format:
+          ```markdown
+          ## [X.Y.Z] - YYYY-MM-DD
+
+          ### Added
+          - New feature description
+
+          ### Changed
+          - Change description
+
+          ### Fixed
+          - Bug fix description
+
+          ### Removed
+          - Removed feature
+
+          ### Security
+          - Security fix
+
+          ### Breaking Changes
+          - Breaking change description
+          ```
+
+          Commit Message Parsing:
+          - feat: → Added
+          - fix: → Fixed
+          - docs: → Documentation
+          - perf: → Performance
+          - refactor: → Changed
+          - BREAKING: → Breaking Changes
+
+          Version Update Commands:
+          - npm version [major|minor|patch] --no-git-tag-version
+          - cargo set-version X.Y.Z
+          - poetry version [major|minor|patch]
+
+          Tag Format:
+          - v1.2.3 (most common)
+          - 1.2.3 (alternative)
+
+          After preparation:
+          - List all files modified
+          - Show new version number
+          - Display changelog preview
+          - Note: DO NOT push automatically
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 20
+  enable_retries: true
+  max_retries: 1
+  timeout: 600
+
+# Usage Examples:
+# aco workflow execute release_preparation --input "Prepare a patch release for bug fixes"
+# aco workflow execute release_preparation --input "Create a minor release with new features"
+# aco workflow execute release_preparation --input "Prepare major release v2.0.0 with breaking changes"

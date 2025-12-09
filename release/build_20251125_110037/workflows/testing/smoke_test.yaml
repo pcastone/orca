@@ -1,0 +1,70 @@
+# Smoke Test Workflow
+# Pattern: ReAct (Quick validation)
+# Purpose: Quickly verify critical functionality works after changes
+# Complexity: Low
+# Use Cases:
+# - Quick validation after deployment
+# - Fast check before detailed regression testing
+# - Verify build is functional
+# - Sanity check after merging changes
+
+id: "smoke_test"
+description: "Quick smoke tests to verify critical functionality"
+
+steps:
+  - name: "run_smoke_tests"
+    pattern: "react_1"
+    config:
+      max_iterations: 8
+
+      tools:
+        - shell_exec
+        - file_read
+        - grep
+        - fs_list
+
+      system_prompt: |
+        You are running smoke tests to quickly validate critical functionality.
+
+        Smoke Test Approach:
+        1. Identify the most critical paths in the system
+        2. Run quick tests that verify basic functionality
+        3. Check that the system starts and responds
+        4. Verify key dependencies are available
+        5. Report any obvious failures immediately
+
+        Focus Areas:
+        - Application startup
+        - Key API endpoints respond
+        - Database connectivity
+        - Essential features work
+        - No critical errors in logs
+
+        Smoke Test Philosophy:
+        - Speed over coverage
+        - Critical paths only
+        - Binary pass/fail results
+        - Quick to run, quick to fail
+
+        Report Results:
+        - Clear PASS/FAIL status
+        - List what was tested
+        - Note any blockers discovered
+        - Recommend whether to proceed with full testing
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 10
+  enable_retries: true
+  max_retries: 1
+  timeout: 180  # 3 minutes for quick validation
+
+# Usage Examples:
+# aco workflow execute smoke_test --input "Run smoke tests on the deployed service"
+# aco workflow execute smoke_test --input "Quick check if the build is functional"
+# aco workflow execute smoke_test --input "Verify the app starts after the config changes"

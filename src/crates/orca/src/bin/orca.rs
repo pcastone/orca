@@ -4,6 +4,138 @@
 
 use clap::{Parser, Subcommand};
 use orca::version_info;
+use serde::Deserialize;
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+
+/// Minimal logging config for sync loading (without full config/database)
+#[derive(Debug, Deserialize)]
+struct LoggingConfigSync {
+    #[serde(default = "default_level")]
+    level: String,
+    #[serde(default)]
+    log_directory: Option<String>,
+    #[serde(default = "default_prefix")]
+    log_prefix: String,
+}
+
+fn default_level() -> String { "info".to_string() }
+fn default_prefix() -> String { "orca".to_string() }
+
+#[derive(Debug, Deserialize)]
+struct PartialConfig {
+    #[serde(default)]
+    logging: Option<LoggingConfigSync>,
+}
+
+/// Load logging config synchronously from TOML files (no async, no database)
+///
+/// Checks project-level (./.orca/orca.toml) first, then user-level (~/.orca/orca.toml)
+fn load_logging_config_sync() -> Option<LoggingConfigSync> {
+    // Try project-level config first
+    let project_config = std::path::PathBuf::from(".orca/orca.toml");
+    if let Some(config) = try_load_toml_logging(&project_config) {
+        return Some(config);
+    }
+
+    // Fall back to user-level config
+    if let Some(home) = dirs::home_dir() {
+        let user_config = home.join(".orca/orca.toml");
+        if let Some(config) = try_load_toml_logging(&user_config) {
+            return Some(config);
+        }
+    }
+
+    None
+}
+
+fn try_load_toml_logging(path: &std::path::Path) -> Option<LoggingConfigSync> {
+    let content = std::fs::read_to_string(path).ok()?;
+    let partial: PartialConfig = toml::from_str(&content).ok()?;
+    partial.logging
+}
+
+/// Initialize logging with file support
+///
+/// Reads logging configuration from:
+/// 1. Environment variables (highest priority):
+///    - RUST_LOG: Log level filter
+///    - ORCA_LOG_DIR: Directory for log files
+///    - ORCA_LOG_PREFIX: Log file prefix
+/// 2. Config files (if env vars not set):
+///    - ./.orca/orca.toml (project-level)
+///    - ~/.orca/orca.toml (user-level)
+///
+/// If log_directory is set, logs are written to rolling daily files.
+/// Otherwise, logs go to stderr only.
+fn init_logging() {
+    // Try to load logging config from TOML files (without async/database)
+    let config = load_logging_config_sync();
+
+    // Determine log level: env var > config > default
+    let log_level = std::env::var("RUST_LOG").ok()
+        .or_else(|| config.as_ref().map(|c| c.level.clone()))
+        .unwrap_or_else(|| "info".to_string());
+
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(&log_level));
+
+    // Check if we should log to files: env var > config
+    let log_directory = std::env::var("ORCA_LOG_DIR").ok()
+        .or_else(|| config.as_ref().and_then(|c| c.log_directory.clone()));
+    let log_prefix = std::env::var("ORCA_LOG_PREFIX").ok()
+        .or_else(|| config.as_ref().map(|c| c.log_prefix.clone()))
+        .unwrap_or_else(|| "orca".to_string());
+
+    if let Some(log_dir) = log_directory {
+        // Expand ~ to home directory
+        let expanded_dir = if log_dir.starts_with("~/") {
+            dirs::home_dir()
+                .map(|h| h.join(&log_dir[2..]))
+                .unwrap_or_else(|| std::path::PathBuf::from(&log_dir))
+        } else {
+            std::path::PathBuf::from(&log_dir)
+        };
+
+        // Create log directory if it doesn't exist
+        if let Err(e) = std::fs::create_dir_all(&expanded_dir) {
+            eprintln!("Warning: Failed to create log directory {:?}: {}", expanded_dir, e);
+            // Fall back to stderr logging
+            tracing_subscriber::registry()
+                .with(env_filter)
+                .with(fmt::layer().with_writer(std::io::stderr))
+                .init();
+            return;
+        }
+
+        // Create file appender with rolling daily logs
+        let file_appender = tracing_appender::rolling::daily(&expanded_dir, &log_prefix);
+        let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
+        // Store the guard in a static to keep it alive
+        // (otherwise the non-blocking writer will be dropped)
+        static GUARD: std::sync::OnceLock<tracing_appender::non_blocking::WorkerGuard> = std::sync::OnceLock::new();
+        let _ = GUARD.set(_guard);
+
+        // Set up subscriber with file output
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt::layer()
+                .with_writer(non_blocking)
+                .with_ansi(false)  // No ANSI codes in file
+                .with_file(true)
+                .with_line_number(true)
+                .with_thread_ids(true))
+            .init();
+
+        eprintln!("Logging to: {}/{}.YYYY-MM-DD", expanded_dir.display(), log_prefix);
+    } else {
+        // Default: log to stderr only
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt::layer().with_writer(std::io::stderr))
+            .init();
+    }
+}
 
 #[derive(Parser)]
 #[command(name = "orca")]
@@ -61,13 +193,56 @@ enum Commands {
     #[command(subcommand)]
     Budget(BudgetCommands),
 
-    /// LLM profile management commands
-    #[command(subcommand)]
-    LlmProfile(LlmProfileCommands),
-
     /// Pattern configuration management commands
     #[command(subcommand)]
     Pattern(PatternCommands),
+
+    /// Data management commands (backup, restore, export, import)
+    #[command(subcommand)]
+    Data(DataCommands),
+
+    /// LLM profile management commands
+    #[command(subcommand)]
+    LlmProfile(LlmProfileCommands),
+}
+
+#[derive(Subcommand)]
+enum DataCommands {
+    /// Create a backup of databases
+    Backup {
+        /// Override backup directory
+        #[arg(short, long)]
+        dir: Option<std::path::PathBuf>,
+        /// Include project database (default: true)
+        #[arg(long, default_value = "true")]
+        include_project: bool,
+    },
+    /// Restore from a backup
+    Restore {
+        /// Backup file to restore from
+        #[arg(short, long)]
+        file: Option<std::path::PathBuf>,
+        /// List available backups instead of restoring
+        #[arg(long)]
+        list: bool,
+    },
+    /// Export tables to SQL dump
+    Export {
+        /// Tables to export (comma-separated or "all", groups: llm, budgets, bugs, tasks, patterns, ast)
+        #[arg(short, long, default_value = "all")]
+        tables: String,
+        /// Output file path
+        #[arg(short, long)]
+        output: Option<std::path::PathBuf>,
+    },
+    /// Import from SQL dump or backup
+    Import {
+        /// File to import
+        file: std::path::PathBuf,
+        /// Tables to import (comma-separated or "all")
+        #[arg(short, long, default_value = "all")]
+        tables: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -193,55 +368,6 @@ enum BudgetCommands {
 }
 
 #[derive(Subcommand)]
-enum LlmProfileCommands {
-    /// Create a new LLM profile
-    Create {
-        /// Profile name
-        name: String,
-        /// Planner LLM provider and model (format: provider:model)
-        #[arg(long)]
-        planner: String,
-        /// Worker LLM provider and model (format: provider:model)
-        #[arg(long)]
-        worker: String,
-        /// Profile description
-        #[arg(short, long)]
-        description: Option<String>,
-    },
-    /// List all LLM profiles
-    List,
-    /// Show LLM profile details
-    Show {
-        /// Profile name
-        name: String,
-    },
-    /// Update an LLM profile
-    Update {
-        /// Profile name
-        name: String,
-        /// New planner LLM (format: provider:model)
-        #[arg(long)]
-        planner: Option<String>,
-        /// New worker LLM (format: provider:model)
-        #[arg(long)]
-        worker: Option<String>,
-        /// New description
-        #[arg(short, long)]
-        description: Option<String>,
-    },
-    /// Delete an LLM profile
-    Delete {
-        /// Profile name
-        name: String,
-    },
-    /// Activate an LLM profile
-    Activate {
-        /// Profile name
-        name: String,
-    },
-}
-
-#[derive(Subcommand)]
 enum BugCommands {
     /// Create a new bug
     Create {
@@ -293,6 +419,8 @@ enum BugCommands {
         /// Bug ID
         id: String,
     },
+    /// Show bug statistics
+    Stats,
 }
 
 #[derive(Subcommand)]
@@ -442,10 +570,65 @@ enum PatternCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum LlmProfileCommands {
+    /// Create a new LLM profile
+    Create {
+        /// Profile name
+        name: String,
+        /// Planner provider (e.g., anthropic, openai)
+        #[arg(long)]
+        planner_provider: String,
+        /// Planner model (e.g., claude-sonnet-4-20250514, gpt-4)
+        #[arg(long)]
+        planner_model: String,
+        /// Worker provider (e.g., anthropic, openai)
+        #[arg(long)]
+        worker_provider: String,
+        /// Worker model (e.g., claude-sonnet-4-20250514, gpt-4)
+        #[arg(long)]
+        worker_model: String,
+        /// Profile description
+        #[arg(short, long)]
+        description: Option<String>,
+    },
+    /// List all LLM profiles
+    List,
+    /// Show profile details
+    Show {
+        /// Profile name
+        name: String,
+    },
+    /// Update a profile
+    Update {
+        /// Profile name
+        name: String,
+        /// New planner (format: provider:model)
+        #[arg(long)]
+        planner: Option<String>,
+        /// New worker (format: provider:model)
+        #[arg(long)]
+        worker: Option<String>,
+        /// New description
+        #[arg(short, long)]
+        description: Option<String>,
+    },
+    /// Delete a profile
+    Delete {
+        /// Profile name
+        name: String,
+    },
+    /// Activate a profile (makes it the default)
+    Activate {
+        /// Profile name
+        name: String,
+    },
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialize tracing
-    tracing_subscriber::fmt::init();
+    // Initialize tracing with file support
+    init_logging();
 
     // Create shutdown coordinator and install signal handlers
     let shutdown_coordinator = std::sync::Arc::new(orca::ShutdownCoordinator::new());
@@ -471,7 +654,28 @@ async fn main() -> anyhow::Result<()> {
             config.execution.show_thinking = false;
         }
 
-        let service = orca::PromptService::new(&config)?;
+        // Create database manager (workspace_root = current directory)
+        let db_manager = std::sync::Arc::new(
+            orca::DatabaseManager::new(".").await?
+        );
+
+        // Load active LLM provider from database
+        let active_provider = orca::cli::load_active_llm_profile(db_manager.clone()).await?;
+        let provider_config = active_provider.ok_or_else(|| {
+            anyhow::anyhow!("No active LLM profile configured. Use 'orca llm-profile create' to add one.")
+        })?;
+
+        // Create LlmProvider from the profile
+        let llm_provider = std::sync::Arc::new(
+            orca::executor::LlmProvider::from_params(
+                &provider_config.worker_provider,
+                &provider_config.worker_model,
+                std::env::var(format!("{}_API_KEY", provider_config.worker_provider.to_uppercase())).ok().as_deref(),
+                None,
+            )?
+        );
+
+        let service = orca::PromptService::new(&config, llm_provider)?;
 
         match service.send_prompt(&prompt).await {
             Ok(response) => {
@@ -660,6 +864,9 @@ async fn main() -> anyhow::Result<()> {
                 BugCommands::Delete { id } => {
                     orca::cli::bug::handle_delete(db_manager, id).await?;
                 }
+                BugCommands::Stats => {
+                    orca::cli::bug::handle_stats(db_manager).await?;
+                }
             }
             Ok(())
         }
@@ -740,56 +947,6 @@ async fn main() -> anyhow::Result<()> {
             }
             Ok(())
         }
-        Some(Commands::LlmProfile(profile_cmd)) => {
-            // Check if initialized
-            if !orca::cli::is_initialized() {
-                eprintln!("{}", orca::cli::get_init_instructions());
-                return Err(anyhow::anyhow!("Orca not initialized"));
-            }
-
-            // Create database manager (workspace_root = current directory)
-            let db_manager = std::sync::Arc::new(
-                orca::DatabaseManager::new(".").await?
-            );
-
-            match profile_cmd {
-                LlmProfileCommands::Create { name, planner, worker, description } => {
-                    // Parse planner
-                    let planner_parts: Vec<&str> = planner.split(':').collect();
-                    if planner_parts.len() != 2 {
-                        return Err(anyhow::anyhow!("Planner must be in format 'provider:model'"));
-                    }
-                    let (planner_provider, planner_model) = (planner_parts[0].to_string(), planner_parts[1].to_string());
-
-                    // Parse worker
-                    let worker_parts: Vec<&str> = worker.split(':').collect();
-                    if worker_parts.len() != 2 {
-                        return Err(anyhow::anyhow!("Worker must be in format 'provider:model'"));
-                    }
-                    let (worker_provider, worker_model) = (worker_parts[0].to_string(), worker_parts[1].to_string());
-
-                    orca::cli::llm_profile::handle_create(
-                        db_manager, name, planner_provider, planner_model, worker_provider, worker_model, description
-                    ).await?;
-                }
-                LlmProfileCommands::List => {
-                    orca::cli::llm_profile::handle_list(db_manager).await?;
-                }
-                LlmProfileCommands::Show { name } => {
-                    orca::cli::llm_profile::handle_show(db_manager, name).await?;
-                }
-                LlmProfileCommands::Update { name, planner, worker, description } => {
-                    orca::cli::llm_profile::handle_update(db_manager, name, planner, worker, description).await?;
-                }
-                LlmProfileCommands::Delete { name } => {
-                    orca::cli::llm_profile::handle_delete(db_manager, name).await?;
-                }
-                LlmProfileCommands::Activate { name } => {
-                    orca::cli::llm_profile::handle_activate(db_manager, name).await?;
-                }
-            }
-            Ok(())
-        }
         Some(Commands::Pattern(pattern_cmd)) => {
             // Check if initialized
             if !orca::cli::is_initialized() {
@@ -825,6 +982,71 @@ async fn main() -> anyhow::Result<()> {
                 }
                 PatternCommands::SetDefault { id } => {
                     orca::cli::pattern::handle_set_default(db_manager, id).await?;
+                }
+            }
+            Ok(())
+        }
+        Some(Commands::Data(data_cmd)) => {
+            // Check if initialized
+            if !orca::cli::is_initialized() {
+                eprintln!("{}", orca::cli::get_init_instructions());
+                return Err(anyhow::anyhow!("Orca not initialized"));
+            }
+
+            // Create database manager (workspace_root = current directory)
+            let db_manager = std::sync::Arc::new(
+                orca::DatabaseManager::new(".").await?
+            );
+
+            // Load config for backup directory
+            let config = orca::load_config().await?;
+
+            match data_cmd {
+                DataCommands::Backup { dir, include_project } => {
+                    orca::cli::data::handle_backup(db_manager, &config, dir, include_project).await?;
+                }
+                DataCommands::Restore { file, list } => {
+                    orca::cli::data::handle_restore(db_manager, &config, file, list).await?;
+                }
+                DataCommands::Export { tables, output } => {
+                    orca::cli::data::handle_export(db_manager, &config, tables, output).await?;
+                }
+                DataCommands::Import { file, tables } => {
+                    orca::cli::data::handle_import(db_manager, &config, file, tables).await?;
+                }
+            }
+            Ok(())
+        }
+        Some(Commands::LlmProfile(profile_cmd)) => {
+            // Check if initialized
+            if !orca::cli::is_initialized() {
+                eprintln!("{}", orca::cli::get_init_instructions());
+                return Err(anyhow::anyhow!("Orca not initialized"));
+            }
+
+            // Create database manager (workspace_root = current directory)
+            let db_manager = std::sync::Arc::new(
+                orca::DatabaseManager::new(".").await?
+            );
+
+            match profile_cmd {
+                LlmProfileCommands::Create { name, planner_provider, planner_model, worker_provider, worker_model, description } => {
+                    orca::cli::llm_profile::handle_create(db_manager, name, planner_provider, planner_model, worker_provider, worker_model, description).await?;
+                }
+                LlmProfileCommands::List => {
+                    orca::cli::llm_profile::handle_list(db_manager).await?;
+                }
+                LlmProfileCommands::Show { name } => {
+                    orca::cli::llm_profile::handle_show(db_manager, name).await?;
+                }
+                LlmProfileCommands::Update { name, planner, worker, description } => {
+                    orca::cli::llm_profile::handle_update(db_manager, name, planner, worker, description).await?;
+                }
+                LlmProfileCommands::Delete { name } => {
+                    orca::cli::llm_profile::handle_delete(db_manager, name).await?;
+                }
+                LlmProfileCommands::Activate { name } => {
+                    orca::cli::llm_profile::handle_activate(db_manager, name).await?;
                 }
             }
             Ok(())

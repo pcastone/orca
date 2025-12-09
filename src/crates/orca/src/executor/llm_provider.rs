@@ -2,8 +2,10 @@
 //!
 //! Bridges the llm crate's ChatModel implementations to the LlmFunction type
 //! expected by langgraph-prebuilt agents.
+//!
+//! LLM configuration is now database-only (llm_providers and llm_profiles tables).
+//! Use `from_params` to create providers with explicit parameters.
 
-use crate::config::OrcaConfig;
 use crate::error::{OrcaError, Result};
 use langgraph_core::llm::ChatRequest;
 use langgraph_prebuilt::Message; // Use the re-exported Message from langgraph_prebuilt
@@ -40,81 +42,92 @@ impl std::fmt::Debug for LlmProvider {
 }
 
 impl LlmProvider {
-    /// Create an LLM provider from Orca configuration
+    /// Create an LLM provider from explicit parameters
+    ///
+    /// LLM configuration is now database-only (llm_providers and llm_profiles tables).
+    /// Callers should load configuration from the database and pass explicit parameters.
     ///
     /// # Arguments
-    /// * `config` - Orca configuration with LLM settings
+    /// * `provider` - Provider type: "openai", "anthropic", "claude", "ollama", etc.
+    /// * `model` - Model name (e.g., "gpt-4", "claude-sonnet-4-20250514")
+    /// * `api_key` - API key (None for local providers like Ollama)
+    /// * `api_base` - Custom API base URL (None for defaults)
     ///
     /// # Returns
-    /// An LlmProvider instance based on the configured provider
-    pub fn from_config(config: &OrcaConfig) -> Result<Self> {
-        let provider = config.llm.provider.to_lowercase();
+    /// An LlmProvider instance
+    pub fn from_params(
+        provider: &str,
+        model: &str,
+        api_key: Option<&str>,
+        api_base: Option<&str>,
+    ) -> Result<Self> {
+        let provider_lower = provider.to_lowercase();
 
-        match provider.as_str() {
+        match provider_lower.as_str() {
             "ollama" => {
                 let local_config = LocalLlmConfig::new(
-                    config.llm.api_base.clone().unwrap_or_else(|| "http://localhost:11434".to_string()),
-                    config.llm.model.clone(),
+                    api_base.unwrap_or("http://localhost:11434").to_string(),
+                    model.to_string(),
                 );
                 Ok(Self::Ollama(llm::local::OllamaClient::new(local_config)))
             }
 
             "openai" => {
-                let api_key = config.llm.api_key.clone()
+                let api_key = api_key
                     .ok_or_else(|| OrcaError::Config("OpenAI API key not configured".to_string()))?;
 
                 let remote_config = RemoteLlmConfig::new(
-                    api_key,
-                    config.llm.api_base.clone().unwrap_or_else(|| "https://api.openai.com/v1".to_string()),
-                    config.llm.model.clone(),
+                    api_key.to_string(),
+                    api_base.unwrap_or("https://api.openai.com/v1").to_string(),
+                    model.to_string(),
                 );
                 Ok(Self::OpenAI(llm::remote::OpenAiClient::new(remote_config)))
             }
 
             "anthropic" | "claude" => {
-                let api_key = config.llm.api_key.clone()
+                let api_key = api_key
                     .ok_or_else(|| OrcaError::Config("Anthropic API key not configured".to_string()))?;
 
                 let remote_config = RemoteLlmConfig::new(
-                    api_key,
-                    config.llm.api_base.clone().unwrap_or_else(|| "https://api.anthropic.com".to_string()),
-                    config.llm.model.clone(),
+                    api_key.to_string(),
+                    api_base.unwrap_or("https://api.anthropic.com").to_string(),
+                    model.to_string(),
                 );
                 Ok(Self::Claude(llm::remote::ClaudeClient::new(remote_config)))
             }
 
             "deepseek" => {
-                let api_key = config.llm.api_key.clone()
+                let api_key = api_key
                     .ok_or_else(|| OrcaError::Config("Deepseek API key not configured".to_string()))?;
 
                 let remote_config = RemoteLlmConfig::new(
-                    api_key,
-                    config.llm.api_base.clone().unwrap_or_else(|| "https://api.deepseek.com".to_string()),
-                    config.llm.model.clone(),
+                    api_key.to_string(),
+                    api_base.unwrap_or("https://api.deepseek.com").to_string(),
+                    model.to_string(),
                 );
                 Ok(Self::Deepseek(llm::remote::DeepseekClient::new(remote_config)))
             }
 
             "grok" | "xai" => {
-                let api_key = config.llm.api_key.clone()
+                let api_key = api_key
                     .ok_or_else(|| OrcaError::Config("Grok API key not configured".to_string()))?;
 
                 let remote_config = RemoteLlmConfig::new(
-                    api_key,
-                    config.llm.api_base.clone().unwrap_or_else(|| "https://api.x.ai".to_string()),
-                    config.llm.model.clone(),
+                    api_key.to_string(),
+                    api_base.unwrap_or("https://api.x.ai").to_string(),
+                    model.to_string(),
                 );
                 Ok(Self::Grok(llm::remote::GrokClient::new(remote_config)))
             }
 
             "openrouter" => {
-                let api_key = config.llm.api_key.clone()
+                let api_key = api_key
                     .ok_or_else(|| OrcaError::Config("OpenRouter API key not configured".to_string()))?;
 
                 let remote_config = RemoteLlmConfig::new(
-                    api_key,
-                    config.llm.api_base.clone().unwrap_or_else(|| "https://openrouter.ai/api/v1".to_string()),
-                    config.llm.model.clone(),
+                    api_key.to_string(),
+                    api_base.unwrap_or("https://openrouter.ai/api/v1").to_string(),
+                    model.to_string(),
                 );
                 Ok(Self::OpenRouter(llm::remote::OpenRouterClient::new(remote_config)))
             }
@@ -124,6 +137,18 @@ impl LlmProvider {
                 provider
             ))),
         }
+    }
+
+    /// Create an LLM provider from LlmProviderConfig (database model)
+    ///
+    /// This is the preferred way to create providers when loading from the database.
+    pub fn from_provider_config(config: &crate::models::LlmProviderConfig) -> Result<Self> {
+        Self::from_params(
+            &config.provider_type,
+            &config.model,
+            config.api_key.as_deref(),
+            config.api_base.as_deref(),
+        )
     }
 
     /// Call the LLM with a chat request
@@ -361,23 +386,10 @@ pub fn create_llm_function(provider: Arc<LlmProvider>) -> LlmFunction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{OrcaConfig, LlmConfig};
 
     #[test]
-    fn test_provider_from_config_missing_api_key() {
-        let config = OrcaConfig {
-            llm: LlmConfig {
-                provider: "openai".to_string(),
-                model: "gpt-4".to_string(),
-                api_key: None,
-                api_base: None,
-                temperature: 0.7,
-                max_tokens: 1000,
-            },
-            ..Default::default()
-        };
-
-        let result = LlmProvider::from_config(&config);
+    fn test_provider_from_params_missing_api_key() {
+        let result = LlmProvider::from_params("openai", "gpt-4", None, None);
         assert!(result.is_err());
         let error = result.unwrap_err();
         println!("Error: {}", error);
@@ -385,57 +397,21 @@ mod tests {
     }
 
     #[test]
-    fn test_provider_from_config_unsupported() {
-        let config = OrcaConfig {
-            llm: LlmConfig {
-                provider: "unsupported".to_string(),
-                model: "model".to_string(),
-                api_key: Some("key".to_string()),
-                api_base: None,
-                temperature: 0.7,
-                max_tokens: 1000,
-            },
-            ..Default::default()
-        };
-
-        let result = LlmProvider::from_config(&config);
+    fn test_provider_from_params_unsupported() {
+        let result = LlmProvider::from_params("unsupported", "model", Some("key"), None);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Unsupported"));
     }
 
     #[test]
     fn test_provider_creation_openai() {
-        let config = OrcaConfig {
-            llm: LlmConfig {
-                provider: "openai".to_string(),
-                model: "gpt-4".to_string(),
-                api_key: Some("test-key".to_string()),
-                api_base: None,
-                temperature: 0.7,
-                max_tokens: 1000,
-            },
-            ..Default::default()
-        };
-
-        let result = LlmProvider::from_config(&config);
+        let result = LlmProvider::from_params("openai", "gpt-4", Some("test-key"), None);
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_send_prompt_empty_returns_error() {
-        let config = OrcaConfig {
-            llm: LlmConfig {
-                provider: "ollama".to_string(),
-                model: "llama2".to_string(),
-                api_key: None,
-                api_base: None,
-                temperature: 0.7,
-                max_tokens: 1000,
-            },
-            ..Default::default()
-        };
-
-        let provider = LlmProvider::from_config(&config).unwrap();
+        let provider = LlmProvider::from_params("ollama", "llama2", None, None).unwrap();
         let result = provider.send_prompt("").await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("empty"));
@@ -443,37 +419,13 @@ mod tests {
 
     #[test]
     fn test_provider_creation_claude() {
-        let config = OrcaConfig {
-            llm: LlmConfig {
-                provider: "claude".to_string(),
-                model: "claude-3-sonnet".to_string(),
-                api_key: Some("test-key".to_string()),
-                api_base: None,
-                temperature: 0.7,
-                max_tokens: 1000,
-            },
-            ..Default::default()
-        };
-
-        let result = LlmProvider::from_config(&config);
+        let result = LlmProvider::from_params("claude", "claude-3-sonnet", Some("test-key"), None);
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_provider_creation_ollama() {
-        let config = OrcaConfig {
-            llm: LlmConfig {
-                provider: "ollama".to_string(),
-                model: "llama2".to_string(),
-                api_key: None,
-                api_base: Some("http://localhost:11434".to_string()),
-                temperature: 0.7,
-                max_tokens: 1000,
-            },
-            ..Default::default()
-        };
-
-        let result = LlmProvider::from_config(&config);
+        let result = LlmProvider::from_params("ollama", "llama2", None, Some("http://localhost:11434"));
         assert!(result.is_ok());
     }
 }

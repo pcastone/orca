@@ -1,0 +1,32 @@
+# Angular Lint Workflow
+id: "angular_lint"
+description: "Lint Angular code"
+
+steps:
+  - name: "lint_angular"
+    pattern: "react_1"
+    config:
+      max_iterations: 8
+      tools: [shell_exec, file_read, file_patch]
+      system_prompt: |
+        Lint Angular code with ESLint.
+
+        Commands:
+        ```bash
+        ng lint
+        ng lint --fix
+        npm run lint
+        ```
+
+        Angular-specific rules: @angular-eslint
+
+        Fix: Template syntax, component structure, RxJS usage
+
+    on_success:
+      end: true
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 12
+  timeout: 300

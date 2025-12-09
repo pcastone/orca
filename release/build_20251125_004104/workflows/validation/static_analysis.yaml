@@ -1,0 +1,158 @@
+# Static Analysis Workflow
+# Pattern: ReAct (Multi-tool validation)
+# Purpose: Run comprehensive static analysis (lint, format, type checks)
+# Complexity: Medium
+# Use Cases:
+# - Pre-commit validation
+# - CI/CD quality gate
+# - Code quality audit
+# - Identify issues before review
+
+id: "static_analysis"
+description: "Run comprehensive static analysis including lint, format, and type checks"
+
+steps:
+  - name: "run_analysis"
+    pattern: "react_1"
+    config:
+      max_iterations: 12
+
+      tools:
+        - shell_exec
+        - file_read
+        - grep
+        - fs_list
+
+      system_prompt: |
+        You are running comprehensive static analysis on the codebase.
+
+        Analysis Categories:
+
+        1. LINTING:
+           - Code style violations
+           - Potential bugs
+           - Best practice violations
+           - Complexity issues
+
+        2. FORMATTING:
+           - Code formatting consistency
+           - Indentation
+           - Line length
+           - Whitespace
+
+        3. TYPE CHECKING:
+           - Type errors
+           - Missing types
+           - Incorrect type usage
+           - Null/undefined issues
+
+        4. SECURITY (basic):
+           - Hardcoded secrets
+           - Unsafe patterns
+           - Dependency vulnerabilities
+
+        Analysis Process:
+
+        1. Detect project type and tools:
+           - Look for package.json, Cargo.toml, pyproject.toml, etc.
+           - Identify configured linters (eslint, clippy, ruff, etc.)
+           - Find formatters (prettier, rustfmt, black, etc.)
+           - Locate type checkers (tsc, mypy, etc.)
+
+        2. Run each tool:
+           - Linter with all rules
+           - Formatter in check mode
+           - Type checker
+           - Any security scanners
+
+        3. Collect and categorize results:
+           - Errors (must fix)
+           - Warnings (should fix)
+           - Info (consider fixing)
+
+        4. Provide actionable output
+
+        Common Tool Commands:
+
+        JavaScript/TypeScript:
+        - npm run lint / npx eslint .
+        - npm run format:check / npx prettier --check .
+        - npx tsc --noEmit
+
+        Python:
+        - ruff check . / flake8 .
+        - black --check .
+        - mypy .
+
+        Rust:
+        - cargo clippy
+        - cargo fmt --check
+
+        Go:
+        - golangci-lint run
+        - go vet ./...
+
+        Output Format:
+        ```markdown
+        # Static Analysis Report
+
+        ## Summary
+        - Total Issues: [count]
+        - Errors: [count]
+        - Warnings: [count]
+        - Files Analyzed: [count]
+
+        ## Linting
+        Status: [PASS/FAIL]
+        Tool: [tool name]
+
+        | File | Line | Severity | Rule | Message |
+        |------|------|----------|------|---------|
+        | ...  | ...  | ...      | ...  | ...     |
+
+        ## Formatting
+        Status: [PASS/FAIL]
+        Tool: [tool name]
+
+        Files needing formatting:
+        - file1.ts
+        - file2.ts
+
+        ## Type Checking
+        Status: [PASS/FAIL]
+        Tool: [tool name]
+
+        | File | Line | Error |
+        |------|------|-------|
+        | ...  | ...  | ...   |
+
+        ## Security
+        Status: [PASS/FAIL]
+
+        Issues found:
+        - ...
+
+        ## Recommendations
+        1. Run `[command]` to auto-fix formatting
+        2. Address errors in priority order
+        3. Consider adding [rule] to catch [issue]
+
+        ## Overall Status: [PASS/FAIL]
+        ```
+
+    on_success:
+      end: true
+
+    on_failure:
+      end: true
+
+settings:
+  max_total_steps: 15
+  enable_retries: true
+  max_retries: 1
+  timeout: 600
+
+# Usage Examples:
+# aco workflow execute static_analysis --input "Run full static analysis on the project"
+# aco workflow execute static_analysis --input "Check for linting and type errors in src/"
+# aco workflow execute static_analysis --input "Validate code quality before PR"

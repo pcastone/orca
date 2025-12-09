@@ -192,7 +192,7 @@ mod tests {
 
         // Should return defaults even if files don't exist
         assert_eq!(config.database.path, "orca.db");
-        assert_eq!(config.llm.provider, "anthropic");
+        // LLM configuration is now database-only (llm_profiles table)
     }
 
     #[test]

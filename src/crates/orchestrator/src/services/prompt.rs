@@ -23,7 +23,7 @@ pub enum PromptError {
 
 /// Service for sending prompts to LLM providers
 pub struct PromptService {
-    provider: Box<dyn ChatModel + Send + Sync>,
+    provider: std::sync::Arc<dyn ChatModel + Send + Sync>,
 }
 
 impl PromptService {
@@ -33,63 +33,63 @@ impl PromptService {
             return Err(PromptError::NotConfigured);
         }
 
-        let provider: Box<dyn ChatModel + Send + Sync> = match config.provider.to_lowercase().as_str() {
+        let provider: std::sync::Arc<dyn ChatModel + Send + Sync> = match config.provider.to_lowercase().as_str() {
             "ollama" => {
                 let api_base = config.api_base.clone().unwrap_or_else(|| "http://localhost:11434".to_string());
                 let local_config = LocalLlmConfig::new(&api_base, &config.model);
-                Box::new(llm::local::OllamaClient::new(local_config))
+                std::sync::Arc::new(llm::local::OllamaClient::new(local_config))
             }
             "lmstudio" => {
                 let api_base = config.api_base.clone().unwrap_or_else(|| "http://localhost:1234".to_string());
                 let local_config = LocalLlmConfig::new(&api_base, &config.model);
-                Box::new(llm::local::LmStudioClient::new(local_config))
+                std::sync::Arc::new(llm::local::LmStudioClient::new(local_config))
             }
             "llamacpp" => {
                 let api_base = config.api_base.clone().unwrap_or_else(|| "http://localhost:8080".to_string());
                 let local_config = LocalLlmConfig::new(&api_base, &config.model);
-                Box::new(llm::local::LlamaCppClient::new(local_config))
+                std::sync::Arc::new(llm::local::LlamaCppClient::new(local_config))
             }
             "openai" => {
                 let api_key = config.get_api_key()
                     .ok_or_else(|| PromptError::MissingApiKey("openai".to_string()))?;
                 let api_base = config.api_base.clone().unwrap_or_else(|| "https://api.openai.com/v1".to_string());
                 let remote_config = RemoteLlmConfig::new(api_key, api_base, config.model.clone());
-                Box::new(llm::remote::OpenAiClient::new(remote_config))
+                std::sync::Arc::new(llm::remote::OpenAiClient::new(remote_config))
             }
             "claude" | "anthropic" => {
                 let api_key = config.get_api_key()
                     .ok_or_else(|| PromptError::MissingApiKey("claude".to_string()))?;
                 let api_base = config.api_base.clone().unwrap_or_else(|| "https://api.anthropic.com/v1".to_string());
                 let remote_config = RemoteLlmConfig::new(api_key, api_base, config.model.clone());
-                Box::new(llm::remote::ClaudeClient::new(remote_config))
+                std::sync::Arc::new(llm::remote::ClaudeClient::new(remote_config))
             }
             "deepseek" => {
                 let api_key = config.get_api_key()
                     .ok_or_else(|| PromptError::MissingApiKey("deepseek".to_string()))?;
                 let api_base = config.api_base.clone().unwrap_or_else(|| "https://api.deepseek.com".to_string());
                 let remote_config = RemoteLlmConfig::new(api_key, api_base, config.model.clone());
-                Box::new(llm::remote::DeepseekClient::new(remote_config))
+                std::sync::Arc::new(llm::remote::DeepseekClient::new(remote_config))
             }
             "grok" => {
                 let api_key = config.get_api_key()
                     .ok_or_else(|| PromptError::MissingApiKey("grok".to_string()))?;
                 let api_base = config.api_base.clone().unwrap_or_else(|| "https://api.x.ai/v1".to_string());
                 let remote_config = RemoteLlmConfig::new(api_key, api_base, config.model.clone());
-                Box::new(llm::remote::GrokClient::new(remote_config))
+                std::sync::Arc::new(llm::remote::GrokClient::new(remote_config))
             }
             "openrouter" => {
                 let api_key = config.get_api_key()
                     .ok_or_else(|| PromptError::MissingApiKey("openrouter".to_string()))?;
                 let api_base = config.api_base.clone().unwrap_or_else(|| "https://openrouter.ai/api/v1".to_string());
                 let remote_config = RemoteLlmConfig::new(api_key, api_base, config.model.clone());
-                Box::new(llm::remote::OpenRouterClient::new(remote_config))
+                std::sync::Arc::new(llm::remote::OpenRouterClient::new(remote_config))
             }
             "gemini" | "google" => {
                 let api_key = config.get_api_key()
                     .ok_or_else(|| PromptError::MissingApiKey("gemini".to_string()))?;
                 let api_base = config.api_base.clone().unwrap_or_else(|| "https://generativelanguage.googleapis.com/v1beta".to_string());
                 let remote_config = RemoteLlmConfig::new(api_key, api_base, config.model.clone());
-                Box::new(llm::remote::GeminiClient::new(remote_config))
+                std::sync::Arc::new(llm::remote::GeminiClient::new(remote_config))
             }
             other => return Err(PromptError::UnsupportedProvider(other.to_string())),
         };
@@ -123,6 +123,11 @@ impl PromptService {
         }
 
         Ok(response_text)
+    }
+
+    /// Get a clone of the LLM client for use in task execution
+    pub fn llm_client(&self) -> std::sync::Arc<dyn ChatModel + Send + Sync> {
+        self.provider.clone()
     }
 }
 

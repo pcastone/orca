@@ -56,6 +56,10 @@ pub struct ClientConfig {
     /// Orchestrator URL
     pub orchestrator_url: String,
 
+    /// Auto-connect to orchestrator on startup
+    #[serde(default)]
+    pub auto_connect: bool,
+
     /// Session timeout in seconds
     pub session_timeout: u64,
 
@@ -69,7 +73,8 @@ pub struct ClientConfig {
 impl Default for ClientConfig {
     fn default() -> Self {
         Self {
-            orchestrator_url: "ws://127.0.0.1:8080/ws".to_string(),
+            orchestrator_url: "http://localhost:8080".to_string(),
+            auto_connect: false,
             session_timeout: 3600,
             reconnect_attempts: 5,
             reconnect_delay_ms: 1000,
@@ -164,7 +169,8 @@ mod tests {
         let config = AcoConfig::default();
         assert_eq!(config.server.host, "127.0.0.1");
         assert_eq!(config.server.port, 8080);
-        assert_eq!(config.client.orchestrator_url, "ws://127.0.0.1:8080/ws");
+        assert_eq!(config.client.orchestrator_url, "http://localhost:8080");
+        assert!(!config.client.auto_connect);
     }
 
     #[test]
